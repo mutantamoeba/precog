@@ -178,7 +178,7 @@ def db_transaction_with_setup(
     cursor.execute("""
         INSERT INTO series (series_id, platform_id, external_id, title, category)
         VALUES ('TEST-SERIES-NFL', 'test_platform', 'TEST-EXT-SERIES', 'Test NFL Series', 'sports')
-        ON CONFLICT (series_id) DO NOTHING
+        ON CONFLICT (series_id) WHERE row_current_ind = TRUE DO NOTHING
     """)
 
     # Get series surrogate PK for event FK (migration 0019: series_internal_id)

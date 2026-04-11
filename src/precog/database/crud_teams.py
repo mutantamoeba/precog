@@ -83,7 +83,7 @@ def create_venue(
             espn_venue_id, venue_name, city, state, capacity, indoor
         )
         VALUES (%s, %s, %s, %s, %s, %s)
-        ON CONFLICT (espn_venue_id)
+        ON CONFLICT (espn_venue_id) WHERE row_current_ind = TRUE
         DO UPDATE SET
             venue_name = EXCLUDED.venue_name,
             city = EXCLUDED.city,

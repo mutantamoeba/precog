@@ -95,21 +95,11 @@ def trailing_stop_position(db_pool: Any) -> Any:
     position_bk = f"{_TEST_POSITION_BK_PREFIX}1"
 
     # Setup: clean any leftover state and ensure the market + position rows exist.
+    from tests.fixtures.cleanup_helpers import delete_market_with_children
+
     with get_cursor(commit=True) as cur:
-        # Cleanup in FK order: positions first (FKs to markets), then markets.
-        cur.execute(
-            "DELETE FROM positions WHERE position_id LIKE %s",
-            (_TEST_POSITION_BK_PREFIX + "%",),
-        )
-        cur.execute(
-            """
-            DELETE FROM market_snapshots WHERE market_id IN (
-                SELECT id FROM markets WHERE ticker = %s
-            )
-            """,
-            (_TEST_TICKER,),
-        )
-        cur.execute("DELETE FROM markets WHERE ticker = %s", (_TEST_TICKER,))
+        # RESTRICT-safe cleanup: delete all children before parents.
+        delete_market_with_children(cur, "ticker = %s", (_TEST_TICKER,))
 
         # Create the underlying market (positions FK to markets.id).
         cur.execute(
@@ -169,12 +159,10 @@ def trailing_stop_position(db_pool: Any) -> Any:
 
     yield position_surrogate_id, position_bk, market_pk
 
-    # Teardown: remove all rows this test touched.
+    # Teardown: RESTRICT-safe cleanup.
     try:
         with get_cursor(commit=True) as cur:
-            cur.execute("DELETE FROM positions WHERE position_id = %s", (position_bk,))
-            cur.execute("DELETE FROM market_snapshots WHERE market_id = %s", (market_pk,))
-            cur.execute("DELETE FROM markets WHERE id = %s", (market_pk,))
+            delete_market_with_children(cur, "id = %s", (market_pk,))
     except Exception:
         # Best-effort cleanup; do not mask the actual test outcome.
         pass
@@ -794,21 +782,11 @@ def create_position_market(db_pool: Any) -> Any:
 
     Yields the market surrogate PK.
     """
+    from tests.fixtures.cleanup_helpers import delete_market_with_children
+
     with get_cursor(commit=True) as cur:
-        # Cleanup any orphaned rows from a prior failed run.
-        cur.execute(
-            "DELETE FROM positions WHERE position_id LIKE %s",
-            (_CREATE_POS_BK_PREFIX + "%",),
-        )
-        cur.execute(
-            """
-            DELETE FROM market_snapshots WHERE market_id IN (
-                SELECT id FROM markets WHERE ticker = %s
-            )
-            """,
-            (_CREATE_POS_TEST_TICKER,),
-        )
-        cur.execute("DELETE FROM markets WHERE ticker = %s", (_CREATE_POS_TEST_TICKER,))
+        # Cleanup any orphaned rows from a prior failed run (RESTRICT-safe).
+        delete_market_with_children(cur, "ticker = %s", (_CREATE_POS_TEST_TICKER,))
 
         # Seed strategy + model parent rows idempotently. Mirrors the high
         # IDs conftest.clean_test_data uses so we don't collide with
@@ -874,17 +852,10 @@ def create_position_market(db_pool: Any) -> Any:
 
     yield market_pk
 
-    # Teardown: remove positions + market rows. Leave strategy/model rows
-    # alone so co-running tests that share the 99901 seed don't have the
-    # rug pulled mid-test.
+    # Teardown: RESTRICT-safe cleanup via helper.
     try:
         with get_cursor(commit=True) as cur:
-            cur.execute(
-                "DELETE FROM positions WHERE position_id LIKE %s",
-                (_CREATE_POS_BK_PREFIX + "%",),
-            )
-            cur.execute("DELETE FROM market_snapshots WHERE market_id = %s", (market_pk,))
-            cur.execute("DELETE FROM markets WHERE id = %s", (market_pk,))
+            delete_market_with_children(cur, "id = %s", (market_pk,))
     except Exception:
         # Best-effort cleanup; do not mask the actual test outcome.
         pass

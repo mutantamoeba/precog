@@ -39,7 +39,7 @@ class TestConnectionE2E:
                 """
                 INSERT INTO venues (espn_venue_id, venue_name, city)
                 VALUES (%s, %s, %s)
-                ON CONFLICT (espn_venue_id) DO UPDATE
+                ON CONFLICT (espn_venue_id) WHERE row_current_ind = TRUE DO UPDATE
                 SET venue_name = EXCLUDED.venue_name
                 """,
                 (venue_id, "E2E Test Venue", "Test City"),
@@ -72,10 +72,9 @@ class TestConnectionE2E:
 
         # Delete
         with get_cursor(commit=True) as cur:
-            cur.execute(
-                "DELETE FROM venues WHERE espn_venue_id = %s",
-                (venue_id,),
-            )
+            from tests.fixtures.cleanup_helpers import delete_venue_with_children
+
+            delete_venue_with_children(cur, "espn_venue_id = %s", (venue_id,))
 
         # Verify deletion
         with get_cursor() as cur:
@@ -103,7 +102,7 @@ class TestConnectionE2E:
                     """
                     INSERT INTO venues (espn_venue_id, venue_name, city)
                     VALUES (%s, %s, %s)
-                    ON CONFLICT (espn_venue_id) DO NOTHING
+                    ON CONFLICT (espn_venue_id) WHERE row_current_ind = TRUE DO NOTHING
                     """,
                     (venue_id, f"Venue {venue_id}", "Batch City"),
                 )
@@ -116,7 +115,9 @@ class TestConnectionE2E:
 
         # Cleanup
         with get_cursor(commit=True) as cur:
-            cur.execute("DELETE FROM venues WHERE espn_venue_id LIKE 'E2E-BATCH-%'")
+            from tests.fixtures.cleanup_helpers import delete_venue_with_children
+
+            delete_venue_with_children(cur, "espn_venue_id LIKE %s", ("E2E-BATCH-%",))
 
     def test_concurrent_access_workflow(self, db_pool, clean_test_data):
         """
@@ -134,7 +135,7 @@ class TestConnectionE2E:
                 """
                 INSERT INTO venues (espn_venue_id, venue_name, city)
                 VALUES (%s, %s, %s)
-                ON CONFLICT (espn_venue_id) DO NOTHING
+                ON CONFLICT (espn_venue_id) WHERE row_current_ind = TRUE DO NOTHING
                 """,
                 (venue_id, "Concurrent Venue", "Concurrent City"),
             )
@@ -156,10 +157,9 @@ class TestConnectionE2E:
 
         # Cleanup
         with get_cursor(commit=True) as cur:
-            cur.execute(
-                "DELETE FROM venues WHERE espn_venue_id = %s",
-                (venue_id,),
-            )
+            from tests.fixtures.cleanup_helpers import delete_venue_with_children
+
+            delete_venue_with_children(cur, "espn_venue_id = %s", (venue_id,))
 
     def test_error_recovery_workflow(self, db_pool, clean_test_data):
         """
@@ -199,7 +199,7 @@ class TestConnectionE2E:
                 """
                 INSERT INTO venues (espn_venue_id, venue_name, city)
                 VALUES (%s, %s, %s)
-                ON CONFLICT (espn_venue_id) DO NOTHING
+                ON CONFLICT (espn_venue_id) WHERE row_current_ind = TRUE DO NOTHING
                 """,
                 (venue_id, "Isolation Test", "Test City"),
             )
