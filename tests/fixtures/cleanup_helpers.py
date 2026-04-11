@@ -107,11 +107,10 @@ def delete_market_with_children(
 
     placeholders = ",".join(["%s"] * len(market_ids))
 
-    # Children referencing markets via market_internal_id
+    # Tables referencing markets via market_internal_id (from migrations 0022, 0028, 0034)
     for table in (
         "orderbook_snapshots",
         "market_trades",
-        "market_snapshots",
         "edges",
         "settlements",
     ):
@@ -120,12 +119,21 @@ def delete_market_with_children(
             tuple(market_ids),
         )
 
-    # Tables that use market_id (not market_internal_id)
-    for table in ("temporal_alignment", "predictions"):
-        cursor.execute(
-            f"DELETE FROM {table} WHERE market_id IN ({placeholders})",  # noqa: S608
-            tuple(market_ids),
-        )
+    # Tables that use market_id (from migrations 0021, 0027, 0031)
+    # NOTE: temporal_alignment must be deleted BEFORE market_snapshots
+    # because it has an FK to market_snapshots(id)
+    cursor.execute(
+        f"DELETE FROM temporal_alignment WHERE market_id IN ({placeholders})",  # noqa: S608
+        tuple(market_ids),
+    )
+    cursor.execute(
+        f"DELETE FROM predictions WHERE market_id IN ({placeholders})",  # noqa: S608
+        tuple(market_ids),
+    )
+    cursor.execute(
+        f"DELETE FROM market_snapshots WHERE market_id IN ({placeholders})",  # noqa: S608
+        tuple(market_ids),
+    )
 
     # Orders reference markets AND have their own children
     cursor.execute(
