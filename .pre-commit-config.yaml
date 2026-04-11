@@ -58,6 +58,33 @@ repos:
         pass_filenames: false
         description: "Scans for hardcoded passwords, API keys, tokens, and secrets (excludes tests and placeholders)"
 
+      # Security: Block staged .env files (CLAUDE.md Security Essentials)
+      - id: env-file-staged
+        name: Block Staged .env Files
+        entry: bash
+        args:
+          - -c
+          - |
+            # Match .env, .env.local, .env.dev, .envrc, src/.env, etc.
+            # Does NOT match environment.py or example.env.txt (anchored on path segment).
+            # Case-insensitive (-i) to catch .ENV / .Env on Windows/macOS filesystems.
+            # Includes .envrc (direnv) which commonly holds exported secrets.
+            staged_env_files=$(git diff --cached --name-only --diff-filter=ACM | grep -iE '(^|/)\.env(rc)?($|\.)' || true)
+            if [ -n "$staged_env_files" ]; then
+              echo ""
+              echo "ERROR: Attempting to commit .env file(s):"
+              echo "$staged_env_files" | sed 's/^/  - /'
+              echo ""
+              echo "Environment files contain secrets and must not be committed."
+              echo "Unstage: git restore --staged <file>"
+              echo "Add to .gitignore if missing: echo '.env' >> .gitignore"
+              exit 1
+            fi
+            echo "No .env files staged"
+        language: system
+        pass_filenames: false
+        description: "Prevents committing .env files (which contain secrets)"
+
       # DEF-005: No print() in production code (use logger instead)
       - id: no-print-in-production
         name: No print() in Production Code

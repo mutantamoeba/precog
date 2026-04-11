@@ -40,6 +40,7 @@ env/
 .env.development.local
 .env.staging.local
 .env.production.local
+.envrc
 
 # API Keys and Cryptographic Keys
 _keys/
