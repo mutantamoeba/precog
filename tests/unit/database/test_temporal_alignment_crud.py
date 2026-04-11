@@ -217,10 +217,17 @@ class TestInsertTemporalAlignment:
 class TestInsertTemporalAlignmentBatch:
     """Unit tests for insert_temporal_alignment_batch function."""
 
+    @patch("precog.database.crud_ledger.execute_values")
     @patch("precog.database.crud_ledger.get_cursor")
-    def test_batch_insert_returns_count(self, mock_get_cursor):
-        """Test batch insert returns count of rows inserted."""
-        _mock_cursor_context(mock_get_cursor)
+    def test_batch_insert_returns_rowcount(self, mock_get_cursor, mock_exec_values):
+        """Batch insert returns cur.rowcount (actually inserted, not submitted).
+
+        The earlier implementation returned len(validated_params), which
+        inflated the count under ON CONFLICT DO NOTHING retries. This test
+        pins the rowcount-based return value to prevent regression.
+        """
+        mock_cursor = _mock_cursor_context(mock_get_cursor)
+        mock_cursor.rowcount = 2
 
         rows = [_default_alignment_dict(), _default_alignment_dict()]
         rows[1]["market_snapshot_id"] = 1002
@@ -229,6 +236,23 @@ class TestInsertTemporalAlignmentBatch:
         result = insert_temporal_alignment_batch(rows)
 
         assert result == 2
+        mock_exec_values.assert_called_once()
+
+    @patch("precog.database.crud_ledger.execute_values")
+    @patch("precog.database.crud_ledger.get_cursor")
+    def test_batch_insert_returns_rowcount_under_conflict(self, mock_get_cursor, mock_exec_values):
+        """rowcount=0 (all duplicates skipped) must return 0, not submitted count."""
+        mock_cursor = _mock_cursor_context(mock_get_cursor)
+        mock_cursor.rowcount = 0  # all rows were ON CONFLICT DO NOTHING
+
+        rows = [_default_alignment_dict(), _default_alignment_dict()]
+        rows[1]["market_snapshot_id"] = 1002
+        rows[1]["game_state_id"] = 502
+
+        result = insert_temporal_alignment_batch(rows)
+
+        assert result == 0
+        mock_exec_values.assert_called_once()
 
     def test_batch_insert_empty_list_returns_zero(self):
         """Test that empty list returns 0 without DB interaction."""
@@ -258,18 +282,21 @@ class TestInsertTemporalAlignmentBatch:
         with pytest.raises(ValueError, match="alignment_quality must be one of"):
             insert_temporal_alignment_batch([row])
 
+    @patch("precog.database.crud_ledger.execute_values")
     @patch("precog.database.crud_ledger.get_cursor")
-    def test_batch_insert_defaults_quality_to_good(self, mock_get_cursor):
+    def test_batch_insert_defaults_quality_to_good(self, mock_get_cursor, mock_exec_values):
         """Test that batch rows without alignment_quality default to 'good'."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
+        mock_cursor.rowcount = 1
 
         row = _default_alignment_dict()
         # alignment_quality NOT set -- should default to 'good'
 
         insert_temporal_alignment_batch([row])
 
-        call_args = mock_cursor.executemany.call_args
-        params_list = call_args[0][1]
+        # execute_values(cur, sql, argslist, template=template)
+        call_args = mock_exec_values.call_args
+        params_list = call_args[0][2]
         # alignment_quality is the 7th param (index 6)
         assert params_list[0][6] == "good"
 
@@ -284,15 +311,39 @@ class TestInsertTemporalAlignmentBatch:
         with pytest.raises(TypeError, match="yes_ask_price must be Decimal"):
             insert_temporal_alignment_batch([row])
 
+    @patch("precog.database.crud_ledger.execute_values")
     @patch("precog.database.crud_ledger.get_cursor")
-    def test_batch_insert_calls_executemany(self, mock_get_cursor):
-        """Test that batch insert uses executemany for efficiency."""
+    def test_batch_insert_calls_execute_values(self, mock_get_cursor, mock_exec_values):
+        """Batch insert uses execute_values (matches upsert_market_trades_batch).
+
+        Switched from executemany in the S68 audit remediation: execute_values
+        supports well-defined cur.rowcount so the return value can reflect
+        actually-inserted rows (not submitted rows) under ON CONFLICT DO NOTHING.
+        """
         mock_cursor = _mock_cursor_context(mock_get_cursor)
+        mock_cursor.rowcount = 1
 
         rows = [_default_alignment_dict()]
         insert_temporal_alignment_batch(rows)
 
-        mock_cursor.executemany.assert_called_once()
+        mock_exec_values.assert_called_once()
+        # First positional arg to execute_values is the cursor
+        assert mock_exec_values.call_args[0][0] is mock_cursor
+
+    @patch("precog.database.crud_ledger.execute_values")
+    @patch("precog.database.crud_ledger.get_cursor")
+    def test_batch_insert_sql_has_on_conflict_do_nothing(self, mock_get_cursor, mock_exec_values):
+        """Batch insert SQL uses ON CONFLICT DO NOTHING on uq_alignment_snapshot_game."""
+        mock_cursor = _mock_cursor_context(mock_get_cursor)
+        mock_cursor.rowcount = 1
+
+        insert_temporal_alignment_batch([_default_alignment_dict()])
+
+        # execute_values(cur, sql, argslist, template=template)
+        sql = mock_exec_values.call_args[0][1]
+        assert "ON CONFLICT" in sql
+        assert "DO NOTHING" in sql
+        assert "market_snapshot_id, game_state_id" in sql
 
 
 # =============================================================================

@@ -66,6 +66,8 @@ VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION: frozenset[str] = frozenset(
 #   - 'edge_detector':   Edge detection engine
 #   - 'trading_engine':  Trade execution engine
 #   - 'websocket':       WebSocket connections
+# Internal services:
+#   - 'temporal_alignment': Temporal alignment writer (links snapshots to game states)
 # Planned Tier A components (not yet active):
 #   - 'polymarket_api':  Polymarket prediction market API
 SystemHealthComponent = Literal[
@@ -77,6 +79,7 @@ SystemHealthComponent = Literal[
     "edge_detector",
     "trading_engine",
     "websocket",
+    "temporal_alignment",
 ]
 
 # Runtime set for O(1) validation in upsert_system_health.
