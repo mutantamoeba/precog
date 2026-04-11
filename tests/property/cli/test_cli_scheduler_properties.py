@@ -261,7 +261,7 @@ class TestSchedulerStateTransitions:
 
     @given(st.integers(min_value=0, max_value=100))
     @settings(max_examples=20, deadline=None)
-    def test_status_with_varying_db_results(self, found_in_db: int):
+    def test_status_with_varying_db_results(self, parity_seed: int):
         """Status should handle the database-backed path returning
         either success or fall-through for any iteration count.
 
@@ -278,8 +278,11 @@ class TestSchedulerStateTransitions:
         original_supervisor = scheduler_module._supervisor
         scheduler_module._supervisor = None
         try:
-            # Even N: DB path "found", odd N: fallback path
-            db_returns = found_in_db % 2 == 0
+            # parity_seed is just a source of True/False variation --
+            # hypothesis gives us a range of integers and we use parity to
+            # toggle the mock's return value. See #778 for a related
+            # latent-assumption issue flagged on a sibling chaos test.
+            db_returns = parity_seed % 2 == 0
             with patch(
                 "precog.cli.scheduler._show_db_backed_status",
                 return_value=db_returns,

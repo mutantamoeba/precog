@@ -110,14 +110,17 @@ def test_kalshi_market_fetch():
 def test_kalshi_api_responds_to_markets_endpoint():
     markets = kalshi_client.get_markets()
     assert "markets" in markets and all("ticker" in m for m in markets["markets"])
+    # Shape assertion must mirror the actual client return type (dict vs list)
 
 # WRONG — Hand-written mock (rots silently, cannot catch drift)
-mock_kalshi.poll_once.return_value = {"items_fetched": 10, "items_updated": 8}
+mock_client.get_markets.return_value = {
+    "markets": [{"ticker": "FAKE-001", "yes_price": 50}]
+}
 ```
 
-**Why:** Hand-written mocks freeze a guessed shape that diverges from the real API over time. VCR cassettes (`tests/cassettes/`) record real responses once and replay them — they catch regressions in our code AND surface format drift when the cassette is re-recorded. Live contract tests catch drift in real-time but are gated to nightly runs. See `tests/integration/api_connectors/test_kalshi_client_vcr.py` for the canonical Pattern 22 reference implementation.
+**Why:** Hand-written mocks freeze a guessed shape that diverges from the real API over time. VCR cassettes (`tests/cassettes/`) record real responses once and replay them — they catch regressions in our code AND surface format drift when the cassette is re-recorded. Live contract tests catch drift in real-time but are gated to nightly runs. See `tests/integration/api_connectors/test_kalshi_client_vcr.py` for the canonical Pattern 22 reference implementation. VCR cassettes live in `tests/cassettes/` (configured per-test via `@pytest.fixture(scope="module")` in each VCR test file, not in a shared conftest).
 
-**Umbrella issue #764** tracks the retrofit of 8 files that historically violated this rule and had been reporting fictional green CI for months. **Trigger S73** enforces this rule on new PRs; **Pattern 22** in `docs/guides/DEVELOPMENT_PATTERNS_V1.31.md` is the authoritative reference.
+**Umbrella issue #764** tracks the retrofit of 8 files that historically violated this rule and had been reporting fictional green CI for months. **Trigger S73** (a PM-side agent review that fires Joe Chip on PRs touching external API tests to catch hand-written mocks) enforces this rule on new PRs; **Pattern 22** in `docs/guides/DEVELOPMENT_PATTERNS_V1.31.md` is the authoritative reference.
 
 ---
 
