@@ -50,10 +50,19 @@ class TestSchedulerStress:
         """
         runner = CliRunner()
 
-        with patch("precog.cli.scheduler._show_db_backed_status", return_value=False):
+        with patch(
+            "precog.cli.scheduler._show_db_backed_status", return_value=False
+        ) as mock_status:
             for i in range(50):
                 result = runner.invoke(isolated_app, ["scheduler", "status"])
-                assert result.exit_code in [0, 1, 2], f"Failed on iteration {i}"
+                assert result.exit_code == 0, (
+                    f"Failed on iteration {i}: exit={result.exit_code}, output={result.output}"
+                )
+
+            assert mock_status.call_count == 50, (
+                f"_show_db_backed_status called {mock_status.call_count} times, expected 50 — "
+                "mock is a no-op if count is 0"
+            )
 
     def test_rapid_start_stop_cycles(self, isolated_app) -> None:
         """Test rapid start-stop cycles.
@@ -84,9 +93,21 @@ class TestSchedulerStress:
 
             for i in range(20):
                 result = runner.invoke(isolated_app, ["scheduler", "start"])
-                assert result.exit_code in [0, 1, 2], f"Start failed on iteration {i}"
+                assert result.exit_code == 0, (
+                    f"Start failed on iteration {i}: exit={result.exit_code}, output={result.output}"
+                )
                 result = runner.invoke(isolated_app, ["scheduler", "stop"])
-                assert result.exit_code in [0, 1, 2], f"Stop failed on iteration {i}"
+                assert result.exit_code == 0, (
+                    f"Stop failed on iteration {i}: exit={result.exit_code}, output={result.output}"
+                )
+
+            assert mock_espn.call_count == 20, (
+                f"ESPNGamePoller constructor called {mock_espn.call_count} times, expected 20 "
+                "(one per start iteration) — mock is a no-op if count is 0"
+            )
+            assert mock_kalshi.call_count == 20, (
+                f"KalshiMarketPoller constructor called {mock_kalshi.call_count} times, expected 20"
+            )
 
     def test_many_poll_once_invocations(self, isolated_app) -> None:
         """Test many poll-once invocations.
@@ -121,8 +142,23 @@ class TestSchedulerStress:
             mock_kalshi.return_value = mock_kalshi_instance
 
             for i in range(30):
-                result = runner.invoke(isolated_app, ["scheduler", "poll-once", "--league", "nfl"])
-                assert result.exit_code in [0, 1, 2], f"Failed on iteration {i}"
+                # NOTE: poll-once accepts --leagues (plural, comma-separated),
+                # not --league. The previous version of this test passed
+                # --league which Typer rejected with exit 2; the mocks
+                # were never called. (#764)
+                result = runner.invoke(isolated_app, ["scheduler", "poll-once", "--leagues", "nfl"])
+                assert result.exit_code == 0, (
+                    f"Failed on iteration {i}: exit={result.exit_code}, output={result.output}"
+                )
+
+            assert mock_espn_instance.poll_once.call_count == 30, (
+                f"ESPN poll_once called "
+                f"{mock_espn_instance.poll_once.call_count} times; expected 30"
+            )
+            assert mock_kalshi_instance.poll_once.call_count == 30, (
+                f"Kalshi poll_once called "
+                f"{mock_kalshi_instance.poll_once.call_count} times; expected 30"
+            )
 
 
 class TestDbStress:

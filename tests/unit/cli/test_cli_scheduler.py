@@ -71,29 +71,77 @@ class TestSchedulerHelp:
 
 
 class TestSchedulerStart:
-    """Test scheduler start command."""
+    """Test scheduler start command.
 
-    @patch("precog.schedulers.service_supervisor.ServiceSupervisor")
-    def test_start_supervised_mode(self, mock_supervisor_class, runner):
-        """Test start command with supervised mode."""
-        mock_supervisor = MagicMock()
-        mock_supervisor_class.return_value = mock_supervisor
+    See #764 for the rationale on patching ``create_supervisor`` (the
+    factory) rather than ``ServiceSupervisor`` (the class). The CLI's
+    supervised path calls ``create_supervisor(...)`` which itself
+    instantiates real Kalshi and ESPN pollers, rate limiters, and
+    circuit breakers before constructing the supervisor. Patching the
+    class leaves all that real setup intact and the tests start
+    making real network calls. The factory is the correct mock level.
+    """
 
-        result = runner.invoke(app, ["start", "--supervised", "--no-foreground"])
+    def test_start_supervised_mode(self, runner):
+        """Test start command with supervised mode.
 
-        # Exit code 2 is Typer's "missing option/bad usage" code
-        # Should attempt to start (may fail if services not configured)
-        assert result.exit_code in [0, 1, 2]
+        Asserts the supervised code path reaches ``create_supervisor``
+        and runs to clean exit with exit code 0. The
+        ``_validate_startup`` patch is required because without it the
+        CLI short-circuits with exit code 1 and the factory mock is
+        never reached -- which was the silent no-op that hid the bug
+        in #764 for months.
+        """
+        with (
+            patch(
+                "precog.schedulers.service_supervisor.create_supervisor"
+            ) as mock_create_supervisor,
+            patch("precog.cli.scheduler._validate_startup", return_value=True),
+            patch("precog.cli.scheduler._prevent_system_sleep_for_supervised"),
+        ):
+            mock_supervisor = MagicMock()
+            mock_supervisor.is_running = True
+            mock_supervisor.start_all.return_value = None
+            mock_create_supervisor.return_value = mock_supervisor
 
-    @patch("precog.database.connection.get_connection")
-    def test_start_espn_only(self, mock_conn, runner):
-        """Test start with ESPN only (no Kalshi)."""
-        mock_conn.return_value = MagicMock()
+            result = runner.invoke(app, ["start", "--supervised"])
 
-        result = runner.invoke(app, ["start", "--espn", "--no-kalshi", "--no-foreground"])
+            assert result.exit_code == 0, (
+                f"supervised start should exit 0; got {result.exit_code} "
+                f"with output: {result.output}"
+            )
+            mock_create_supervisor.assert_called_once()
 
-        # May succeed, fail, or have usage error depending on env
-        assert result.exit_code in [0, 1, 2]
+    def test_start_espn_only(self, runner):
+        """Test start with ESPN only (no Kalshi) via supervised path.
+
+        Routes through ``--supervised`` so the ``create_supervisor``
+        mock is the actual code path. ``enabled_services={"espn"}`` is
+        verified by inspecting the factory call kwargs.
+        """
+        with (
+            patch(
+                "precog.schedulers.service_supervisor.create_supervisor"
+            ) as mock_create_supervisor,
+            patch("precog.cli.scheduler._validate_startup", return_value=True),
+            patch("precog.cli.scheduler._prevent_system_sleep_for_supervised"),
+        ):
+            mock_supervisor = MagicMock()
+            mock_supervisor.is_running = True
+            mock_supervisor.start_all.return_value = None
+            mock_create_supervisor.return_value = mock_supervisor
+
+            result = runner.invoke(app, ["start", "--supervised", "--espn", "--no-kalshi"])
+
+            assert result.exit_code == 0, (
+                f"espn-only supervised start should exit 0; got {result.exit_code} "
+                f"with output: {result.output}"
+            )
+            mock_create_supervisor.assert_called_once()
+            call_kwargs = mock_create_supervisor.call_args.kwargs
+            assert call_kwargs.get("enabled_services") == {"espn"}, (
+                f"expected enabled_services={{'espn'}}, got {call_kwargs.get('enabled_services')}"
+            )
 
     def test_start_invalid_interval(self, runner):
         """Test start with invalid interval value.
@@ -157,20 +205,21 @@ class TestSchedulerPollOnce:
 
         result = runner.invoke(app, ["poll-once", "--no-kalshi"])
 
-        # Should attempt poll (may fail on missing config)
-        assert result.exit_code in [0, 1]
+        assert result.exit_code == 0, f"exit={result.exit_code}, output={result.output}"
+        mock_poller.poll_once.assert_called_once()
 
     @patch("precog.schedulers.KalshiMarketPoller")
     def test_poll_once_kalshi_only(self, mock_poller_class, runner):
         """Test poll-once with Kalshi only."""
         mock_poller = MagicMock()
         mock_poller.poll_once.return_value = {"markets": 10, "updated": 5}
+        mock_poller.kalshi_client = MagicMock()
         mock_poller_class.return_value = mock_poller
 
         result = runner.invoke(app, ["poll-once", "--no-espn"])
 
-        # Should attempt poll (may fail on missing credentials)
-        assert result.exit_code in [0, 1]
+        assert result.exit_code == 0, f"exit={result.exit_code}, output={result.output}"
+        mock_poller.poll_once.assert_called_once()
 
     def test_poll_once_help(self, runner):
         """Test poll-once --help shows options."""
