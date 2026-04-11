@@ -93,20 +93,10 @@ def migration_test_platform(db_pool: Any) -> Any:
 
     with get_cursor(commit=True) as cur:
         # Defensive cleanup of any prior run.
-        cur.execute(
-            "DELETE FROM exit_attempts WHERE position_internal_id IN "
-            "(SELECT id FROM positions WHERE platform_id = %s)",
-            (platform_id,),
-        )
-        cur.execute(
-            "DELETE FROM position_exits WHERE position_internal_id IN "
-            "(SELECT id FROM positions WHERE platform_id = %s)",
-            (platform_id,),
-        )
+        from tests.fixtures.cleanup_helpers import delete_market_with_children
+
         cur.execute("DELETE FROM account_ledger WHERE platform_id = %s", (platform_id,))
-        cur.execute("DELETE FROM settlements WHERE platform_id = %s", (platform_id,))
-        cur.execute("DELETE FROM positions WHERE platform_id = %s", (platform_id,))
-        cur.execute("DELETE FROM markets WHERE platform_id = %s", (platform_id,))
+        delete_market_with_children(cur, "platform_id = %s", (platform_id,))
         cur.execute("DELETE FROM platforms WHERE platform_id = %s", (platform_id,))
 
         # Platform
@@ -166,18 +156,10 @@ def migration_test_platform(db_pool: Any) -> Any:
 
     # Teardown in reverse FK order.
     with get_cursor(commit=True) as cur:
-        cur.execute(
-            "DELETE FROM exit_attempts WHERE position_internal_id = %s",
-            (position_internal_id,),
-        )
-        cur.execute(
-            "DELETE FROM position_exits WHERE position_internal_id = %s",
-            (position_internal_id,),
-        )
+        from tests.fixtures.cleanup_helpers import delete_market_with_children
+
         cur.execute("DELETE FROM account_ledger WHERE platform_id = %s", (platform_id,))
-        cur.execute("DELETE FROM settlements WHERE platform_id = %s", (platform_id,))
-        cur.execute("DELETE FROM positions WHERE id = %s", (position_internal_id,))
-        cur.execute("DELETE FROM markets WHERE id = %s", (market_internal_id,))
+        delete_market_with_children(cur, "platform_id = %s", (platform_id,))
         cur.execute("DELETE FROM platforms WHERE platform_id = %s", (platform_id,))
 
 

@@ -236,37 +236,20 @@ def clean_test_data(db_cursor):
     except Exception:
         pass  # Already rolled back or no active transaction
 
-    # Cleanup before test (in reverse FK order)
-    # Delete child records first - trades/positions reference strategies/models/markets
-    # Migration 0022: downstream tables use market_internal_id INTEGER FK with ON DELETE CASCADE.
-    # Deleting from markets will CASCADE to trades/positions/edges/settlements.
-    # Still clean up by strategy/model references for non-market-linked test data.
-    db_cursor.execute("DELETE FROM settlements")
-    # Try to delete orders/positions referencing test strategies/models (may fail in CI)
-    # Migration 0025: strategy_id/model_id moved from trades to orders table
-    # Delete fixture data (99901+) AND any SERIAL-generated data (1-99900)
-    try:
-        db_cursor.execute(
-            "DELETE FROM orders WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
-        )
-        db_cursor.execute(
-            "DELETE FROM positions WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
-        )
-    except Exception:
-        db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
-    # Delete markets by ticker pattern — CASCADE handles downstream tables
-    # (edges, positions, trades, settlements via market_internal_id FK)
+    # Cleanup before test (strict reverse FK order — RESTRICT requires children first).
+    # Uses shared helper from tests/fixtures/cleanup_helpers.py.
+    from tests.fixtures.cleanup_helpers import delete_all_test_data
+
+    delete_all_test_data(db_cursor)
+    # Delete markets (children already cleared by delete_all_test_data)
     db_cursor.execute("DELETE FROM markets WHERE ticker LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE external_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
-    # Clean up ALL test models and strategies (fixture data + SERIAL-generated)
-    # This ensures clean state for property tests that create many strategies
     try:
         db_cursor.execute("DELETE FROM probability_models")
         db_cursor.execute("DELETE FROM strategies")
     except Exception:
         db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
-    # Delete both uppercase TEST-PLATFORM- and lowercase test_ platforms
     db_cursor.execute(
         "DELETE FROM platforms WHERE platform_id LIKE 'test_%' OR platform_id LIKE 'TEST-PLATFORM-%'"
     )
@@ -282,7 +265,7 @@ def clean_test_data(db_cursor):
     db_cursor.execute("""
         INSERT INTO series (series_id, platform_id, external_id, title, category)
         VALUES ('TEST-SERIES-NFL', 'test_platform', 'TEST-EXT-SERIES', 'Test NFL Series', 'sports')
-        ON CONFLICT (series_id) DO NOTHING
+        ON CONFLICT (series_id) WHERE row_current_ind = TRUE DO NOTHING
     """)
 
     # Get series surrogate PK for event FK (migration 0019: series_internal_id)
@@ -334,26 +317,13 @@ def clean_test_data(db_cursor):
 
     yield  # Test runs here
 
-    # Cleanup after test (in reverse FK order)
-    # Migration 0022: downstream tables use market_internal_id INTEGER FK with ON DELETE CASCADE.
-    # Deleting from markets will CASCADE to trades/positions/edges/settlements.
-    # Still clean up by strategy/model references for non-market-linked test data.
-    # Migration 0025: strategy_id/model_id moved from trades to orders table
-    try:
-        db_cursor.execute(
-            "DELETE FROM orders WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
-        )
-        db_cursor.execute(
-            "DELETE FROM positions WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
-        )
-    except Exception:
-        db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
-    # Delete markets by ticker pattern — CASCADE handles downstream tables
+    # Cleanup after test (strict reverse FK order — RESTRICT, no CASCADE).
+    from tests.fixtures.cleanup_helpers import delete_all_test_data
+
+    delete_all_test_data(db_cursor)
     db_cursor.execute("DELETE FROM markets WHERE ticker LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE external_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
-    # Clean up ALL test models and strategies (fixture data + SERIAL-generated)
-    # This ensures clean state for next test
     try:
         db_cursor.execute("DELETE FROM probability_models")
         db_cursor.execute("DELETE FROM strategies")
@@ -717,7 +687,7 @@ def sample_series(db_pool, clean_test_data, sample_platform) -> str:
     query = """
         INSERT INTO series (series_id, platform_id, external_id, category, subcategory, title, frequency)
         VALUES ('NFL-2025', 'kalshi', 'NFL-2025-ext', 'sports', 'nfl', 'NFL 2025 Season', 'recurring')
-        ON CONFLICT (series_id) DO NOTHING
+        ON CONFLICT (series_id) WHERE row_current_ind = TRUE DO NOTHING
         RETURNING series_id
     """
     execute_query(query)

@@ -120,7 +120,7 @@ class TestConnectionPerformance:
                     """
                     INSERT INTO venues (espn_venue_id, venue_name, city)
                     VALUES (%s, %s, %s)
-                    ON CONFLICT (espn_venue_id) DO NOTHING
+                    ON CONFLICT (espn_venue_id) WHERE row_current_ind = TRUE DO NOTHING
                     """,
                     (f"PERF-BATCH-{i:04d}", f"Venue {i}", "Test City"),
                 )

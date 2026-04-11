@@ -14,7 +14,7 @@ from decimal import Decimal
 
 import pytest
 
-from precog.database.connection import get_connection, release_connection
+from precog.database.connection import get_connection, get_cursor, release_connection
 from precog.database.crud_strategies import create_strategy
 from precog.trading.position_manager import (
     InsufficientMarginError,
@@ -90,7 +90,15 @@ def test_market_pks(db_cursor, clean_test_data):
     finally:
         release_connection(conn)
 
-    return market_pks
+    yield market_pks
+
+    # Teardown: delete markets and their children in FK order.
+    # Must use get_cursor (RealDictCursor) because the helper uses dict-style row access.
+    from tests.fixtures.cleanup_helpers import delete_market_with_children
+
+    with get_cursor(commit=True) as cur:
+        for ticker in market_pks:
+            delete_market_with_children(cur, "ticker = %s", (ticker,))
 
 
 @pytest.fixture

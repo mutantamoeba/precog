@@ -80,7 +80,9 @@ def setup_e2e_teams(db_pool, clean_test_data):
         cur.execute("DELETE FROM game_states WHERE home_team_id IN (88001, 88002, 88003, 88004)")
         cur.execute("DELETE FROM team_rankings WHERE team_id IN (88001, 88002, 88003, 88004)")
         cur.execute("DELETE FROM teams WHERE team_id IN (88001, 88002, 88003, 88004)")
-        cur.execute("DELETE FROM venues WHERE espn_venue_id LIKE 'E2E-%'")
+        from tests.fixtures.cleanup_helpers import delete_venue_with_children
+
+        delete_venue_with_children(cur, "espn_venue_id LIKE %s", ("E2E-%",))
 
 
 # =============================================================================
@@ -417,7 +419,9 @@ class TestStateChangeDetectionWorkflow:
         # Clean up any existing test data
         with get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM game_states WHERE espn_event_id = 'E2E-STATE-GAME-001'")
-            cur.execute("DELETE FROM venues WHERE espn_venue_id = 'E2E-STATE-001'")
+            from tests.fixtures.cleanup_helpers import delete_venue_with_children
+
+            delete_venue_with_children(cur, "espn_venue_id = %s", ("E2E-STATE-001",))
 
         # Create venue for the game
         venue_id = create_venue(
@@ -559,7 +563,9 @@ class TestStateChangeDetectionWorkflow:
         # Clean up any existing test data
         with get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM game_states WHERE espn_event_id = 'E2E-SIT-GAME-001'")
-            cur.execute("DELETE FROM venues WHERE espn_venue_id = 'E2E-SIT-001'")
+            from tests.fixtures.cleanup_helpers import delete_venue_with_children
+
+            delete_venue_with_children(cur, "espn_venue_id = %s", ("E2E-SIT-001",))
 
         venue_id = create_venue(
             espn_venue_id="E2E-SIT-001",
@@ -653,7 +659,9 @@ class TestStateChangeDetectionWorkflow:
         # Clean up any existing test data
         with get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM game_states WHERE espn_event_id = 'E2E-STATUS-GAME-001'")
-            cur.execute("DELETE FROM venues WHERE espn_venue_id = 'E2E-STATUS-001'")
+            from tests.fixtures.cleanup_helpers import delete_venue_with_children
+
+            delete_venue_with_children(cur, "espn_venue_id = %s", ("E2E-STATUS-001",))
 
         venue_id = create_venue(
             espn_venue_id="E2E-STATUS-001",
