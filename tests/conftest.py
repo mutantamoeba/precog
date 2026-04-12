@@ -244,7 +244,7 @@ def clean_test_data(db_cursor):
     # Delete markets (children already cleared by delete_all_test_data)
     db_cursor.execute("DELETE FROM markets WHERE ticker LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE external_id LIKE 'TEST-%'")
-    db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
+    db_cursor.execute("DELETE FROM series WHERE series_key LIKE 'TEST-%'")
     try:
         db_cursor.execute("DELETE FROM probability_models")
         db_cursor.execute("DELETE FROM strategies")
@@ -263,21 +263,21 @@ def clean_test_data(db_cursor):
 
     # Create test series
     db_cursor.execute("""
-        INSERT INTO series (series_id, platform_id, external_id, title, category)
+        INSERT INTO series (series_key, platform_id, external_id, title, category)
         VALUES ('TEST-SERIES-NFL', 'test_platform', 'TEST-EXT-SERIES', 'Test NFL Series', 'sports')
-        ON CONFLICT (series_id) WHERE row_current_ind = TRUE DO NOTHING
+        ON CONFLICT (series_key) WHERE row_current_ind = TRUE DO NOTHING
     """)
 
-    # Get series surrogate PK for event FK (migration 0019: series_internal_id)
-    db_cursor.execute("SELECT id FROM series WHERE series_id = 'TEST-SERIES-NFL'")
+    # Get series surrogate PK for event FK (migration 0019: series_key)
+    db_cursor.execute("SELECT id FROM series WHERE series_key = 'TEST-SERIES-NFL'")
     _series_row = db_cursor.fetchone()
     _test_series_pk = _series_row["id"] if _series_row else None
 
-    # Create test event (uses series_internal_id integer FK)
+    # Create test event (uses series_id integer FK to series.id)
     # external_id is the canonical business key (migration 0047 dropped the old event_id column)
     db_cursor.execute(
         """
-        INSERT INTO events (platform_id, series_internal_id, external_id, category, title, status)
+        INSERT INTO events (platform_id, series_id, external_id, category, title, status)
         VALUES ('test_platform', %s, 'TEST-EVT-NFL-KC-BUF', 'sports', 'Test Event: KC vs BUF', 'scheduled')
         ON CONFLICT (platform_id, external_id) DO NOTHING
     """,
@@ -287,7 +287,7 @@ def clean_test_data(db_cursor):
     # Create additional test event for test_execute_query
     db_cursor.execute(
         """
-        INSERT INTO events (platform_id, series_internal_id, external_id, category, title, status)
+        INSERT INTO events (platform_id, series_id, external_id, category, title, status)
         VALUES ('test_platform', %s, 'TEST-EVT-2', 'sports', 'Test Event 2', 'scheduled')
         ON CONFLICT (platform_id, external_id) DO NOTHING
     """,
@@ -323,7 +323,7 @@ def clean_test_data(db_cursor):
     delete_all_test_data(db_cursor)
     db_cursor.execute("DELETE FROM markets WHERE ticker LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE external_id LIKE 'TEST-%'")
-    db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
+    db_cursor.execute("DELETE FROM series WHERE series_key LIKE 'TEST-%'")
     try:
         db_cursor.execute("DELETE FROM probability_models")
         db_cursor.execute("DELETE FROM strategies")
@@ -349,7 +349,7 @@ def sample_market_data(db_pool, clean_test_data):
 
     return {
         "platform_id": "test_platform",  # Must match clean_test_data fixture
-        "event_internal_id": event_pk,  # Integer FK to events(id) per migration 0020
+        "event_id": event_pk,  # Integer FK to events(id) per migration 0020
         "external_id": "TEST-EXT-123",
         "ticker": "TEST-NFL-KC-BUF-YES",
         "title": "TEST: Chiefs to beat Bills",
@@ -685,10 +685,10 @@ def sample_series(db_pool, clean_test_data, sample_platform) -> str:
     from precog.database.connection import execute_query
 
     query = """
-        INSERT INTO series (series_id, platform_id, external_id, category, subcategory, title, frequency)
+        INSERT INTO series (series_key, platform_id, external_id, category, subcategory, title, frequency)
         VALUES ('NFL-2025', 'kalshi', 'NFL-2025-ext', 'sports', 'nfl', 'NFL 2025 Season', 'recurring')
-        ON CONFLICT (series_id) WHERE row_current_ind = TRUE DO NOTHING
-        RETURNING series_id
+        ON CONFLICT (series_key) WHERE row_current_ind = TRUE DO NOTHING
+        RETURNING series_key
     """
     execute_query(query)
     return "NFL-2025"
@@ -700,11 +700,11 @@ def sample_event(db_pool, clean_test_data, sample_platform, sample_series) -> st
     from precog.database.connection import execute_query, fetch_one
 
     # Look up series surrogate PK (migration 0019: events use integer FK)
-    series_row = fetch_one("SELECT id FROM series WHERE series_id = 'NFL-2025'")
+    series_row = fetch_one("SELECT id FROM series WHERE series_key = 'NFL-2025'")
     series_pk = series_row["id"] if series_row else None
 
     query = """
-        INSERT INTO events (platform_id, series_internal_id, external_id, category, subcategory, title, status)
+        INSERT INTO events (platform_id, series_id, external_id, category, subcategory, title, status)
         VALUES ('kalshi', %s, 'HIGHTEST', 'sports', 'nfl', 'Super Bowl LIX', 'scheduled')
         ON CONFLICT (platform_id, external_id) DO NOTHING
         RETURNING external_id
@@ -738,7 +738,7 @@ def sample_market(db_pool, clean_test_data, sample_platform, sample_event) -> in
     # Create via CRUD function (returns integer PK)
     return create_market(
         platform_id="kalshi",
-        event_internal_id=event_pk,
+        event_id=event_pk,
         external_id="HIGHTEST-25FEB05-ext",
         ticker="HIGHTEST-25FEB05",
         title="Will HIGHTEST win Super Bowl?",

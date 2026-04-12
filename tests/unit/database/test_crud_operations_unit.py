@@ -2095,15 +2095,15 @@ class TestUpdateEventGameIdUnit:
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
-        result = update_event_game_id(event_internal_id=42, game_id=15)
+        result = update_event_game_id(event_id=42, game_id=15)
 
         assert result is True
         mock_cursor.execute.assert_called_once()
-        # Verify params include game_id and event_internal_id
+        # Verify params include game_id and event_id
         call_args = mock_cursor.execute.call_args[0]
         params = call_args[1]
         assert 15 in params  # game_id
-        assert 42 in params  # event_internal_id
+        assert 42 in params  # event_id
 
     @patch("precog.database.crud_game_states.get_cursor")
     def test_returns_false_when_no_event_found(self, mock_get_cursor):
@@ -2113,7 +2113,7 @@ class TestUpdateEventGameIdUnit:
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
-        result = update_event_game_id(event_internal_id=999, game_id=15)
+        result = update_event_game_id(event_id=999, game_id=15)
 
         assert result is False
 
@@ -2143,7 +2143,7 @@ class TestUpdateEventUnit:
         assert "status = %s" in query
         assert "updated_at = NOW()" in query
         assert "final" in params
-        assert 42 in params  # event_internal_id in WHERE clause
+        assert 42 in params  # event_id in WHERE clause
 
     @patch("precog.database.crud_game_states.get_cursor")
     def test_partial_update_multiple_fields(self, mock_get_cursor):
@@ -2170,7 +2170,7 @@ class TestUpdateEventUnit:
 
     @patch("precog.database.crud_game_states.get_cursor")
     def test_returns_false_when_event_not_found(self, mock_get_cursor):
-        """Returns False when no row matches the event_internal_id."""
+        """Returns False when no row matches the event_id."""
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 0
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
@@ -2660,7 +2660,7 @@ class TestCheckEventFullySettled:
 
         assert check_event_fully_settled(42) is True
         mock_fetch_one.assert_called_once()
-        # Verify event_internal_id is passed as param
+        # Verify event_id is passed as param
         call_args = mock_fetch_one.call_args
         assert call_args[0][1] == (42,)
 
@@ -2703,7 +2703,7 @@ class TestCheckEventFullySettled:
         sql = call_args[0][0]
         assert "FILTER" in sql
         assert "settled" in sql
-        assert "event_internal_id" in sql
+        assert "event_id" in sql
 
 
 # =============================================================================
@@ -3043,8 +3043,8 @@ class TestBuildEventResult:
         assert result["outcomes"]["SCALAR-MKT"]["settlement_value"] == "0.3333"
 
     @patch("precog.database.crud_game_states.fetch_all")
-    def test_query_filters_by_event_internal_id(self, mock_fetch_all):
-        """Verify the SQL uses event_internal_id filter."""
+    def test_query_filters_by_event_id(self, mock_fetch_all):
+        """Verify the SQL uses event_id filter."""
         mock_fetch_all.return_value = []
 
         build_event_result(42)
@@ -3052,7 +3052,7 @@ class TestBuildEventResult:
         call_args = mock_fetch_all.call_args
         sql = call_args[0][0]
         params = call_args[0][1]
-        assert "event_internal_id" in sql
+        assert "event_id" in sql
         assert params == (42,)
 
 
@@ -3093,7 +3093,7 @@ class TestCreateMarketEnrichment:
 
         result = create_market(
             platform_id="kalshi",
-            event_internal_id=7,
+            event_id=7,
             external_id="KXNFLKCBUF",
             ticker="NFL-KC-BUF-YES",
             title="Chiefs to beat Bills",
@@ -3160,7 +3160,7 @@ class TestCreateMarketEnrichment:
 
         result = create_market(
             platform_id="kalshi",
-            event_internal_id=None,
+            event_id=None,
             external_id="KXTEST",
             ticker="TEST-MKT",
             title="Test Market",
@@ -3210,7 +3210,7 @@ class TestCreateMarketEnrichment:
         # Should succeed with proper Decimal values
         create_market(
             platform_id="kalshi",
-            event_internal_id=None,
+            event_id=None,
             external_id="KXTEST2",
             ticker="TEST-MKT-2",
             title="Test Market 2",

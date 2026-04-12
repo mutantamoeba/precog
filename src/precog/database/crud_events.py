@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 def get_series(series_id: str) -> dict[str, Any] | None:
     """
-    Get a series by series_id (business key).
+    Get a series by series_key (business key).
 
     Series represent recurring market groups (e.g., "NFL Game Markets" contains
     all individual game betting markets). This is the first level in the
@@ -36,7 +36,7 @@ def get_series(series_id: str) -> dict[str, Any] | None:
 
     Returns:
         Dict containing series data if found, None otherwise.
-        Keys: id, series_id, platform_id, external_id, category, subcategory,
+        Keys: id, series_key, platform_id, external_id, category, subcategory,
               title, frequency, tags, metadata, created_at, updated_at
 
     Example:
@@ -49,7 +49,7 @@ def get_series(series_id: str) -> dict[str, Any] | None:
 
     Educational Note:
         The series table uses a surrogate integer PK (id) for internal identity
-        and foreign key references. The series_id VARCHAR column is kept as a
+        and foreign key references. The series_key VARCHAR column is kept as a
         UNIQUE business key for human readability and API compatibility.
 
         The `tags` column (TEXT[]) is particularly useful for sport filtering:
@@ -63,13 +63,13 @@ def get_series(series_id: str) -> dict[str, Any] | None:
     Reference:
         - docs/database/DATABASE_SCHEMA_SUMMARY.md
         - src/precog/api_connectors/kalshi_client.py (get_series, get_sports_series)
-        - Migration 0019: Added surrogate PK, demoted series_id to business key
+        - Migration 0019: Added surrogate PK, demoted series_key to business key
     """
     query = """
-        SELECT id, series_id, platform_id, external_id, category, subcategory,
+        SELECT id, series_key, platform_id, external_id, category, subcategory,
                title, frequency, tags, metadata, created_at, updated_at
         FROM series
-        WHERE series_id = %s
+        WHERE series_key = %s
     """
     with get_cursor() as cur:
         cur.execute(query, (series_id,))
@@ -108,7 +108,7 @@ def list_series(
         >>> # Get all NFL-related series using tags
         >>> nfl = list_series(tags=['Football'])
         >>> for s in nfl:
-        ...     print(f"{s['series_id']}: {s['title']}")
+        ...     print(f"{s['series_key']}: {s['title']}")
 
         >>> # Paginate through results
         >>> page1 = list_series(limit=100, offset=0)
@@ -154,7 +154,7 @@ def list_series(
 
     # S608 false positive: conditions are hardcoded strings, not user input
     query = f"""
-        SELECT id, series_id, platform_id, external_id, category, subcategory,
+        SELECT id, series_key, platform_id, external_id, category, subcategory,
                title, frequency, tags, metadata, created_at, updated_at
         FROM series
         {where_clause}
@@ -188,9 +188,9 @@ def create_series(
     related markets (e.g., "NFL Game Markets" or "Presidential Election").
 
     Args:
-        series_id: Unique business key (e.g., "KXNFLGAME"). Stored as
-            VARCHAR(100) UNIQUE, but the surrogate integer PK (id) is
-            used for all internal references and FK relationships.
+        series_id: Unique business key (e.g., "KXNFLGAME"). Stored in the
+            series_key VARCHAR(100) UNIQUE column, but the surrogate integer
+            PK (id) is used for all internal references and FK relationships.
         platform_id: Foreign key to platforms table (e.g., 'kalshi')
         external_id: External ID from the platform API
         category: Series category - one of: 'sports', 'politics',
@@ -205,7 +205,7 @@ def create_series(
         Integer surrogate PK (id) of the created series
 
     Raises:
-        psycopg2.IntegrityError: If series_id already exists, platform_id
+        psycopg2.IntegrityError: If series_key already exists, platform_id
             invalid, or (platform_id, external_id) pair already exists
 
     Example:
@@ -233,11 +233,11 @@ def create_series(
     Reference:
         - docs/database/DATABASE_SCHEMA_SUMMARY.md
         - Migration 0010: Added tags column with GIN index
-        - Migration 0019: Added surrogate PK (id SERIAL)
+        - Migration 0019: Added surrogate PK (id SERIAL), series_id renamed to series_key
     """
     query = """
         INSERT INTO series (
-            series_id, platform_id, external_id, category, subcategory,
+            series_key, platform_id, external_id, category, subcategory,
             title, frequency, tags, metadata, created_at, updated_at
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
@@ -347,7 +347,7 @@ def update_series(
     query = f"""
         UPDATE series
         SET {", ".join(set_clauses)}
-        WHERE series_id = %s
+        WHERE series_key = %s
     """  # noqa: S608
 
     with get_cursor(commit=True) as cur:
@@ -413,7 +413,7 @@ def get_or_create_series(
         3. No duplicate insert errors occur
 
         The returned integer PK is used by downstream callers (e.g., the
-        poller) to set events.series_internal_id when creating events.
+        poller) to set events.series_id FK when creating events.
 
         The update_if_exists flag allows the caller to control whether
         existing records should be refreshed with API data. Set to False
@@ -499,7 +499,7 @@ def create_event(
     external_id: str,
     category: str,
     title: str,
-    series_internal_id: int | None = None,
+    series_id: int | None = None,
     subcategory: str | None = None,
     description: str | None = None,
     start_time: str | None = None,
@@ -512,7 +512,7 @@ def create_event(
     Create a new event record.
 
     Events are the parent entities for markets. Each market belongs to an event,
-    enforced via foreign key constraint (markets.event_internal_id -> events.id).
+    enforced via foreign key constraint (markets.event_id -> events.id).
 
     Args:
         event_id: Legacy parameter name kept for caller compatibility.
@@ -525,7 +525,7 @@ def create_event(
         category: Event category ('sports', 'politics', 'entertainment',
                   'economics', 'weather', 'other')
         title: Event title/description
-        series_internal_id: Optional integer FK to series(id). This is the
+        series_id: Optional integer FK to series(id). This is the
             surrogate PK from the series table (migration 0019), NOT the
             VARCHAR business key.
         subcategory: Optional subcategory (e.g., 'nfl', 'nba')
@@ -540,7 +540,7 @@ def create_event(
 
     Returns:
         Integer surrogate PK (id) of the created event. Callers use this
-        to set markets.event_internal_id FK.
+        to set markets.event_id FK.
 
     Raises:
         psycopg2.IntegrityError: If external_id+platform_id already exists
@@ -553,7 +553,7 @@ def create_event(
         ...     external_id="KXNFL-24DEC22-KC-SEA",
         ...     category="sports",
         ...     title="Chiefs vs Seahawks - Dec 22, 2024",
-        ...     series_internal_id=42,
+        ...     series_id=42,
         ...     subcategory="nfl",
         ...     game_id=15,
         ... )
@@ -570,14 +570,14 @@ def create_event(
 
     Reference:
         - docs/database/DATABASE_SCHEMA_SUMMARY.md
-        - Migration 0019: events.series_internal_id replaces events.series_id
-        - Migration 0020: events.id SERIAL PK, markets.event_internal_id INTEGER FK
+        - Migration 0019: events.series_id FK to series(id)
+        - Migration 0020: events.id SERIAL PK, markets.event_id INTEGER FK
         - Migration 0038: events.game_id FK to games(id)
         - Migration 0047: Dropped redundant event_id column
     """
     query = """
         INSERT INTO events (
-            platform_id, series_internal_id, external_id,
+            platform_id, series_id, external_id,
             category, subcategory, title, description,
             start_time, end_time, status, metadata,
             game_id,
@@ -589,7 +589,7 @@ def create_event(
 
     params = (
         platform_id,
-        series_internal_id,
+        series_id,
         external_id,
         category,
         subcategory,
@@ -675,7 +675,7 @@ def get_or_create_event(
     external_id: str,
     category: str,
     title: str,
-    series_internal_id: int | None = None,
+    series_id: int | None = None,
     subcategory: str | None = None,
     description: str | None = None,
     start_time: str | None = None,
@@ -697,7 +697,7 @@ def get_or_create_event(
         external_id: External ID from the platform API
         category: Event category
         title: Event title
-        series_internal_id: Optional integer FK to series(id) surrogate PK
+        series_id: Optional integer FK to series(id) surrogate PK
         subcategory: Optional subcategory
         description: Optional description
         start_time: Optional start time
@@ -709,7 +709,7 @@ def get_or_create_event(
     Returns:
         Tuple of (id, created) where id is the integer surrogate PK and
         created is True if event was newly created, False if it already existed.
-        Callers use the returned id to set markets.event_internal_id FK.
+        Callers use the returned id to set markets.event_id FK.
 
     Example:
         >>> event_pk, created = get_or_create_event(
@@ -718,7 +718,7 @@ def get_or_create_event(
         ...     external_id="KXNFL-24DEC22-KC-SEA",
         ...     category="sports",
         ...     title="Chiefs vs Seahawks - Dec 22, 2024",
-        ...     series_internal_id=42,
+        ...     series_id=42,
         ...     game_id=15,
         ... )
         >>> if created:
@@ -735,7 +735,7 @@ def get_or_create_event(
 
     Reference:
         - src/precog/schedulers/kalshi_poller.py
-        - Migration 0019: events.series_internal_id replaces events.series_id
+        - Migration 0019: events.series_id FK to series(id)
         - Migration 0020: events.id SERIAL PK, returns integer instead of VARCHAR
         - Migration 0047: Dropped redundant event_id column
         - Migration 0038: events.game_id FK to games(id)
@@ -757,7 +757,7 @@ def get_or_create_event(
         external_id=external_id,
         category=category,
         title=title,
-        series_internal_id=series_internal_id,
+        series_id=series_id,
         subcategory=subcategory,
         description=description,
         start_time=start_time,

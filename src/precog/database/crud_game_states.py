@@ -879,8 +879,8 @@ def update_bracket_counts() -> int:
     """
     Batch-update bracket_count for all markets based on their parent event.
 
-    bracket_count = number of markets sharing the same event_internal_id.
-    Markets without an event_internal_id get bracket_count = NULL (not 0),
+    bracket_count = number of markets sharing the same event_id.
+    Markets without an event_id get bracket_count = NULL (not 0),
     since they have no parent event to count within.
 
     Only rows where the current bracket_count differs from the computed
@@ -897,16 +897,16 @@ def update_bracket_counts() -> int:
     """
     query = """
         WITH counts AS (
-            SELECT event_internal_id, COUNT(*) AS cnt
+            SELECT event_id, COUNT(*) AS cnt
             FROM markets
-            WHERE event_internal_id IS NOT NULL
-            GROUP BY event_internal_id
+            WHERE event_id IS NOT NULL
+            GROUP BY event_id
         )
         UPDATE markets m
         SET bracket_count = c.cnt,
             updated_at = NOW()
         FROM counts c
-        WHERE m.event_internal_id = c.event_internal_id
+        WHERE m.event_id = c.event_id
           AND (m.bracket_count IS DISTINCT FROM c.cnt)
     """
     # Also null out bracket_count for markets with no event (shouldn't be 0)
@@ -914,7 +914,7 @@ def update_bracket_counts() -> int:
         UPDATE markets
         SET bracket_count = NULL,
             updated_at = NOW()
-        WHERE event_internal_id IS NULL
+        WHERE event_id IS NULL
           AND bracket_count IS NOT NULL
     """
     with get_cursor(commit=True) as cur:
@@ -932,7 +932,7 @@ def update_bracket_counts() -> int:
 # teams via Kalshi-specific team codes (which may differ from ESPN codes).
 
 
-def update_event_game_id(event_internal_id: int, game_id: int) -> bool:
+def update_event_game_id(event_id: int, game_id: int) -> bool:
     """Set game_id on an existing event. Returns True if updated.
 
     Links a Kalshi event to an ESPN game by setting the FK. This is
@@ -940,7 +940,7 @@ def update_event_game_id(event_internal_id: int, game_id: int) -> bool:
     previously unlinked (game_id IS NULL).
 
     Args:
-        event_internal_id: The events.id (integer surrogate PK)
+        event_id: The events.id (integer surrogate PK)
         game_id: The games.id to link to
 
     Returns:
@@ -962,12 +962,12 @@ def update_event_game_id(event_internal_id: int, game_id: int) -> bool:
         WHERE id = %s AND (game_id IS NULL OR game_id != %s)
     """
     with get_cursor(commit=True) as cur:
-        cur.execute(query, (game_id, event_internal_id, game_id))
+        cur.execute(query, (game_id, event_id, game_id))
         return bool(cur.rowcount > 0)
 
 
 def update_event(
-    event_internal_id: int,
+    event_id: int,
     *,
     start_time: str | None = None,
     end_time: str | None = None,
@@ -981,7 +981,7 @@ def update_event(
     explicitly provided (non-None). Always bumps ``updated_at``.
 
     Args:
-        event_internal_id: The events.id (integer surrogate PK).
+        event_id: The events.id (integer surrogate PK).
         start_time: New start time (ISO 8601 string). PostgreSQL handles
             ISO string -> TIMESTAMPTZ conversion natively.
         end_time: New end time (ISO 8601 string).
@@ -1043,14 +1043,14 @@ def update_event(
     set_parts.append("updated_at = NOW()")
 
     query = f"UPDATE events SET {', '.join(set_parts)} WHERE id = %s"  # noqa: S608
-    params.append(event_internal_id)
+    params.append(event_id)
 
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         return bool(cur.rowcount > 0)
 
 
-def check_event_fully_settled(event_internal_id: int) -> bool:
+def check_event_fully_settled(event_id: int) -> bool:
     """Check whether all markets in an event have settled.
 
     Uses a single aggregate query to count total markets and settled
@@ -1058,7 +1058,7 @@ def check_event_fully_settled(event_internal_id: int) -> bool:
     market exists AND every market has ``status = 'settled'``.
 
     Args:
-        event_internal_id: The events.id (integer surrogate PK).
+        event_id: The events.id (integer surrogate PK).
 
     Returns:
         True if all markets in the event are settled (and at least one
@@ -1078,9 +1078,9 @@ def check_event_fully_settled(event_internal_id: int) -> bool:
             COUNT(*) AS total,
             COUNT(*) FILTER (WHERE status = 'settled') AS settled
         FROM markets
-        WHERE event_internal_id = %s
+        WHERE event_id = %s
     """
-    result = fetch_one(query, (event_internal_id,))
+    result = fetch_one(query, (event_id,))
     if result is None:
         return False
     total = int(result["total"])
@@ -1088,7 +1088,7 @@ def check_event_fully_settled(event_internal_id: int) -> bool:
     return total > 0 and total == settled
 
 
-def build_event_result(event_internal_id: int) -> dict[str, Any]:
+def build_event_result(event_id: int) -> dict[str, Any]:
     """Build a JSONB result summary from child markets' settlement values.
 
     Queries all markets for the given event and assembles a dict suitable
@@ -1096,7 +1096,7 @@ def build_event_result(event_internal_id: int) -> dict[str, Any]:
     are serialized as strings to preserve Decimal precision.
 
     Args:
-        event_internal_id: The events.id (integer surrogate PK).
+        event_id: The events.id (integer surrogate PK).
 
     Returns:
         Dict with structure::
@@ -1132,10 +1132,10 @@ def build_event_result(event_internal_id: int) -> dict[str, Any]:
     query = """
         SELECT ticker, settlement_value, status
         FROM markets
-        WHERE event_internal_id = %s
+        WHERE event_id = %s
         ORDER BY ticker
     """
-    rows = fetch_all(query, (event_internal_id,))
+    rows = fetch_all(query, (event_id,))
 
     markets_total = len(rows)
     markets_settled = sum(1 for r in rows if r["status"] == "settled")

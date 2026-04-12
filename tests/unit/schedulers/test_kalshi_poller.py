@@ -1463,7 +1463,7 @@ class TestSettlementDetection:
             "yes_ask_price": Decimal("0.4800"),
             "no_ask_price": Decimal("0.5500"),
             "status": "open",
-            "event_internal_id": 42,
+            "event_id": 42,
         }
 
         with (
@@ -1510,7 +1510,7 @@ class TestSettlementDetection:
             "yes_ask_price": Decimal("0.4800"),
             "no_ask_price": Decimal("0.5500"),
             "status": "open",
-            "event_internal_id": 42,
+            "event_id": 42,
         }
 
         with (
@@ -1555,7 +1555,7 @@ class TestSettlementDetection:
             "yes_ask_price": Decimal("0.4800"),
             "no_ask_price": Decimal("0.5500"),
             "status": "open",
-            "event_internal_id": 42,
+            "event_id": 42,
         }
 
         with (
@@ -1602,7 +1602,7 @@ class TestSettlementDetection:
             "yes_ask_price": Decimal("0.4800"),
             "no_ask_price": Decimal("0.5500"),
             "status": "open",
-            "event_internal_id": 42,
+            "event_id": 42,
         }
 
         with (
@@ -1649,7 +1649,7 @@ class TestSettlementDetection:
             "yes_ask_price": Decimal("0.4800"),
             "no_ask_price": Decimal("0.5500"),
             "status": "open",
-            "event_internal_id": 42,
+            "event_id": 42,
         }
 
         with (
@@ -1693,7 +1693,7 @@ class TestSettlementDetection:
             "yes_ask_price": Decimal("0.4800"),
             "no_ask_price": Decimal("0.5500"),
             "status": "open",
-            "event_internal_id": 42,
+            "event_id": 42,
         }
 
         with (
@@ -1734,7 +1734,7 @@ class TestSettlementDetection:
             "yes_ask_price": Decimal("0.4800"),
             "no_ask_price": Decimal("0.5500"),
             "status": "open",
-            "event_internal_id": 42,
+            "event_id": 42,
         }
 
         mock_result = {
@@ -1793,7 +1793,7 @@ class TestSettlementDetection:
             "yes_ask_price": Decimal("0.4800"),
             "no_ask_price": Decimal("0.5500"),
             "status": "open",
-            "event_internal_id": 42,
+            "event_id": 42,
         }
 
         with (
@@ -1820,7 +1820,7 @@ class TestSettlementDetection:
 
     @pytest.mark.unit
     def test_no_event_check_when_market_has_no_event(self, poller_with_mock_client):
-        """When market has no event_internal_id, event settlement check is skipped."""
+        """When market has no event_id, event settlement check is skipped."""
         settled_market = {
             "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
             "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
@@ -1841,7 +1841,7 @@ class TestSettlementDetection:
             "yes_ask_price": Decimal("0.4800"),
             "no_ask_price": Decimal("0.5500"),
             "status": "open",
-            "event_internal_id": None,  # No event
+            "event_id": None,  # No event
         }
 
         with (
@@ -1883,7 +1883,7 @@ class TestSettlementDetection:
             "yes_ask_price": Decimal("0.4800"),
             "no_ask_price": Decimal("0.5500"),
             "status": "open",
-            "event_internal_id": 42,
+            "event_id": 42,
         }
 
         with (

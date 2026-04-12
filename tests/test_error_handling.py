@@ -137,7 +137,7 @@ def test_crud_operation_with_foreign_key_violation():
     with pytest.raises(psycopg2.IntegrityError) as exc_info:
         create_market(
             platform_id="nonexistent_platform",  # FK violation
-            event_internal_id=None,
+            event_id=None,
             external_id="TEST",
             ticker="INVALID",
             title="Test Market",

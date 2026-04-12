@@ -86,7 +86,7 @@ def backfill_event_times(*, dry_run: bool = False) -> int:
             WHERE (e.start_time IS NULL OR e.end_time IS NULL)
               AND EXISTS (
                   SELECT 1 FROM markets m
-                  WHERE m.event_internal_id = e.id
+                  WHERE m.event_id = e.id
                     AND (m.open_time IS NOT NULL OR m.expiration_time IS NOT NULL)
               )
         """
@@ -99,14 +99,14 @@ def backfill_event_times(*, dry_run: bool = False) -> int:
             end_time = COALESCE(events.end_time, sub.max_exp),
             updated_at = NOW()
         FROM (
-            SELECT event_internal_id,
+            SELECT event_id,
                    MIN(open_time) AS min_open,
                    MAX(expiration_time) AS max_exp
             FROM markets
             WHERE open_time IS NOT NULL OR expiration_time IS NOT NULL
-            GROUP BY event_internal_id
+            GROUP BY event_id
         ) sub
-        WHERE events.id = sub.event_internal_id
+        WHERE events.id = sub.event_id
           AND (events.start_time IS NULL OR events.end_time IS NULL)
     """
     with get_cursor(commit=True) as cur:
@@ -143,7 +143,7 @@ def backfill_event_status(*, dry_run: bool = False) -> dict[str, int]:
                        COUNT(m.id) AS total,
                        COUNT(m.id) FILTER (WHERE m.status = 'settled') AS settled
                 FROM events e
-                JOIN markets m ON m.event_internal_id = e.id
+                JOIN markets m ON m.event_id = e.id
                 WHERE e.status IS NULL
                 GROUP BY e.id
                 HAVING COUNT(m.id) > 0
@@ -162,9 +162,9 @@ def backfill_event_status(*, dry_run: bool = False) -> dict[str, int]:
         UPDATE events SET status = 'final', updated_at = NOW()
         WHERE status IS NULL
           AND id IN (
-              SELECT event_internal_id
+              SELECT event_id
               FROM markets
-              GROUP BY event_internal_id
+              GROUP BY event_id
               HAVING COUNT(*) = COUNT(*) FILTER (WHERE status = 'settled')
                  AND COUNT(*) > 0
           )
@@ -174,9 +174,9 @@ def backfill_event_status(*, dry_run: bool = False) -> dict[str, int]:
         UPDATE events SET status = 'live', updated_at = NOW()
         WHERE status IS NULL
           AND id IN (
-              SELECT event_internal_id
+              SELECT event_id
               FROM markets
-              GROUP BY event_internal_id
+              GROUP BY event_id
               HAVING COUNT(*) > COUNT(*) FILTER (WHERE status = 'settled')
                  AND COUNT(*) > 0
           )
@@ -213,7 +213,7 @@ def backfill_event_results(*, dry_run: bool = False) -> int:
         FROM events e
         WHERE e.status = 'final'
           AND e.result IS NULL
-          AND EXISTS (SELECT 1 FROM markets m WHERE m.event_internal_id = e.id)
+          AND EXISTS (SELECT 1 FROM markets m WHERE m.event_id = e.id)
     """
     events = fetch_all(find_query)
 
@@ -227,7 +227,7 @@ def backfill_event_results(*, dry_run: bool = False) -> int:
         market_query = """
             SELECT ticker, settlement_value, status
             FROM markets
-            WHERE event_internal_id = %s
+            WHERE event_id = %s
             ORDER BY ticker
         """
         markets = fetch_all(market_query, (eid,))
@@ -283,7 +283,7 @@ def backfill_market_settlement_values(
         SELECT m.id, m.ticker, m.status, m.metadata,
                e.external_id AS event_ticker
         FROM markets m
-        LEFT JOIN events e ON e.id = m.event_internal_id
+        LEFT JOIN events e ON e.id = m.event_id
         WHERE m.status = 'settled'
           AND m.settlement_value IS NULL
     """

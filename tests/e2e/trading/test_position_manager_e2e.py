@@ -120,8 +120,8 @@ class TestPositionLifecycle:
             # Mock fetchone for position data after creation
             position_data_after_create = {
                 "id": 1,  # Surrogate key
-                "position_id": "POS-1",  # Business key
-                "market_internal_id": 1,
+                "position_key": "POS-1",  # Business key
+                "market_id": 1,
                 "strategy_id": 42,
                 "model_id": 7,
                 "side": "YES",
@@ -143,7 +143,7 @@ class TestPositionLifecycle:
 
             # Open position
             position = manager.open_position(
-                market_internal_id=1,
+                market_id=1,
                 strategy_id=42,
                 model_id=7,
                 side="YES",
@@ -157,7 +157,7 @@ class TestPositionLifecycle:
 
             # Verify position created
             assert position["id"] == 1
-            assert position["position_id"] == "POS-1"
+            assert position["position_key"] == "POS-1"
             assert position["side"] == "YES"
             assert position["quantity"] == 10
             assert position["entry_price"] == Decimal("0.5000")
@@ -177,8 +177,8 @@ class TestPositionLifecycle:
             # Mock fetchone for updated position data
             position_data_after_update = {
                 "id": 2,  # NEW surrogate key (SCD Type 2!)
-                "position_id": "POS-1",  # SAME business key
-                "market_internal_id": 1,
+                "position_key": "POS-1",  # SAME business key
+                "market_id": 1,
                 "strategy_id": 42,
                 "model_id": 7,
                 "side": "YES",
@@ -206,7 +206,7 @@ class TestPositionLifecycle:
 
             # Verify SCD Type 2 versioning
             assert updated_position["id"] == 2  # NEW ID!
-            assert updated_position["position_id"] == "POS-1"  # SAME business key
+            assert updated_position["position_key"] == "POS-1"  # SAME business key
             assert updated_position["current_price"] == Decimal("0.6000")
             assert updated_position["unrealized_pnl"] == Decimal("1.00")  # Profit!
             assert updated_position["row_current_ind"] is True
@@ -219,8 +219,8 @@ class TestPositionLifecycle:
             # Mock fetchone for current position (before close)
             position_data_before_close = {
                 "id": 2,
-                "position_id": "POS-1",
-                "market_internal_id": 1,
+                "position_key": "POS-1",
+                "market_id": 1,
                 "strategy_id": 42,
                 "model_id": 7,
                 "side": "YES",
@@ -242,8 +242,8 @@ class TestPositionLifecycle:
             # Mock fetchone for closed position (after close)
             position_data_after_close = {
                 "id": 3,  # FINAL surrogate key
-                "position_id": "POS-1",  # SAME business key
-                "market_internal_id": 1,
+                "position_key": "POS-1",  # SAME business key
+                "market_id": 1,
                 "strategy_id": 42,
                 "model_id": 7,
                 "side": "YES",
@@ -277,7 +277,7 @@ class TestPositionLifecycle:
 
             # Verify final state
             assert closed_position["id"] == 3  # FINAL ID
-            assert closed_position["position_id"] == "POS-1"  # SAME business key
+            assert closed_position["position_key"] == "POS-1"  # SAME business key
             assert closed_position["status"] == "closed"
             assert closed_position["exit_price"] == Decimal("0.7500")
             assert closed_position["exit_reason"] == "profit_target"
@@ -338,8 +338,8 @@ class TestPositionLifecycle:
             # Mock position data
             position_data = {
                 "id": 1,
-                "position_id": "POS-1",
-                "market_internal_id": 1,
+                "position_key": "POS-1",
+                "market_id": 1,
                 "strategy_id": 42,
                 "model_id": 7,
                 "side": "YES",
@@ -366,7 +366,7 @@ class TestPositionLifecycle:
 
             # Open position with all parameters
             position = manager.open_position(
-                market_internal_id=1,
+                market_id=1,
                 strategy_id=42,
                 model_id=7,
                 side="YES",
@@ -422,7 +422,7 @@ class TestPositionLifecycle:
             # Mock updated position
             position_data = {
                 "id": 2,  # NEW ID!
-                "position_id": "POS-1",  # Same business key
+                "position_key": "POS-1",  # Same business key
                 "side": "YES",
                 "quantity": 10,
                 "entry_price": Decimal("0.5000"),
@@ -438,7 +438,7 @@ class TestPositionLifecycle:
 
             # Verify SCD Type 2 versioning
             assert updated["id"] == 2  # NEW surrogate ID
-            assert updated["position_id"] == "POS-1"  # SAME business key
+            assert updated["position_key"] == "POS-1"  # SAME business key
             assert updated["current_price"] == Decimal("0.6500")
             assert updated["unrealized_pnl"] == Decimal("1.50")
 
@@ -481,7 +481,7 @@ class TestPositionLifecycle:
             # Mock current position (before close)
             current_position_data = {
                 "id": 2,
-                "position_id": "POS-1",
+                "position_key": "POS-1",
                 "side": "YES",
                 "quantity": 10,
                 "entry_price": Decimal("0.5000"),
@@ -493,7 +493,7 @@ class TestPositionLifecycle:
             # Mock closed position (after close)
             closed_position_data = {
                 "id": 3,  # Final ID
-                "position_id": "POS-1",
+                "position_key": "POS-1",
                 "side": "YES",
                 "quantity": 10,
                 "entry_price": Decimal("0.5000"),
@@ -546,7 +546,7 @@ class TestPositionVersioning:
 
         Key concepts:
         - Surrogate key (id): Changes with each version (1 -> 2 -> 3)
-        - Business key (position_id): Stays constant across versions (POS-1)
+        - Business key (position_key): Stays constant across versions (POS-1)
         - row_current_ind: TRUE for current version, FALSE for historical
 
         Why SCD Type 2 for positions?
@@ -592,7 +592,7 @@ class TestPositionVersioning:
             # Mock new version data
             new_version_data = {
                 "id": 2,  # NEW ID
-                "position_id": "POS-1",  # SAME business key
+                "position_key": "POS-1",  # SAME business key
                 "side": "YES",
                 "quantity": 10,
                 "entry_price": Decimal("0.5000"),
@@ -608,7 +608,7 @@ class TestPositionVersioning:
 
             # Verify new version created
             assert updated["id"] == 2  # NEW surrogate ID
-            assert updated["position_id"] == "POS-1"  # SAME business key
+            assert updated["position_key"] == "POS-1"  # SAME business key
             assert updated["row_current_ind"] is True  # Current version
 
             # Note: Old version (id=1) still exists in database with row_current_ind=FALSE
@@ -623,7 +623,7 @@ class TestPositionVersioning:
             ALWAYS filter by row_current_ind = TRUE when querying positions:
             ```sql
             SELECT * FROM positions
-            WHERE position_id = 'POS-1'
+            WHERE position_key = 'POS-1'
               AND row_current_ind = TRUE  -- CRITICAL!
             ```
 
@@ -652,7 +652,7 @@ class TestPositionVersioning:
             # Mock current version (row_current_ind = TRUE)
             current_version = {
                 "id": 2,
-                "position_id": "POS-1",
+                "position_key": "POS-1",
                 "current_price": Decimal("0.6000"),
                 "unrealized_pnl": Decimal("1.00"),  # Include P&L for logging
                 "row_current_ind": True,  # CURRENT
@@ -715,7 +715,7 @@ class TestPositionVersioning:
                 # Mock version data
                 version_data = {
                     "id": version_id,
-                    "position_id": "POS-1",  # Business key stays constant
+                    "position_key": "POS-1",  # Business key stays constant
                     "side": "YES",
                     "quantity": 10,
                     "entry_price": Decimal("0.5000"),
@@ -733,7 +733,7 @@ class TestPositionVersioning:
 
                 # Verify new version created
                 assert updated["id"] == version_id
-                assert updated["position_id"] == "POS-1"  # Business key constant
+                assert updated["position_key"] == "POS-1"  # Business key constant
                 assert updated["current_price"] == price
                 assert updated["row_current_ind"] is True
 
@@ -1022,7 +1022,7 @@ class TestTrailingStopIntegration:
             # Mock position with stop TRIGGERED (price at/below stop)
             triggered_position = {
                 "id": 1,
-                "position_id": "POS-1",
+                "position_key": "POS-1",
                 "side": "YES",
                 "current_price": Decimal("0.7400"),  # Below stop!
                 "status": "open",
@@ -1112,8 +1112,8 @@ class TestPositionPrecisionRequirements:
             # Mock position with ALL price fields as Decimal
             position_data = {
                 "id": 1,
-                "position_id": "POS-1",
-                "market_internal_id": 1,
+                "position_key": "POS-1",
+                "market_id": 1,
                 "strategy_id": 1,
                 "model_id": 1,
                 "side": "YES",
@@ -1135,7 +1135,7 @@ class TestPositionPrecisionRequirements:
 
             # Open position (all inputs Decimal)
             position = manager.open_position(
-                market_internal_id=1,
+                market_id=1,
                 strategy_id=1,
                 model_id=1,
                 side="YES",
@@ -1245,7 +1245,7 @@ class TestPositionPrecisionRequirements:
             # Mock position data (all Decimal)
             position_v1 = {
                 "id": 1,
-                "position_id": "POS-1",
+                "position_key": "POS-1",
                 "side": "YES",
                 "quantity": 10,
                 "entry_price": Decimal("0.5000"),
@@ -1259,7 +1259,7 @@ class TestPositionPrecisionRequirements:
 
             position_v2 = {
                 "id": 2,
-                "position_id": "POS-1",
+                "position_key": "POS-1",
                 "side": "YES",
                 "quantity": 10,
                 "entry_price": Decimal("0.5000"),
@@ -1271,7 +1271,7 @@ class TestPositionPrecisionRequirements:
 
             position_v3_before = {
                 "id": 2,
-                "position_id": "POS-1",
+                "position_key": "POS-1",
                 "side": "YES",
                 "quantity": 10,
                 "entry_price": Decimal("0.5000"),
@@ -1280,7 +1280,7 @@ class TestPositionPrecisionRequirements:
 
             position_v3_after = {
                 "id": 3,
-                "position_id": "POS-1",
+                "position_key": "POS-1",
                 "side": "YES",
                 "quantity": 10,
                 "entry_price": Decimal("0.5000"),
@@ -1301,7 +1301,7 @@ class TestPositionPrecisionRequirements:
 
             # Open position (all Decimal)
             pos = manager.open_position(
-                market_internal_id=1,
+                market_id=1,
                 strategy_id=1,
                 model_id=1,
                 side="YES",
@@ -1370,7 +1370,7 @@ class TestMarginValidationAndErrors:
 
         with pytest.raises(InsufficientMarginError, match="Required margin"):
             manager.open_position(
-                market_internal_id=1,
+                market_id=1,
                 strategy_id=1,
                 model_id=1,
                 side="YES",
@@ -1396,7 +1396,7 @@ class TestMarginValidationAndErrors:
 
         with pytest.raises(InsufficientMarginError, match="Required margin"):
             manager.open_position(
-                market_internal_id=1,
+                market_id=1,
                 strategy_id=1,
                 model_id=1,
                 side="NO",
@@ -1428,7 +1428,7 @@ class TestMarginValidationAndErrors:
         # Test price too low ($0.00)
         with pytest.raises(ValueError, match="outside valid range"):
             manager.open_position(
-                market_internal_id=1,
+                market_id=1,
                 strategy_id=1,
                 model_id=1,
                 side="YES",
@@ -1441,7 +1441,7 @@ class TestMarginValidationAndErrors:
         # Test price too high ($1.00)
         with pytest.raises(ValueError, match="outside valid range"):
             manager.open_position(
-                market_internal_id=1,
+                market_id=1,
                 strategy_id=1,
                 model_id=1,
                 side="YES",
