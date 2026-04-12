@@ -16837,6 +16837,7 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 - v2.29: **TWO-AXIS ENVIRONMENT CONFIGURATION (PLANNED)** - Added Decision #105/ADR-105 for environment configuration architecture with PRECOG_ENV (database) + {MARKET}_MODE (API per market) with safety guardrails. Documented in PHASE_2.5_DEFERRED_TASKS_V1.1, Issue #202.
 - v2.28: **BASEPOLLER UNIFIED DESIGN PATTERN** - Added Decision #103/ADR-103 (BasePoller abstract class with Template Method pattern, {Platform}{Entity}Poller naming convention, generic stats fields)
 - v2.27: **PHASE 2.5 LIVE DATA COLLECTION** - Added Decisions #100-102/ADR-100-102 (Service Supervisor Pattern, ESPN Status/Season Mapping, CloudWatch/ELK Deferral)
+- v2.37: **ODS SCHEMA CONVENTIONS** - Added Decision #116/ADR-116 (Operational Data Store Schema Conventions). Universal `id` PK, `_key` business keys, `_id` FK naming, RESTRICT default. Supersedes ADR-014 partially, refines ADR-089 naming. Session 52.
 - v2.36: **DOMAIN MODULE PATTERN** - Added Decision #115/ADR-115 (Database Domain Module Architecture). Direct imports from domain modules, no re-export facades. Session 38.
 - v2.26: **CI-SAFE STRESS TEST MARKERS (ISSUE #168)** - Added Decision #99/ADR-099 (skipif vs xfail(run=False) for CI Stress Tests): `skipif(_is_ci)` preferred over `xfail(run=False)` for clearer semantic meaning (SKIPPED vs XFAIL)
 - v2.24: **TIMESCALEDB DECISION (PHASE 6+)** - Added Decision #98/ADR-098 (TimescaleDB Deferred to Phase 6+): Current PostgreSQL + SCD Type 2 sufficient for Phase 1-5, triggers defined for re-evaluation
@@ -16951,5 +16952,145 @@ No cycles. No domain module imports another domain module.
 - Issue #554: CRUD god object decomposition
 - Session 37: Phase 1a extraction (4 modules)
 - Session 38: Phase 1b/1c extraction (11 modules) + Option B cleanup
+
+---
+
+## Decision #116/ADR-116: Operational Data Store (ODS) Schema Conventions — Universal Surrogate PK, Business Key Suffix, FK Naming, RESTRICT Default
+
+**Date:** April 12, 2026
+**Status:** ✅ Accepted
+**Phase:** Phase A' (Schema Hardening Arc, Epic #745)
+**Priority:** 🔴 Critical (foundational schema convention — all future migrations must follow)
+**Supersedes:** Partially supersedes ADR-014 (ON DELETE CASCADE guidance) and refines ADR-089 (Dual-Key Pattern) naming conventions.
+
+### Context: Precog is an Operational Data Store, not pure OLTP or Kimball warehouse
+
+Precog serves **both** transactional writes (trades, orders, market polling) **and** analytical reads (backtesting, attribution, edge calculation). This places it in the **Operational Data Store (ODS)** category:
+
+| Paradigm | FK Enforcement | History | PK Convention | Precog? |
+|---|---|---|---|---|
+| **OLTP** | Strict | UPDATE-in-place + audit tables | `id SERIAL` everywhere | Partially — we need strict FKs |
+| **Kimball Warehouse** | Relaxed (ETL guarantees) | SCD Type 2 in dimension tables | Surrogate for facts, natural key OK for dimensions | Partially — we need SCD2 |
+| **ODS (our model)** | Strict | SCD Type 2 where needed, append-only elsewhere | `id SERIAL` everywhere (no exceptions) | **Yes** |
+
+**Why no Kimball "dimension table" exception for natural-key PKs:** Migration 0057 (session 49) added SCD Type 2 columns to `teams`, `venues`, and `series` — tables that were previously classified as "stable dimensions." Any table can be promoted to SCD2 as requirements evolve. Pre-standardizing all tables to surrogate `id` PKs prevents the costly conversion (as demonstrated by migrations 0019, 0020, 0036 which each renamed PKs on a subset of tables).
+
+**Why this ADR was needed:** Session 52 live-DB schema audit revealed:
+- 21/41 tables use `id` as PK; 15 use non-standard INTEGER names; 3 use VARCHAR PKs; 1 uses a composite PK
+- 8 FK columns use an `_internal_id` suffix (a Precog-specific workaround for business-key naming collisions)
+- 3 SCD2 tables have `<table>_id VARCHAR` business keys that collide with child FK columns named `<parent>_id INTEGER`
+- 8 FK constraints use implicit `NO ACTION` instead of explicit `RESTRICT`
+
+### Decision: Four Rules for Schema Conventions
+
+**Rule 1: Universal `id SERIAL PRIMARY KEY`**
+
+Every table uses `id SERIAL PRIMARY KEY` as the surrogate row identifier. No exceptions for dimensional, immutable, or lookup tables.
+
+```sql
+-- CORRECT (all tables, including lookup/immutable)
+CREATE TABLE strategies (
+    id SERIAL PRIMARY KEY,
+    strategy_key VARCHAR(100) NOT NULL UNIQUE,
+    ...
+);
+
+-- WRONG (natural-key PK)
+CREATE TABLE strategies (
+    strategy_id INTEGER PRIMARY KEY,
+    ...
+);
+```
+
+**Rationale:** ODS tables are candidates for future SCD2 promotion. Surrogate PKs decouple row identity from business identity, enabling SCD2 conversion without FK cascade rewrites.
+
+**Rule 2: Business keys use `_key` suffix (not `_id`)**
+
+Business-key columns (stable identifiers for logical entities) are named `<table>_key` to avoid collision with FK columns named `<parent>_id`.
+
+```sql
+-- CORRECT
+ALTER TABLE positions ADD COLUMN position_key VARCHAR NOT NULL;
+-- position_key holds 'POS-42' (Precog-internal business identifier)
+
+-- WRONG (collides with FK naming)
+ALTER TABLE positions ADD COLUMN position_id VARCHAR NOT NULL;
+-- position_id could be confused with an FK to positions(id)
+```
+
+**Three-layer identifier pattern for enriched tables:**
+
+| Layer | Column Name | Purpose | Example Value |
+|---|---|---|---|
+| Row identity | `id` | Surrogate PK, FK target, unique per SCD2 version | `42` |
+| Precog identity | `<table>_key` | Internal business key, format `<PREFIX>-{id}`, stable across versions | `MKT-42` |
+| Platform identity | `external_id` | Platform's identifier, scoped by `platform_id` | `KXNFLGAME-25DEC14DALNYG-NYG` |
+
+Not all tables need all three layers. Append-only tables may have only `id`. SCD2 tables should have `id` + `_key`. Tables sourced from external platforms should have all three.
+
+**Rule 3: FK columns use `<parent>_id` pointing at `<parent>(id)`**
+
+No `_internal_id` suffix. The `_key` suffix on business keys (Rule 2) eliminates the naming collision that originally motivated `_internal_id`.
+
+```sql
+-- CORRECT (after Rule 2 eliminates the collision)
+ALTER TABLE edges ADD COLUMN market_id INTEGER REFERENCES markets(id) ON DELETE RESTRICT;
+
+-- WRONG (unnecessary disambiguation suffix)
+ALTER TABLE edges ADD COLUMN market_internal_id INTEGER REFERENCES markets(id) ON DELETE RESTRICT;
+```
+
+**Exception for immutable/lookup parent tables with VARCHAR business-key UNIQUE columns:** When a parent table's `_key` column is VARCHAR and child tables already hold VARCHAR FK values (e.g., `'kalshi'` referencing `platforms(platform_key)`), the child FK column may retain its existing name temporarily. These cases should be tracked for eventual INTEGER conversion.
+
+**Rule 4: `ON DELETE RESTRICT` is the default**
+
+Every new FK uses `ON DELETE RESTRICT` unless a specific exception is justified in the migration docstring.
+
+```sql
+-- CORRECT (explicit RESTRICT)
+ALTER TABLE orders ADD COLUMN edge_id INTEGER REFERENCES edges(id) ON DELETE RESTRICT;
+
+-- WRONG (CASCADE silently destroys provenance)
+ALTER TABLE orders ADD COLUMN edge_id INTEGER REFERENCES edges(id) ON DELETE CASCADE;
+
+-- WRONG (SET NULL silently orphans data)
+ALTER TABLE orders ADD COLUMN edge_id INTEGER REFERENCES edges(id) ON DELETE SET NULL;
+
+-- WRONG (implicit NO ACTION — functionally identical to RESTRICT but unclear intent)
+ALTER TABLE orders ADD COLUMN edge_id INTEGER REFERENCES edges(id);
+```
+
+**Rationale (from migration 0057):** "Every FK should block parent deletion instead of silently destroying provenance or child data." Matches PostgreSQL manual best practice for transactional systems handling financial data.
+
+### Implementation
+
+Three migrations implement these rules across the existing schema:
+
+- **Migration 0058** (#788): Rename 3 business-key columns to `_key` + rename 8 `_internal_id` FK columns to `_id` + convert 8 `NO ACTION` to explicit `RESTRICT`
+- **Migration 0059** (#789): Rename 15 non-standard INTEGER PK columns to `id`
+- **Migration 0060** (#790): Convert 3 VARCHAR-PK tables to surrogate `id` + `_key` UNIQUE
+
+Tracked under umbrella issue #787 (C2b PK/FK Standardization), epic #745.
+
+### Alternatives Considered
+
+1. **Keep Kimball exception for dimensional tables** — Rejected. Migration 0057 proved "stable dimensions" aren't stable (teams/venues/series gained SCD2). The exception creates cognitive load ("which convention does this table use?") with no compensating benefit.
+
+2. **Keep `_internal_id` suffix** — Rejected. The suffix exists because `<table>_id VARCHAR` business keys collide with `<parent>_id INTEGER` FK columns. Renaming business keys to `_key` eliminates the collision at the root, making `_internal_id` unnecessary.
+
+3. **Use `_nk` (natural key) suffix from Kimball** — Rejected. `_key` is more readable for non-warehouse developers and serves the same purpose.
+
+4. **Rename business keys to `_code` instead of `_key`** — Rejected. `_code` implies a short enumerated value (like `team_code`), not a versioned entity identifier like `POS-42`.
+
+### Cross-References
+
+- **ADR-089:** Dual-Key Schema Pattern (foundational — explains WHY surrogate + business key exist; this ADR standardizes HOW they're named)
+- **ADR-014:** ON DELETE CASCADE (partially superseded — Rule 4 establishes RESTRICT as the new default)
+- **Migration 0036:** PK naming consistency (partial predecessor — renamed 3 PKs to `id`; this ADR completes the remaining 15+)
+- **Migration 0057:** FK RESTRICT conversion (implemented Rule 4 for existing FKs; this ADR formalizes it as policy)
+- **Issue #787:** C2b PK/FK Standardization umbrella
+- **Issue #791:** C2c Business Key Enrichment (adds missing `_key` columns to markets, events, game_states, games)
+- **Pattern 47:** Verify Schema Before Fixing Pattern Violations (live-DB audit methodology used to validate these rules)
+- **Session 52:** Design session — live-DB audit, Holden+Galadriel design review, ODS framing analysis
 
 **END OF ARCHITECTURE DECISIONS V2.36**
