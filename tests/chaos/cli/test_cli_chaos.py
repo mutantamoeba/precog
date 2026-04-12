@@ -25,6 +25,16 @@ def setup_commands():
     register_commands()
 
 
+@pytest.fixture(autouse=True)
+def _mock_migration_check():
+    """Bypass migration parity check in all scheduler CLI tests."""
+    from precog.database.migration_check import MigrationStatus
+
+    ok = MigrationStatus(is_current=True, db_version="0057", head_version="0057")
+    with patch("precog.database.migration_check.check_migration_parity", return_value=ok):
+        yield
+
+
 class TestSchedulerChaos:
     """Chaos tests for scheduler CLI.
 
