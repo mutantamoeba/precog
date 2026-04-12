@@ -2,7 +2,7 @@
 Live Database Schema Audit Script (Pattern 47).
 
 Spins up an ephemeral PostgreSQL container via testcontainers, applies all
-Alembic migrations (0001-0057), then queries information_schema to produce
+Alembic migrations (0001 through head), then queries information_schema to produce
 an authoritative inventory of:
   1. Primary keys (table, column, data type)
   2. Foreign keys (child -> parent, ON DELETE action)
@@ -27,7 +27,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 _AUDIT_USER = "audit_user"
-_AUDIT_PASSWORD = "audit_password"
+_AUDIT_PASSWORD = os.getenv("AUDIT_DB_PASSWORD", "audit_password")
 _AUDIT_DB = "precog_audit"
 
 
@@ -51,12 +51,15 @@ def apply_migrations(host, port, database, user, password):
         cwd=str(alembic_dir),
         env=env,
         capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=120,
     )
     if result.returncode != 0:
         print("=== ALEMBIC MIGRATION FAILED ===")
-        print("STDOUT:", result.stdout.decode(errors="replace"))
-        print("STDERR:", result.stderr.decode(errors="replace"))
+        print("STDOUT:", result.stdout)
+        print("STDERR:", result.stderr)
         sys.exit(1)
     print("Alembic migrations applied successfully.")
 
@@ -143,44 +146,44 @@ def main():
         print("Applying Alembic migrations...")
         apply_migrations(host, port, _AUDIT_DB, _AUDIT_USER, _AUDIT_PASSWORD)
 
-        conn = psycopg2.connect(
+        with psycopg2.connect(
             host=host, port=port, dbname=_AUDIT_DB, user=_AUDIT_USER, password=_AUDIT_PASSWORD
-        )
-        conn.autocommit = True
-        cur = conn.cursor()
+        ) as conn:
+            conn.autocommit = True
+            with conn.cursor() as cur:
+                pk_rows = query_primary_keys(cur)
+                pk_set = {(r[0], r[1]) for r in pk_rows}
+                pk_display = [
+                    (r[0], r[1], f"{r[2]} ({r[3]})" if r[3] and r[3] not in r[2] else r[2])
+                    for r in pk_rows
+                ]
+                print_table("PRIMARY KEYS", ["table_name", "pk_column", "data_type"], pk_display)
 
-        pk_rows = query_primary_keys(cur)
-        pk_set = {(r[0], r[1]) for r in pk_rows}
-        pk_display = [
-            (r[0], r[1], f"{r[2]} ({r[3]})" if r[3] and r[3] not in r[2] else r[2]) for r in pk_rows
-        ]
-        print_table("PRIMARY KEYS", ["table_name", "pk_column", "data_type"], pk_display)
+                fk_rows = query_foreign_keys(cur)
+                fk_set = {(r[0], r[1]) for r in fk_rows}
+                print_table(
+                    "FOREIGN KEYS",
+                    ["child_table", "child_column", "parent_table", "parent_column", "on_delete"],
+                    fk_rows,
+                )
 
-        fk_rows = query_foreign_keys(cur)
-        fk_set = {(r[0], r[1]) for r in fk_rows}
-        print_table(
-            "FOREIGN KEYS",
-            ["child_table", "child_column", "parent_table", "parent_column", "on_delete"],
-            fk_rows,
-        )
+                bk_rows = query_business_keys(cur, pk_set, fk_set)
+                bk_display = [
+                    (r[0], r[1], f"{r[2]}({r[4]})" if r[4] else r[2], r[3]) for r in bk_rows
+                ]
+                print_table(
+                    "BUSINESS KEY CANDIDATES (VARCHAR *_id/*_key columns, NOT PK, NOT FK)",
+                    ["table_name", "column_name", "data_type", "is_nullable"],
+                    bk_display,
+                )
 
-        bk_rows = query_business_keys(cur, pk_set, fk_set)
-        bk_display = [(r[0], r[1], f"{r[2]}({r[4]})" if r[4] else r[2], r[3]) for r in bk_rows]
-        print_table(
-            "BUSINESS KEY CANDIDATES (VARCHAR *_id/*_key columns, NOT PK, NOT FK)",
-            ["table_name", "column_name", "data_type", "is_nullable"],
-            bk_display,
-        )
-
-        print("\n=== SUMMARY ===")
-        cur.execute("""SELECT count(*) FROM information_schema.tables
-                       WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name!='alembic_version';""")
-        print(f"Total tables: {cur.fetchone()[0]}")
-        print(f"Total PK columns: {len(pk_rows)}")
-        print(f"Total FK constraints: {len(fk_rows)}")
-        print(f"Business key candidates: {len(bk_rows)}")
-        cur.close()
-        conn.close()
+                print("\n=== SUMMARY ===")
+                cur.execute("""SELECT count(*) FROM information_schema.tables
+                               WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name!='alembic_version';""")
+                print(f"Total tables: {cur.fetchone()[0]}")
+                print(f"Total PK columns: {len(pk_rows)}")
+                print(f"Total FK constraints: {len(fk_rows)}")
+                print(f"Business key candidates: {len(bk_rows)}")
     print("\nContainer stopped. Audit complete.")
 
 

@@ -17093,4 +17093,4 @@ Tracked under umbrella issue #787 (C2b PK/FK Standardization), epic #745.
 - **Pattern 47:** Verify Schema Before Fixing Pattern Violations (live-DB audit methodology used to validate these rules)
 - **Session 52:** Design session — live-DB audit, Holden+Galadriel design review, ODS framing analysis
 
-**END OF ARCHITECTURE DECISIONS V2.36**
+**END OF ARCHITECTURE DECISIONS V2.37**
