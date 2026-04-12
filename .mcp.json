@@ -2,7 +2,7 @@
   "mcpServers": {
     "postgres-dev": {
       "command": "npx",
-      "args": ["-y", "@pgedge/pgedge-postgres-mcp-server"],
+      "args": ["-y", "@modelcontextprotocol/server-postgres@0.6.2"],
       "env": {
         "PGHOST": "localhost",
         "PGPORT": "5432",
