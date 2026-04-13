@@ -5,13 +5,14 @@ Category A — Business-key renames (3 columns):
     edges.edge_id          → edge_key
     series.series_id       → series_key
 
-Category D — FK column renames, removing _internal_id suffix (8 columns):
+Category D — FK column renames, removing _internal_id suffix (9 columns):
     Depends on Cat A completing first to free the _id namespace.
     edges.market_internal_id              → market_id
     events.series_internal_id             → series_id
     markets.event_internal_id             → event_id
     orderbook_snapshots.market_internal_id → market_id
     market_trades.market_internal_id      → market_id
+    orders.market_internal_id             → market_id
     positions.market_internal_id          → market_id
     settlements.market_internal_id        → market_id
     trades.market_internal_id             → market_id
