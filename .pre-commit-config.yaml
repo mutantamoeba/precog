@@ -152,6 +152,47 @@ repos:
         types: [python]
         description: "Enforces Decimal precision for financial calculations (CRITICAL)"
 
+      # Loose assertion ratchet: prevent new loose exit_code assertions (#770, Hook 1.5)
+      - id: loose-assertion-ratchet
+        name: Loose Assertion Ratchet (Hook 1.5)
+        entry: bash
+        args:
+          - -c
+          - |
+            baseline_file="tests/.loose_assertion_baseline"
+            if [ ! -f "$baseline_file" ]; then
+              echo "WARNING: No baseline file at $baseline_file — skipping ratchet check"
+              exit 0
+            fi
+            # Read baseline (last non-comment, non-empty line)
+            baseline=$(grep -v '^#' "$baseline_file" | grep -v '^$' | tail -1)
+            if [ -z "$baseline" ]; then
+              echo "WARNING: Could not read baseline from $baseline_file"
+              exit 0
+            fi
+            # Count current loose assertions in entire test suite
+            count_exitcode=$(grep -rn "exit_code in \[" tests/ 2>/dev/null | wc -l | tr -d ' ')
+            count_isinstance=$(grep -rn "isinstance(result.exit_code, int)" tests/ 2>/dev/null | wc -l | tr -d ' ')
+            current=$((count_exitcode + count_isinstance))
+            if [ "$current" -gt "$baseline" ]; then
+              echo ""
+              echo "FAIL: Loose assertion count increased: $current (was $baseline)"
+              echo "  exit_code in [...]:              $count_exitcode"
+              echo "  isinstance(exit_code, int):      $count_isinstance"
+              echo ""
+              echo "Fix: tighten the assertion (assert result.exit_code == 0)"
+              echo "Or update baseline: echo $current > $baseline_file"
+              echo "Reference: #770 (Hook 1.5 — loose assertion ratchet)"
+              exit 1
+            fi
+            if [ "$current" -lt "$baseline" ]; then
+              echo "Loose assertion count decreased: $current (was $baseline) — nice!"
+            fi
+            echo "Loose assertion ratchet OK ($current <= $baseline)"
+        language: system
+        pass_filenames: false
+        description: "Prevents new loose exit_code assertions (count must never increase)"
+
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
