@@ -167,9 +167,16 @@ repos:
               exit 0
             fi
             output=$(PRECOG_ENV=test python scripts/lint_cli_flag_references.py 2>&1)
-            if [ $? -eq 0 ]; then
+            linter_exit=$?
+            if [ $linter_exit -eq 0 ]; then
               echo "CLI flag existence check passed"
               exit 0
+            fi
+            # Distinguish linter crash from expected violations
+            if ! echo "$output" | grep -q "^Found [0-9]* unknown CLI flag"; then
+              echo "ERROR: CLI flag linter failed to run (crash or import error):"
+              echo "$output" | tail -20
+              exit 1
             fi
             # Filter violations to only staged files
             violations=""
