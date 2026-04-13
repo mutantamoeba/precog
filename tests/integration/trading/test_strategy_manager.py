@@ -940,4 +940,4 @@ class TestStrategyManagerIntegration:
 # ============================================================================
 
 # Mark all integration tests to run in specific order
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
