@@ -153,7 +153,7 @@ MODULE_TIERS = {
     # TUI entries removed — TUI deleted in PR #563 (#558)
     # Schedulers
     "schedulers/espn_game_poller": "business",
-    "schedulers/temporal_alignment_writer": "business",
+    "schedulers/temporal_alignment_writer": "business",  # TODO: only unit tests exist — 7 test types missing, needs full suite
     # Priority-based polling (#560) — new module, promote to business when test suite expands
     "schedulers/league_priority": "experimental",
     # Validation
