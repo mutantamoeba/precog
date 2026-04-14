@@ -96,8 +96,10 @@ def resolve_dotted_path(dotted: str) -> bool:
         attr_chain = parts[split:]
         try:
             mod = importlib.import_module(mod_name)
-        except (ImportError, ValueError, TypeError):
-            # ValueError: relative-name edge cases; TypeError: weird inputs
+        except Exception:
+            # Broad catch matches the sibling S75 linter (lint_cli_flag_existence.py):
+            # any import-time failure (ImportError, ValueError, RuntimeError, OSError,
+            # etc.) means this prefix isn't a usable module — try the next shorter one.
             continue
         obj: object = mod
         ok = True
@@ -147,7 +149,10 @@ def main() -> int:
     if unresolved:
         print(f"Found {len(unresolved)} unresolved mock.patch target(s):\n")
         for filepath, lineno, target in unresolved:
-            print(f"  {filepath}:{lineno}: {target}")
+            # Use as_posix() so paths use forward slashes on Windows too;
+            # the pre-commit wrapper greps staged filenames from `git diff`
+            # output (forward-slash) against this line, so separators must match.
+            print(f"  {filepath.as_posix()}:{lineno}: {target}")
         print("\nIf a path is intentionally external or dynamic, add it to")
         print(f"{_ALLOWLIST_FILE} (one dotted path per line).")
         return 1
