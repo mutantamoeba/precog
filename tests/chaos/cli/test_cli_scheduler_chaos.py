@@ -64,7 +64,7 @@ class TestSchedulerChaos:
 
     def test_invalid_interval(self, runner):
         """Test start with invalid interval."""
-        result = runner.invoke(app, ["start", "--espn-interval", "0", "--no-foreground"])
+        result = runner.invoke(app, ["start", "--espn-interval", "0"])
         # Should handle invalid interval gracefully
         assert isinstance(result.exit_code, int)
 
