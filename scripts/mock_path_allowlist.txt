@@ -1,0 +1,29 @@
+# Mock path allowlist for scripts/lint_mock_target_paths.py
+#
+# Format:
+#   - One dotted path per line
+#   - Lines starting with # are comments
+#   - Blank lines ignored
+#
+# When to add an entry:
+#   1. Third-party attribute that the linter's import resolver can't reach
+#      (e.g., attributes only created after some runtime setup)
+#   2. Dynamic path that is constructed legitimately (rare — patch() with
+#      a non-string arg is already skipped silently, so this is mostly for
+#      string paths that are intentionally indirect)
+#   3. Stdlib paths the importer refuses for env-specific reasons
+#
+# Real stale paths (where the target module moved or the attr was deleted)
+# are NOT allowlist candidates — they are bugs and should be fixed in the
+# test file. Reference: umbrella #764 (scheduler CLI anti-pattern), S75
+# sister linter (scripts/lint_cli_flag_references.py).
+#
+# ----- allowlist entries below -----
+
+# Stale references in a deprecated, not-collected test file (filename
+# prefix `_deprecated_` means pytest skips collection). These point at
+# the old flat `main` module that no longer exists. File will be deleted
+# in a future cleanup; until then, allowlist to keep the hook green.
+# See: tests/integration/cli/_deprecated_test_cli_database_integration.py
+main.KalshiClient
+main.update_account_balance_with_versioning
