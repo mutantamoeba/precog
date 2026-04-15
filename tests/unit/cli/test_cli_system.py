@@ -145,9 +145,7 @@ class TestSystemVersion:
         """Test version command shows version information."""
         result = cli_runner.invoke(app, ["version"])
 
-        assert result.exit_code in (0, 1), (
-            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
-        )
+        assert result.exit_code == 0
         # Should show some version-related info
         output_lower = strip_ansi(result.stdout).lower()
         assert "version" in output_lower or "precog" in output_lower or "0." in output_lower
@@ -169,9 +167,7 @@ class TestSystemInfo:
         """Test info command shows system diagnostics."""
         result = cli_runner.invoke(app, ["info"])
 
-        assert result.exit_code in (0, 1), (
-            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
-        )
+        assert result.exit_code == 0
         output_lower = strip_ansi(result.stdout).lower()
         # Should show some system info
         assert "python" in output_lower or "system" in output_lower or "info" in output_lower
@@ -180,9 +176,7 @@ class TestSystemInfo:
         """Test info shows Python version."""
         result = cli_runner.invoke(app, ["info"])
 
-        assert result.exit_code in (0, 1), (
-            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
-        )
+        assert result.exit_code == 0
         # Python info should be present
         output_lower = strip_ansi(result.stdout).lower()
         assert "python" in output_lower or "3." in output_lower
