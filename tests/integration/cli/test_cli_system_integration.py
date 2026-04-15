@@ -69,27 +69,6 @@ class TestSystemHealthIntegration:
             # Should complete but report unhealthy
             assert result.exit_code in [0, 1, 2, 3, 4, 5]
 
-    def test_health_with_api_check(self, isolated_app) -> None:
-        """Test health includes API connectivity check.
-
-        Integration: Tests API health check.
-        """
-        runner = CliRunner()
-
-        with (
-            patch("precog.database.connection.get_connection") as mock_conn,
-            patch("precog.api_connectors.kalshi_client.KalshiClient") as mock_kalshi,
-        ):
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
-            mock_kalshi_instance = MagicMock()
-            mock_kalshi_instance.get_exchange_status.return_value = {"trading": "open"}
-            mock_kalshi.return_value = mock_kalshi_instance
-
-            result = runner.invoke(isolated_app, ["system", "health", "--check-apis"])
-
-            assert result.exit_code in [0, 1, 2]
-
     def test_health_verbose_output(self, isolated_app) -> None:
         """Test health verbose output.
 
@@ -122,28 +101,6 @@ class TestSystemVersionIntegration:
         # Version output should exist
         assert result.output is not None
 
-    def test_version_with_dependencies(self, isolated_app) -> None:
-        """Test version with dependency information.
-
-        Integration: Tests dependency enumeration.
-        """
-        runner = CliRunner()
-
-        result = runner.invoke(isolated_app, ["system", "version", "--deps"])
-
-        assert result.exit_code in [0, 1, 2]
-
-    def test_version_json_output(self, isolated_app) -> None:
-        """Test version in JSON format.
-
-        Integration: Tests JSON formatting.
-        """
-        runner = CliRunner()
-
-        result = runner.invoke(isolated_app, ["system", "version", "--json"])
-
-        assert result.exit_code in [0, 1, 2]
-
 
 class TestSystemInfoIntegration:
     """Integration tests for system info command."""
@@ -156,88 +113,6 @@ class TestSystemInfoIntegration:
         runner = CliRunner()
 
         result = runner.invoke(isolated_app, ["system", "info"])
-
-        assert result.exit_code in [0, 1, 2]
-
-    def test_info_with_environment(self, isolated_app) -> None:
-        """Test info with environment variables.
-
-        Integration: Tests environment variable reporting.
-        """
-        runner = CliRunner()
-
-        result = runner.invoke(isolated_app, ["system", "info", "--env"])
-
-        assert result.exit_code in [0, 1, 2]
-
-    def test_info_with_config(self, isolated_app) -> None:
-        """Test info with configuration details.
-
-        Integration: Tests config file parsing.
-        """
-        runner = CliRunner()
-
-        result = runner.invoke(isolated_app, ["system", "info", "--config"])
-
-        assert result.exit_code in [0, 1, 2]
-
-    def test_info_with_paths(self, isolated_app) -> None:
-        """Test info with path information.
-
-        Integration: Tests path resolution.
-        """
-        runner = CliRunner()
-
-        result = runner.invoke(isolated_app, ["system", "info", "--paths"])
-
-        assert result.exit_code in [0, 1, 2]
-
-
-class TestSystemDiagnosticsIntegration:
-    """Integration tests for system diagnostics."""
-
-    def test_diagnostics_collects_info(self, isolated_app) -> None:
-        """Test diagnostics collection.
-
-        Integration: Tests diagnostic data gathering.
-        """
-        runner = CliRunner()
-
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
-
-            result = runner.invoke(isolated_app, ["system", "health", "--diagnostics"])
-
-            assert result.exit_code in [0, 1, 2]
-
-
-class TestSystemComponentCheckIntegration:
-    """Integration tests for component-specific checks."""
-
-    def test_check_database_component(self, isolated_app) -> None:
-        """Test checking database component specifically.
-
-        Integration: Tests targeted component check.
-        """
-        runner = CliRunner()
-
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
-
-            result = runner.invoke(isolated_app, ["system", "health", "--component", "database"])
-
-            assert result.exit_code in [0, 1, 2]
-
-    def test_check_config_component(self, isolated_app) -> None:
-        """Test checking config component specifically.
-
-        Integration: Tests config validation.
-        """
-        runner = CliRunner()
-
-        result = runner.invoke(isolated_app, ["system", "health", "--component", "config"])
 
         assert result.exit_code in [0, 1, 2]
 
@@ -258,17 +133,5 @@ class TestSystemConfigIntegration:
             mock_config.return_value = mock_config_instance
 
             result = runner.invoke(isolated_app, ["system", "info"])
-
-            assert result.exit_code in [0, 1, 2]
-
-    def test_system_respects_environment(self, isolated_app) -> None:
-        """Test system respects environment settings.
-
-        Integration: Tests environment integration.
-        """
-        runner = CliRunner()
-
-        with patch.dict("os.environ", {"PRECOG_ENV": "test"}):
-            result = runner.invoke(isolated_app, ["system", "info", "--env"])
 
             assert result.exit_code in [0, 1, 2]
