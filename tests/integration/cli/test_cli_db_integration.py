@@ -221,15 +221,20 @@ class TestDbTablesIntegration:
     def test_tables_with_filter(self, cli_runner) -> None:
         """Test table listing with filter.
 
-        Integration: Tests filtered table enumeration.
+        Integration: Tests filtered table enumeration via the --filter glob.
         """
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
+        with patch("precog.database.connection.get_cursor") as mock_cursor_ctx:
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {"row_count": 0}
+            mock_cur.fetchall.return_value = [{"table_name": "games"}]
+            mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
-            result = cli_runner.invoke(app, ["db", "tables", "--filter", "game"])
+            result = cli_runner.invoke(app, ["db", "tables", "--filter", "game*"])
 
-            assert result.exit_code in [0, 1, 2]
+            assert result.exit_code == 0, f"got {result.exit_code}: {result.output}"
+            assert "games" in result.output
+            assert "matching 'game*'" in result.output
 
     def test_tables_with_counts(self, cli_runner) -> None:
         """Test table listing with row counts.
