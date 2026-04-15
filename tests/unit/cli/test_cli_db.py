@@ -119,8 +119,11 @@ class TestDbInit:
 
         result = cli_runner.invoke(app, ["init"])
 
-        # May fail if some validation steps fail (exit codes 0-5 are valid)
-        assert result.exit_code in [0, 1, 2, 3, 4, 5]
+        # db init runs multiple validation steps; exit code reflects step count
+        # TODO(#783): investigate why mocked init returns 5 and tighten to == 0
+        assert result.exit_code in (0, 1, 5), (
+            f"init unexpected exit, got {result.exit_code}: {result.output}"
+        )
 
     @patch("precog.database.connection.test_connection")
     def test_init_connection_failure(self, mock_test_conn, cli_runner):
@@ -139,7 +142,9 @@ class TestDbInit:
         result = cli_runner.invoke(app, ["init", "--dry-run"])
 
         # Dry run should show what would be done
-        assert result.exit_code in [0, 1]
+        assert result.exit_code in (0, 1), (
+            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        )
         output_lower = strip_ansi(result.stdout).lower()
         assert "dry" in output_lower or "would" in output_lower
 
@@ -177,7 +182,9 @@ class TestDbStatus:
 
         result = cli_runner.invoke(app, ["status"])
 
-        assert result.exit_code in [0, 1]
+        assert result.exit_code in (0, 1), (
+            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        )
         assert "Connection" in result.stdout or "Status" in result.stdout
 
     @patch("precog.database.connection.test_connection")
@@ -188,7 +195,9 @@ class TestDbStatus:
         result = cli_runner.invoke(app, ["status"])
 
         # Should report failure gracefully (exit code 1)
-        assert result.exit_code in [0, 1]
+        assert result.exit_code in (0, 1), (
+            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        )
 
     @patch("precog.database.connection.test_connection")
     @patch("precog.database.connection.get_cursor")
@@ -210,7 +219,9 @@ class TestDbStatus:
 
         result = cli_runner.invoke(app, ["status", "--verbose"])
 
-        assert result.exit_code in [0, 1]
+        assert result.exit_code in (0, 1), (
+            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        )
 
 
 class TestDbMigrate:
@@ -223,8 +234,11 @@ class TestDbMigrate:
 
         result = cli_runner.invoke(app, ["migrate"])
 
-        # May have various exit codes depending on migration state
-        assert result.exit_code in [0, 1, 2, 3]
+        # Exit 3 = DATABASE_URL not set (test env lacks it); 0 = success
+        # TODO(#783): mock DATABASE_URL so this tests the actual migration path
+        assert result.exit_code in (0, 1, 3), (
+            f"migrate unexpected exit, got {result.exit_code}: {result.output}"
+        )
 
     @patch("precog.database.initialization.apply_migrations")
     def test_migrate_no_pending(self, mock_apply, cli_runner):
@@ -233,8 +247,11 @@ class TestDbMigrate:
 
         result = cli_runner.invoke(app, ["migrate"])
 
-        # May have various exit codes depending on migration state
-        assert result.exit_code in [0, 1, 2, 3]
+        # Exit 3 = DATABASE_URL not set (test env lacks it); 0 = success
+        # TODO(#783): mock DATABASE_URL so this tests the actual migration path
+        assert result.exit_code in (0, 1, 3), (
+            f"migrate unexpected exit, got {result.exit_code}: {result.output}"
+        )
 
 
 class TestDbTables:
@@ -267,7 +284,9 @@ class TestDbTables:
 
         result = cli_runner.invoke(app, ["tables"])
 
-        assert result.exit_code in [0, 1]
+        assert result.exit_code in (0, 1), (
+            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        )
 
     @patch("precog.database.connection.get_cursor")
     def test_tables_empty_database(self, mock_get_cursor, cli_runner):
@@ -277,7 +296,9 @@ class TestDbTables:
 
         result = cli_runner.invoke(app, ["tables"])
 
-        assert result.exit_code in [0, 1]
+        assert result.exit_code in (0, 1), (
+            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        )
 
 
 class TestCriticalTables:
@@ -311,5 +332,7 @@ class TestDbEdgeCases:
 
         result = cli_runner.invoke(app, ["status"])
 
-        # Should handle timeout gracefully (exit codes: 1=failure, 5=db error)
-        assert result.exit_code in [0, 1, 5]
+        # Exit 5 = db connection error, 1 = general failure
+        assert result.exit_code in (1, 5), (
+            f"timeout should report failure, got {result.exit_code}: {result.output}"
+        )

@@ -152,6 +152,154 @@ repos:
         types: [python]
         description: "Enforces Decimal precision for financial calculations (CRITICAL)"
 
+      # Loose assertion ratchet: prevent new loose exit_code assertions (#770, Hook 1.5)
+      - id: loose-assertion-ratchet
+        name: Loose Assertion Ratchet (Hook 1.5)
+        entry: bash
+        args:
+          - -c
+          - |
+            baseline_file="tests/.loose_assertion_baseline"
+            if [ ! -f "$baseline_file" ]; then
+              echo "WARNING: No baseline file at $baseline_file — skipping ratchet check"
+              exit 0
+            fi
+            # Read baseline (last non-comment, non-empty line)
+            baseline=$(grep -v '^#' "$baseline_file" | grep -v '^$' | tail -1)
+            if [ -z "$baseline" ]; then
+              echo "WARNING: Could not read baseline from $baseline_file"
+              exit 0
+            fi
+            # Count current loose assertions in entire test suite
+            count_exitcode=$(grep -rn "exit_code in \[" tests/ 2>/dev/null | wc -l | tr -d ' ')
+            count_isinstance=$(grep -rn "isinstance(result.exit_code, int)" tests/ 2>/dev/null | wc -l | tr -d ' ')
+            current=$((count_exitcode + count_isinstance))
+            if [ "$current" -gt "$baseline" ]; then
+              echo ""
+              echo "FAIL: Loose assertion count increased: $current (was $baseline)"
+              echo "  exit_code in [...]:              $count_exitcode"
+              echo "  isinstance(exit_code, int):      $count_isinstance"
+              echo ""
+              echo "Fix: tighten the assertion (assert result.exit_code == 0)"
+              echo "Or update baseline: echo $current > $baseline_file"
+              echo "Reference: #770 (Hook 1.5 — loose assertion ratchet)"
+              exit 1
+            fi
+            if [ "$current" -lt "$baseline" ]; then
+              echo "Loose assertion count decreased: $current (was $baseline) — nice!"
+            fi
+            echo "Loose assertion ratchet OK ($current <= $baseline)"
+        language: system
+        pass_filenames: false
+        description: "Prevents new loose exit_code assertions (count must never increase)"
+
+      # Mock target path verification: catch stale mock.patch string targets (Hook 1.6, Phase A')
+      - id: mock-target-paths
+        name: Mock Target Path Verification (Hook 1.6)
+        entry: bash
+        args:
+          - -c
+          - |
+            # Only check STAGED test files for unresolved mock.patch targets.
+            # Pre-existing violations in unstaged files are allowlisted (see
+            # scripts/mock_path_allowlist.txt) or ignored here to avoid
+            # blocking unrelated commits on historical drift.
+            staged_tests=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^tests/.*\.py$' || true)
+            if [ -z "$staged_tests" ]; then
+              echo "No staged test files — skipping mock target path check"
+              exit 0
+            fi
+            output=$(PRECOG_ENV=test python scripts/lint_mock_target_paths.py 2>&1)
+            linter_exit=$?
+            if [ $linter_exit -eq 0 ]; then
+              echo "Mock target path check passed"
+              exit 0
+            fi
+            # Distinguish linter crash from expected violations
+            if ! echo "$output" | grep -q "^Found [0-9]* unresolved mock.patch target"; then
+              echo "ERROR: Mock target linter failed to run (crash or import error):"
+              echo "$output" | tail -20
+              exit 1
+            fi
+            # Filter violations to only staged files
+            violations=""
+            for f in $staged_tests; do
+              match=$(echo "$output" | grep "^  ${f}:" || true)
+              if [ -n "$match" ]; then
+                violations="${violations}${match}\n"
+              fi
+            done
+            if [ -n "$violations" ]; then
+              echo "ERROR: Staged test files contain unresolved mock.patch targets:"
+              echo -e "$violations"
+              echo "Fix: verify the dotted path resolves to a real attribute in src/"
+              echo "     (check for module renames, moved classes, deleted functions)"
+              echo "If intentional (external/dynamic), add to scripts/mock_path_allowlist.txt"
+              echo "Reference: Hook 1.6, umbrella #764 (mock-target decay family)"
+              exit 1
+            fi
+            echo "Mock target path check passed (pre-existing violations in unstaged files ignored)"
+        language: system
+        pass_filenames: false
+        types: [python]
+        description: "Catches test files using stale mock.patch string targets (Hook 1.6)"
+
+      # CLI flag existence: verify test runner.invoke flags match actual CLI (#769, S75)
+      - id: cli-flag-existence
+        name: CLI Flag Existence Check (S75)
+        entry: bash
+        args:
+          - -c
+          - |
+            # Only check STAGED test files for unknown CLI flags.
+            # Pre-existing violations in unstaged files are tracked in #799.
+            staged_tests=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^tests/.*\.py$' || true)
+            if [ -z "$staged_tests" ]; then
+              echo "No staged test files — skipping CLI flag check"
+              exit 0
+            fi
+            output=$(PRECOG_ENV=test python scripts/lint_cli_flag_references.py 2>&1)
+            linter_exit=$?
+            if [ $linter_exit -eq 0 ]; then
+              echo "CLI flag existence check passed"
+              exit 0
+            fi
+            # Distinguish linter crash from expected violations
+            if ! echo "$output" | grep -q "^Found [0-9]* unknown CLI flag"; then
+              echo "ERROR: CLI flag linter failed to run (crash or import error):"
+              echo "$output" | tail -20
+              exit 1
+            fi
+            # Filter violations to only staged files
+            violations=""
+            for f in $staged_tests; do
+              match=$(echo "$output" | grep "^  ${f}:" || true)
+              if [ -n "$match" ]; then
+                violations="${violations}${match}\n"
+              fi
+            done
+            if [ -n "$violations" ]; then
+              echo "ERROR: Staged test files use unknown CLI flags:"
+              echo -e "$violations"
+              echo "Fix: verify flag names match 'precog <command> --help' output"
+              echo "Reference: #769 (S75 CLI flag existence linter)"
+              exit 1
+            fi
+            echo "CLI flag existence check passed (pre-existing violations in unstaged files ignored)"
+        language: system
+        pass_filenames: false
+        types: [python]
+        description: "Catches test files using nonexistent CLI flags (S75, #769)"
+
+      # G1: Doc version drift — block versioned-doc renames with stale cross-references
+      - id: doc-version-drift
+        name: Doc Version Drift (G1)
+        entry: python scripts/lint_doc_version_refs.py
+        language: system
+        pass_filenames: false
+        types: [markdown]
+        description: "Blocks versioned-doc renames (_V<N>.<M>.md) when stale references to the old filename exist elsewhere in the repo (G1)"
+
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
