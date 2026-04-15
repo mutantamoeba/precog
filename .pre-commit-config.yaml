@@ -291,6 +291,15 @@ repos:
         types: [python]
         description: "Catches test files using nonexistent CLI flags (S75, #769)"
 
+      # G1: Doc version drift — block versioned-doc renames with stale cross-references
+      - id: doc-version-drift
+        name: Doc Version Drift (G1)
+        entry: python scripts/lint_doc_version_refs.py
+        language: system
+        pass_filenames: false
+        types: [markdown]
+        description: "Blocks versioned-doc renames (_V<N>.<M>.md) when stale references to the old filename exist elsewhere in the repo (G1)"
+
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
