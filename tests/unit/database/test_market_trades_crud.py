@@ -49,7 +49,7 @@ def _default_trade_kwargs():
     return {
         "platform_id": "kalshi",
         "external_trade_id": "abc-123-def",
-        "market_internal_id": 42,
+        "market_id": 42,
         "count": 10,
         "trade_time": datetime(2026, 1, 15, 20, 30, 0, tzinfo=UTC),
     }
@@ -60,7 +60,7 @@ def _default_trade_dict():
     return {
         "platform_id": "kalshi",
         "external_trade_id": "abc-123-def",
-        "market_internal_id": 42,
+        "market_id": 42,
         "count": 10,
         "trade_time": datetime(2026, 1, 15, 20, 30, 0, tzinfo=UTC),
     }
@@ -148,7 +148,7 @@ class TestUpsertMarketTrade:
         result = upsert_market_trade(
             platform_id="kalshi",
             external_trade_id="abc-123-def",
-            market_internal_id=42,
+            market_id=42,
             count=10,
             trade_time=datetime(2026, 1, 15, 20, 30, 0, tzinfo=UTC),
             yes_price=Decimal("0.5500"),
@@ -344,8 +344,8 @@ class TestGetMarketTrades:
     def test_returns_list_of_dicts(self, mock_fetch_all):
         """Test that result is a list of dicts."""
         mock_fetch_all.return_value = [
-            {"id": 1, "market_internal_id": 42, "count": 10},
-            {"id": 2, "market_internal_id": 42, "count": 5},
+            {"id": 1, "market_id": 42, "count": 10},
+            {"id": 2, "market_id": 42, "count": 5},
         ]
 
         result = get_market_trades(42)
@@ -397,15 +397,15 @@ class TestGetMarketTrades:
         assert "ORDER BY trade_time DESC, id DESC" in query
 
     @patch("precog.database.crud_ledger.fetch_all")
-    def test_filters_by_market_internal_id(self, mock_fetch_all):
-        """Test that query filters by market_internal_id."""
+    def test_filters_by_market_id(self, mock_fetch_all):
+        """Test that query filters by market_id."""
         mock_fetch_all.return_value = []
 
         get_market_trades(42)
 
         query = mock_fetch_all.call_args[0][0]
         params = mock_fetch_all.call_args[0][1]
-        assert "market_internal_id = %s" in query
+        assert "market_id = %s" in query
         assert 42 in params
 
     @patch("precog.database.crud_ledger.fetch_all")
@@ -449,7 +449,7 @@ class TestGetLatestTradeTime:
 
     @patch("precog.database.crud_ledger.fetch_one")
     def test_queries_correct_market(self, mock_fetch_one):
-        """Test that query filters by the given market_internal_id."""
+        """Test that query filters by the given market_id."""
         mock_fetch_one.return_value = None
 
         get_latest_trade_time(99)

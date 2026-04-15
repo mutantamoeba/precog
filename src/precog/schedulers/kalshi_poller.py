@@ -259,13 +259,13 @@ class KalshiMarketPoller(BasePoller):
 
         # Mapping of series ticker -> integer surrogate PK from series table.
         # Populated by sync_series(), consumed by _sync_market_to_db() when
-        # creating events (events.series_internal_id FK).
+        # creating events (events.series_id FK).
         # See migration 0019: series now uses SERIAL PK instead of VARCHAR PK.
         self._series_id_map: dict[str, int] = {}
 
         # Mapping of event ticker -> integer surrogate PK from events table.
         # Populated by _sync_market_to_db() via get_or_create_event(), consumed
-        # when creating markets (markets.event_internal_id FK).
+        # when creating markets (markets.event_id FK).
         # See migration 0020: events now uses SERIAL PK instead of VARCHAR PK.
         self._event_id_map: dict[str, int] = {}
 
@@ -439,8 +439,8 @@ class KalshiMarketPoller(BasePoller):
             - Markets: Tradeable outcomes (e.g., "Chiefs to win")
 
             We sync series first because:
-            1. Events reference series (events.series_internal_id -> series.id)
-            2. Markets reference events (markets.event_internal_id -> events.id)
+            1. Events reference series (events.series_id -> series.id)
+            2. Markets reference events (markets.event_id -> events.id)
             3. Without series records, FK constraints would fail
 
             The tags field is particularly valuable for sport filtering:
@@ -616,7 +616,7 @@ class KalshiMarketPoller(BasePoller):
 
         # Use get_or_create_series with update_if_exists=True to keep data fresh.
         # Returns (integer_pk, created) — the integer PK is stored in
-        # _series_id_map for downstream event creation (events.series_internal_id).
+        # _series_id_map for downstream event creation (events.series_id).
         series_pk, created = get_or_create_series(
             series_id=ticker,
             platform_id=self.PLATFORM_ID,
@@ -1145,7 +1145,7 @@ class KalshiMarketPoller(BasePoller):
             category = "sports"  # Most Kalshi markets we poll are sports
 
             # Get or create the event before creating the market.
-            # This satisfies the FK constraint (markets.event_internal_id -> events.id).
+            # This satisfies the FK constraint (markets.event_id -> events.id).
             # get_or_create_event() returns (int_pk, created) per migration 0020.
             event_pk: int | None = None
             if event_ticker:
@@ -1159,7 +1159,7 @@ class KalshiMarketPoller(BasePoller):
                     if effective_series and series_pk is None:
                         logger.warning(
                             "Series '%s' not in _series_id_map for event %s -- "
-                            "event will have NULL series_internal_id",
+                            "event will have NULL series_id",
                             effective_series,
                             event_ticker,
                         )
@@ -1175,7 +1175,7 @@ class KalshiMarketPoller(BasePoller):
                         external_id=event_ticker,
                         category=category,
                         title=market.get("title", event_ticker),
-                        series_internal_id=series_pk,  # Integer FK to series(id)
+                        series_id=series_pk,  # Integer FK to series(id)
                         subcategory=subcategory,
                         game_id=game_id,  # Link to games table (may be None)
                         # Event time proxies from market-level fields.
@@ -1225,7 +1225,7 @@ class KalshiMarketPoller(BasePoller):
             # Migration 0046: depth signals + daily movement columns.
             create_market(
                 platform_id=self.PLATFORM_ID,
-                event_internal_id=event_pk,  # Integer FK to events(id)
+                event_id=event_pk,  # Integer FK to events(id)
                 external_id=ticker,  # Use ticker as external_id
                 ticker=ticker,
                 title=market.get("title", ticker),
@@ -1364,10 +1364,10 @@ class KalshiMarketPoller(BasePoller):
             # and build a result summary from child market settlement values.
             if (
                 db_status == "settled"
-                and existing.get("event_internal_id")
-                and check_event_fully_settled(existing["event_internal_id"])
+                and existing.get("event_id")
+                and check_event_fully_settled(existing["event_id"])
             ):
-                event_id_for_settlement = existing["event_internal_id"]
+                event_id_for_settlement = existing["event_id"]
                 update_event(
                     event_id_for_settlement,
                     status="final",

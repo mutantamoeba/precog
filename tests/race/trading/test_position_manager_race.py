@@ -36,8 +36,8 @@ def mock_position() -> dict[str, Any]:
     """Create a mock position dict."""
     return {
         "id": 123,
-        "position_id": "POS-2025-001",
-        "market_internal_id": 1,
+        "position_key": "POS-2025-001",
+        "market_id": 1,
         "strategy_id": 1,
         "model_id": 1,
         "side": "YES",
@@ -237,9 +237,9 @@ class TestConcurrentQueries:
         errors: list[Exception] = []
         lock = threading.Lock()
 
-        def query_by_market(market_internal_id: int) -> None:
+        def query_by_market(market_id: int) -> None:
             try:
-                positions = manager.get_open_positions(market_internal_id=market_internal_id)
+                positions = manager.get_open_positions(market_id=market_id)
                 with lock:
                     results.append(positions)
             except Exception as e:

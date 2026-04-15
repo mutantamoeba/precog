@@ -105,7 +105,7 @@ def trailing_stop_position(db_pool: Any) -> Any:
         cur.execute(
             """
             INSERT INTO markets (
-                platform_id, event_internal_id, external_id, ticker, title,
+                platform_id, event_id, external_id, ticker, title,
                 market_type, status
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -128,7 +128,7 @@ def trailing_stop_position(db_pool: Any) -> Any:
         cur.execute(
             """
             INSERT INTO positions (
-                position_id, market_internal_id, side, quantity,
+                position_key, market_id, side, quantity,
                 entry_price, current_price, stop_loss_price,
                 status, entry_time, last_check_time,
                 row_current_ind, row_start_ts,
@@ -225,11 +225,11 @@ class TestSetTrailingStopStateIntegration:
         with get_cursor(commit=False) as cur:
             cur.execute(
                 """
-                SELECT id, position_id, current_price, trailing_stop_state,
+                SELECT id, position_key, current_price, trailing_stop_state,
                        execution_environment, status, row_current_ind,
                        row_start_ts, row_end_ts
                 FROM positions
-                WHERE position_id = %s
+                WHERE position_key = %s
                 ORDER BY row_start_ts ASC
                 """,
                 (position_bk,),
@@ -346,7 +346,7 @@ class TestSetTrailingStopStateIntegration:
                        execution_environment, row_current_ind, row_start_ts,
                        row_end_ts
                 FROM positions
-                WHERE position_id = %s
+                WHERE position_key = %s
                 ORDER BY row_start_ts ASC
                 """,
                 (position_bk,),
@@ -403,7 +403,7 @@ class TestSetTrailingStopStateIntegration:
                 """
                 UPDATE positions
                 SET status = 'closed', exit_time = NOW()
-                WHERE position_id = %s AND row_current_ind = TRUE
+                WHERE position_key = %s AND row_current_ind = TRUE
                 """,
                 (position_bk,),
             )
@@ -434,7 +434,7 @@ class TestSetTrailingStopStateIntegration:
                 """
                 SELECT COUNT(*) AS n
                 FROM positions
-                WHERE position_id = %s
+                WHERE position_key = %s
                 """,
                 (position_bk,),
             )
@@ -661,7 +661,7 @@ class TestUpdatePositionPriceIntegration:
                 """
                 SELECT id, current_price, execution_environment, row_current_ind
                 FROM positions
-                WHERE position_id = %s AND row_current_ind = TRUE
+                WHERE position_key = %s AND row_current_ind = TRUE
                 """,
                 (position_bk,),
             )
@@ -689,7 +689,7 @@ class TestUpdatePositionPriceIntegration:
                 """
                 SELECT execution_environment
                 FROM positions
-                WHERE position_id = %s AND row_current_ind = FALSE
+                WHERE position_key = %s AND row_current_ind = FALSE
                 ORDER BY row_start_ts DESC
                 LIMIT 1
                 """,
@@ -719,7 +719,7 @@ class TestUpdatePositionPriceIntegration:
                 """
                 SELECT id, current_price, execution_environment
                 FROM positions
-                WHERE position_id = %s AND row_current_ind = TRUE
+                WHERE position_key = %s AND row_current_ind = TRUE
                 """,
                 (position_bk,),
             )
@@ -832,7 +832,7 @@ def create_position_market(db_pool: Any) -> Any:
         cur.execute(
             """
             INSERT INTO markets (
-                platform_id, event_internal_id, external_id, ticker, title,
+                platform_id, event_id, external_id, ticker, title,
                 market_type, status
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -901,7 +901,7 @@ def _seed_open_position_with_trailing_stop(
         cur.execute(
             """
             INSERT INTO positions (
-                position_id, market_internal_id, side, quantity,
+                position_key, market_id, side, quantity,
                 entry_price, current_price, stop_loss_price,
                 trailing_stop_state,
                 status, entry_time, last_check_time,
@@ -999,7 +999,7 @@ class TestCreatePositionTrailingStopJsonbWrite:
         }
 
         new_id = create_position(
-            market_internal_id=market_pk,
+            market_id=market_pk,
             strategy_id=_CREATE_POS_STRATEGY_ID,
             model_id=_CREATE_POS_MODEL_ID,
             side="YES",
@@ -1065,7 +1065,7 @@ class TestCreatePositionTrailingStopJsonbWrite:
         market_pk = create_position_market
 
         new_id = create_position(
-            market_internal_id=market_pk,
+            market_id=market_pk,
             strategy_id=_CREATE_POS_STRATEGY_ID,
             model_id=_CREATE_POS_MODEL_ID,
             side="YES",
@@ -1188,7 +1188,7 @@ class TestUpdatePositionPriceTrailingStopJsonbWrite:
                 SELECT id, current_price, trailing_stop_state,
                        execution_environment, row_current_ind
                 FROM positions
-                WHERE position_id = %s AND row_current_ind = TRUE
+                WHERE position_key = %s AND row_current_ind = TRUE
                 """,
                 (position_bk,),
             )
@@ -1305,7 +1305,7 @@ class TestClosePositionTrailingStopJsonbWrite:
                        trailing_stop_state, execution_environment,
                        row_current_ind
                 FROM positions
-                WHERE position_id = %s AND row_current_ind = TRUE
+                WHERE position_key = %s AND row_current_ind = TRUE
                 """,
                 (position_bk,),
             )

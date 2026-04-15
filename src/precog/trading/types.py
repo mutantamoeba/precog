@@ -186,14 +186,14 @@ class PositionResponse(TypedDict):
     Educational Note:
         Positions use SCD Type 2 versioning - each price update creates a NEW row.
         The 'id' field is the surrogate key (changes with each version).
-        The 'position_id' field is the business key (stays constant).
+        The 'position_key' field is the business key (stays constant).
 
         IMPORTANT: When updating positions, use the RETURNED 'id' for subsequent
         operations, as it points to the NEW version.
 
     Example:
         >>> position = manager.open_position(...)
-        >>> print(f"Position {position['position_id']} opened at {position['entry_price']}")
+        >>> print(f"Position {position['position_key']} opened at {position['entry_price']}")
         Position POS-123 opened at 0.4975
 
     References:
@@ -205,7 +205,7 @@ class PositionResponse(TypedDict):
 
     # Keys (SCD Type 2 dual-key pattern)
     id: int  # Surrogate key (changes with each version)
-    position_id: str  # Business key (format: 'POS-{id}', stays constant)
+    position_key: str  # Business key (format: 'POS-{id}', stays constant)
 
     # Trade attribution
     market_id: str  # Market identifier

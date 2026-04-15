@@ -90,7 +90,7 @@ def trailing_stop_open_position(db_pool: Any) -> Any:
     with get_cursor(commit=True) as cur:
         # Cleanup in FK order: positions first (FKs to markets), then markets.
         cur.execute(
-            "DELETE FROM positions WHERE position_id LIKE %s",
+            "DELETE FROM positions WHERE position_key LIKE %s",
             (_TEST_POSITION_BK_PREFIX + "%",),
         )
         from tests.fixtures.cleanup_helpers import delete_market_with_children
@@ -101,7 +101,7 @@ def trailing_stop_open_position(db_pool: Any) -> Any:
         cur.execute(
             """
             INSERT INTO markets (
-                platform_id, event_internal_id, external_id, ticker, title,
+                platform_id, event_id, external_id, ticker, title,
                 market_type, status
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -127,7 +127,7 @@ def trailing_stop_open_position(db_pool: Any) -> Any:
         cur.execute(
             """
             INSERT INTO positions (
-                position_id, market_internal_id, side, quantity,
+                position_key, market_id, side, quantity,
                 entry_price, current_price, stop_loss_price,
                 status, entry_time, last_check_time,
                 row_current_ind, row_start_ts,
@@ -162,7 +162,7 @@ def trailing_stop_open_position(db_pool: Any) -> Any:
     # the actual test outcome.
     try:
         with get_cursor(commit=True) as cur:
-            cur.execute("DELETE FROM positions WHERE position_id = %s", (position_bk,))
+            cur.execute("DELETE FROM positions WHERE position_key = %s", (position_bk,))
             from tests.fixtures.cleanup_helpers import delete_market_with_children
 
             delete_market_with_children(cur, "id = %s", (market_pk,))
@@ -495,7 +495,7 @@ class TestTrailingStopReadPathRoundTrip:
         with get_cursor(commit=False) as cur:
             cur.execute(
                 """
-                SELECT COUNT(*) AS n FROM positions WHERE position_id = %s
+                SELECT COUNT(*) AS n FROM positions WHERE position_key = %s
                 """,
                 (position_bk,),
             )
