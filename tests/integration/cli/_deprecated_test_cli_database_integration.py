@@ -89,9 +89,9 @@ def setup_kalshi_platform(db_pool, clean_test_data):
         # Create series for test markets
         cur.execute(
             """
-            INSERT INTO series (series_id, platform_id, external_id, title, category)
+            INSERT INTO series (series_key, platform_id, external_id, title, category)
             VALUES ('KXNFLGAME', 'kalshi', 'KXNFLGAME-EXT', 'NFL Game Series', 'sports')
-            ON CONFLICT (series_id) WHERE row_current_ind = TRUE DO NOTHING
+            ON CONFLICT (series_key) WHERE row_current_ind = TRUE DO NOTHING
         """
         )
 
@@ -99,12 +99,12 @@ def setup_kalshi_platform(db_pool, clean_test_data):
         # Note: VCR cassette events (KXNFLGAME-25NOV27*) + mock test event (KXNFLGAME-25DEC15CLEKC)
         cur.execute(
             """
-            INSERT INTO events (platform_id, series_internal_id, external_id, category, title, status)
+            INSERT INTO events (platform_id, series_id, external_id, category, title, status)
             VALUES
-                ('kalshi', (SELECT id FROM series WHERE series_id = 'KXNFLGAME'), 'KXNFLGAME-25NOV27GBDET', 'sports', 'Green Bay at Detroit', 'scheduled'),
-                ('kalshi', (SELECT id FROM series WHERE series_id = 'KXNFLGAME'), 'KXNFLGAME-25NOV27KCDAL', 'sports', 'Kansas City at Dallas', 'scheduled'),
-                ('kalshi', (SELECT id FROM series WHERE series_id = 'KXNFLGAME'), 'KXNFLGAME-25NOV27CINBAL', 'sports', 'Cincinnati at Baltimore', 'scheduled'),
-                ('kalshi', (SELECT id FROM series WHERE series_id = 'KXNFLGAME'), 'KXNFLGAME-25DEC15CLEKC', 'sports', 'Mock Test Event', 'scheduled')
+                ('kalshi', (SELECT id FROM series WHERE series_key = 'KXNFLGAME'), 'KXNFLGAME-25NOV27GBDET', 'sports', 'Green Bay at Detroit', 'scheduled'),
+                ('kalshi', (SELECT id FROM series WHERE series_key = 'KXNFLGAME'), 'KXNFLGAME-25NOV27KCDAL', 'sports', 'Kansas City at Dallas', 'scheduled'),
+                ('kalshi', (SELECT id FROM series WHERE series_key = 'KXNFLGAME'), 'KXNFLGAME-25NOV27CINBAL', 'sports', 'Cincinnati at Baltimore', 'scheduled'),
+                ('kalshi', (SELECT id FROM series WHERE series_key = 'KXNFLGAME'), 'KXNFLGAME-25DEC15CLEKC', 'sports', 'Mock Test Event', 'scheduled')
             ON CONFLICT (platform_id, external_id) DO NOTHING
         """
         )
@@ -327,7 +327,7 @@ def test_fetch_markets_creates_new_markets(
             """
             SELECT COUNT(*) as market_count
             FROM markets m
-            JOIN events e ON m.event_internal_id = e.id
+            JOIN events e ON m.event_id = e.id
             WHERE e.series_id = 'KXNFLGAME' AND m.row_current_ind = TRUE
         """
         )
@@ -342,7 +342,7 @@ def test_fetch_markets_creates_new_markets(
             """
             SELECT m.ticker, m.yes_price, m.no_price, m.volume, m.open_interest
             FROM markets m
-            JOIN events e ON m.event_internal_id = e.id
+            JOIN events e ON m.event_id = e.id
             WHERE e.series_id = 'KXNFLGAME' AND m.row_current_ind = TRUE
             LIMIT 1
         """
@@ -387,7 +387,7 @@ def test_fetch_markets_upsert_pattern(
 
         delete_market_with_children(
             cur,
-            "event_internal_id IN (SELECT id FROM events WHERE platform_id = %s)",
+            "event_id IN (SELECT id FROM events WHERE platform_id = %s)",
             ("kalshi",),
         )
 
@@ -410,7 +410,7 @@ def test_fetch_markets_upsert_pattern(
             """
             SELECT COUNT(*) as market_count
             FROM markets m
-            JOIN events e ON m.event_internal_id = e.id
+            JOIN events e ON m.event_id = e.id
             WHERE e.series_id = 'KXNFLGAME'
         """
         )
@@ -438,7 +438,7 @@ def test_fetch_markets_upsert_pattern(
             """
             SELECT COUNT(*) as market_count
             FROM markets m
-            JOIN events e ON m.event_internal_id = e.id
+            JOIN events e ON m.event_id = e.id
             WHERE e.series_id = 'KXNFLGAME'
         """
         )
@@ -454,7 +454,7 @@ def test_fetch_markets_upsert_pattern(
             """
             SELECT COUNT(*) as current_count
             FROM markets m
-            JOIN events e ON m.event_internal_id = e.id
+            JOIN events e ON m.event_id = e.id
             WHERE e.series_id = 'KXNFLGAME' AND m.row_current_ind = TRUE
         """
         )
@@ -468,7 +468,7 @@ def test_fetch_markets_upsert_pattern(
             """
             SELECT COUNT(*) as historical_count
             FROM markets m
-            JOIN events e ON m.event_internal_id = e.id
+            JOIN events e ON m.event_id = e.id
             WHERE e.series_id = 'KXNFLGAME' AND m.row_current_ind = FALSE
         """
         )
@@ -482,7 +482,7 @@ def test_fetch_markets_upsert_pattern(
             """
             SELECT m.ticker, m.yes_price, m.row_current_ind
             FROM markets m
-            JOIN events e ON m.event_internal_id = e.id
+            JOIN events e ON m.event_id = e.id
             WHERE e.series_id = 'KXNFLGAME' AND m.row_current_ind = FALSE
             ORDER BY m.ticker
         """
@@ -546,7 +546,7 @@ def test_fetch_settlements_creates_records_and_updates_market_status(
             """
             SELECT m.ticker, m.status
             FROM markets m
-            JOIN events e ON m.event_internal_id = e.id
+            JOIN events e ON m.event_id = e.id
             WHERE m.ticker = 'KXNFLGAME-25DEC15CLEKC-KC-YES' AND m.row_current_ind = TRUE
         """
         )
@@ -584,7 +584,7 @@ def test_fetch_settlements_creates_records_and_updates_market_status(
             """
             SELECT m.ticker, m.status
             FROM markets m
-            JOIN events e ON m.event_internal_id = e.id
+            JOIN events e ON m.event_id = e.id
             WHERE m.ticker = 'KXNFLGAME-25DEC15CLEKC-KC-YES' AND m.row_current_ind = TRUE
         """
         )

@@ -118,10 +118,10 @@ def sample_series(db_pool, clean_test_data, sample_platform) -> str:
     from precog.database.connection import execute_query
 
     query = """
-        INSERT INTO series (series_id, platform_id, external_id, category, subcategory, title, frequency)
+        INSERT INTO series (series_key, platform_id, external_id, category, subcategory, title, frequency)
         VALUES ('NFL-2025', 'kalshi', 'NFL-2025-ext', 'sports', 'nfl', 'NFL 2025 Season', 'recurring')
-        ON CONFLICT (series_id) WHERE row_current_ind = TRUE DO NOTHING
-        RETURNING series_id
+        ON CONFLICT (series_key) WHERE row_current_ind = TRUE DO NOTHING
+        RETURNING series_key
     """
     execute_query(query)
     return "NFL-2025"
@@ -133,11 +133,11 @@ def sample_event(db_pool, clean_test_data, sample_platform, sample_series) -> st
     from precog.database.connection import execute_query, fetch_one
 
     # Look up series surrogate PK (migration 0019: events use integer FK)
-    series_row = fetch_one("SELECT id FROM series WHERE series_id = 'NFL-2025'")
+    series_row = fetch_one("SELECT id FROM series WHERE series_key = 'NFL-2025'")
     series_pk = series_row["id"] if series_row else None
 
     query = """
-        INSERT INTO events (platform_id, series_internal_id, external_id, category, subcategory, title, status)
+        INSERT INTO events (platform_id, series_id, external_id, category, subcategory, title, status)
         VALUES ('kalshi', %s, 'HIGHTEST', 'sports', 'nfl', 'Super Bowl LIX', 'scheduled')
         ON CONFLICT (platform_id, external_id) DO NOTHING
         RETURNING external_id
@@ -171,7 +171,7 @@ def sample_market(db_pool, clean_test_data, sample_platform, sample_event) -> in
     # Create via CRUD function (returns integer PK)
     return create_market(
         platform_id="kalshi",
-        event_internal_id=event_pk,
+        event_id=event_pk,
         external_id="HIGHTEST-25FEB05-ext",
         ticker="HIGHTEST-25FEB05",
         title="Will HIGHTEST win Super Bowl?",
@@ -203,7 +203,7 @@ def test_create_trade_with_automated_source_default(
     - ENUM validation works correctly
     """
     trade_id = create_trade(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",
@@ -231,7 +231,7 @@ def test_create_trade_with_manual_source(
     - Enables reconciliation workflow (separate manual from automated)
     """
     trade_id = create_trade(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",
@@ -260,7 +260,7 @@ def test_create_trade_with_attribution_fields(
     - Enables performance analytics: "Which models have highest ROI?"
     """
     trade_id = create_trade(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",
@@ -293,7 +293,7 @@ def test_create_trade_with_negative_edge(
     - Useful for analytics: "How often did we trade negative edges?"
     """
     trade_id = create_trade(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",
@@ -325,7 +325,7 @@ def test_create_trade_without_attribution_fields(
     - Ensures backward compatibility with existing code
     """
     trade_id = create_trade(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",
@@ -358,7 +358,7 @@ def test_create_trade_probability_out_of_range(
     # Test probability > 1.0
     with pytest.raises(psycopg2.errors.CheckViolation):
         create_trade(
-            market_internal_id=sample_market,
+            market_id=sample_market,
             strategy_id=sample_strategy,
             model_id=sample_model,
             side="buy",
@@ -372,7 +372,7 @@ def test_create_trade_probability_out_of_range(
     # Test probability < 0.0
     with pytest.raises(psycopg2.errors.CheckViolation):
         create_trade(
-            market_internal_id=sample_market,
+            market_id=sample_market,
             strategy_id=sample_strategy,
             model_id=sample_model,
             side="buy",
@@ -402,7 +402,7 @@ def test_create_position_with_attribution_fields(
     - Enables strategy A/B testing
     """
     position_id = create_position(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="yes",
@@ -437,7 +437,7 @@ def test_create_position_immutable_attribution(
     - Enables comparing entry predictions to actual outcomes
     """
     position_id = create_position(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="yes",
@@ -473,7 +473,7 @@ def test_create_position_without_attribution_fields(
     - Ensures backward compatibility
     """
     position_id = create_position(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="yes",
@@ -502,7 +502,7 @@ def test_create_position_with_negative_edge(
     - Useful for analytics: "Did we open positions with insufficient edge?"
     """
     position_id = create_position(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="yes",
@@ -532,7 +532,7 @@ def test_create_position_probability_out_of_range(
     # Test probability > 1.0
     with pytest.raises(psycopg2.errors.CheckViolation):
         create_position(
-            market_internal_id=sample_market,
+            market_id=sample_market,
             strategy_id=sample_strategy,
             model_id=sample_model,
             side="yes",
@@ -674,7 +674,7 @@ def test_analytics_query_roi_by_model(
     """
     # Create trades with different models
     trade_id_1 = create_trade(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,  # Model A (from sample_model fixture)
         side="buy",
@@ -686,7 +686,7 @@ def test_analytics_query_roi_by_model(
     )
 
     trade_id_2 = create_trade(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model + 1,  # Model B (99902 from sample_model fixture)
         side="buy",
@@ -727,7 +727,7 @@ def test_analytics_query_edge_vs_outcome(
     """
     # High edge trade
     trade_id_high_edge = create_trade(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",
@@ -740,7 +740,7 @@ def test_analytics_query_edge_vs_outcome(
 
     # Low edge trade
     trade_id_low_edge = create_trade(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",

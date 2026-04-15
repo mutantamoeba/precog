@@ -59,7 +59,7 @@ class TestCreateEdge:
         mock_cursor.fetchone.return_value = {"id": 42}
 
         result = create_edge(
-            market_internal_id=1,
+            market_id=1,
             model_id=2,
             expected_value=Decimal("0.0500"),
             true_win_probability=Decimal("0.5700"),
@@ -71,13 +71,13 @@ class TestCreateEdge:
         assert result == 42
 
     @patch("precog.database.crud_analytics.get_cursor")
-    def test_create_edge_auto_generates_edge_id(self, mock_get_cursor):
-        """Test that edge_id is set to EDGE-{id} after insert."""
+    def test_create_edge_auto_generates_edge_key(self, mock_get_cursor):
+        """Test that edge_key is set to EDGE-{id} after insert."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
         mock_cursor.fetchone.return_value = {"id": 7}
 
         create_edge(
-            market_internal_id=1,
+            market_id=1,
             model_id=2,
             expected_value=Decimal("0.0500"),
             true_win_probability=Decimal("0.5700"),
@@ -86,7 +86,7 @@ class TestCreateEdge:
             execution_environment="paper",  # required (#622+#686)
         )
 
-        # Second execute call should be the UPDATE for edge_id
+        # Second execute call should be the UPDATE for edge_key
         calls = mock_cursor.execute.call_args_list
         assert len(calls) == 2
         update_call = calls[1]
@@ -99,7 +99,7 @@ class TestCreateEdge:
 
         with pytest.raises(TypeError, match="expected_value must be Decimal"):
             create_edge(
-                market_internal_id=1,
+                market_id=1,
                 model_id=2,
                 expected_value=0.05,  # float -- should raise
                 true_win_probability=Decimal("0.5700"),
@@ -115,7 +115,7 @@ class TestCreateEdge:
 
         with pytest.raises(TypeError, match="yes_ask_price must be Decimal"):
             create_edge(
-                market_internal_id=1,
+                market_id=1,
                 model_id=2,
                 expected_value=Decimal("0.0500"),
                 true_win_probability=Decimal("0.5700"),
@@ -132,7 +132,7 @@ class TestCreateEdge:
         mock_cursor.fetchone.return_value = {"id": 99}
 
         result = create_edge(
-            market_internal_id=1,
+            market_id=1,
             model_id=2,
             expected_value=Decimal("0.0500"),
             true_win_probability=Decimal("0.5700"),
@@ -168,7 +168,7 @@ class TestCreateEdge:
         mock_cursor.fetchone.return_value = {"id": 1}
 
         create_edge(
-            market_internal_id=1,
+            market_id=1,
             model_id=2,
             expected_value=Decimal("0.0500"),
             true_win_probability=Decimal("0.5700"),
@@ -187,7 +187,7 @@ class TestCreateEdge:
         mock_cursor.fetchone.return_value = {"id": 1}
 
         create_edge(
-            market_internal_id=1,
+            market_id=1,
             model_id=2,
             expected_value=Decimal("0.0500"),
             true_win_probability=Decimal("0.5700"),
@@ -376,8 +376,8 @@ class TestGetEdgesByStrategy:
     def test_get_edges_by_strategy_basic(self, mock_fetch_all):
         """Test basic query with only strategy_id."""
         mock_fetch_all.return_value = [
-            {"id": 1, "edge_id": "EDGE-1", "strategy_id": 5},
-            {"id": 2, "edge_id": "EDGE-2", "strategy_id": 5},
+            {"id": 1, "edge_key": "EDGE-1", "strategy_id": 5},
+            {"id": 2, "edge_key": "EDGE-2", "strategy_id": 5},
         ]
 
         result = get_edges_by_strategy(strategy_id=5)
@@ -470,7 +470,7 @@ class TestGetEdgeLifecycle:
         mock_fetch_all.return_value = [
             {
                 "id": 1,
-                "edge_id": "EDGE-1",
+                "edge_key": "EDGE-1",
                 "realized_pnl": Decimal("0.4800"),
                 "hours_to_resolution": 24.5,
             }
@@ -496,15 +496,15 @@ class TestGetEdgeLifecycle:
 
     @patch("precog.database.crud_analytics.fetch_all")
     def test_get_edge_lifecycle_filter_by_market(self, mock_fetch_all):
-        """Test filtering by market_internal_id."""
+        """Test filtering by market_id."""
         mock_fetch_all.return_value = []
 
-        get_edge_lifecycle(market_internal_id=42)
+        get_edge_lifecycle(market_id=42)
 
         call_args = mock_fetch_all.call_args
         sql = call_args[0][0]
         params = call_args[0][1]
-        assert "market_internal_id = %s" in sql
+        assert "market_id = %s" in sql
         assert 42 in params
 
     @patch("precog.database.crud_analytics.fetch_all")
@@ -525,7 +525,7 @@ class TestGetEdgeLifecycle:
         """Test filtering by both market and strategy."""
         mock_fetch_all.return_value = []
 
-        get_edge_lifecycle(market_internal_id=42, strategy_id=5, limit=25)
+        get_edge_lifecycle(market_id=42, strategy_id=5, limit=25)
 
         call_args = mock_fetch_all.call_args
         params = call_args[0][1]

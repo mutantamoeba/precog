@@ -40,7 +40,7 @@ from precog.database.connection import get_cursor
 
 # All FKs that were SET NULL, now RESTRICT
 SET_NULL_FKS = [
-    ("events", "series_internal_id", "series", "id"),
+    ("events", "series_id", "series", "id"),
     ("events", "game_id", "games", "id"),
     ("edges", "model_id", "probability_models", "model_id"),
     ("edges", "strategy_id", "strategies", "strategy_id"),
@@ -86,23 +86,23 @@ CASCADE_FKS = [
     ("orders", "platform_id", "platforms", "platform_id"),
     ("account_ledger", "platform_id", "platforms", "platform_id"),
     ("market_trades", "platform_id", "platforms", "platform_id"),
-    ("markets", "event_internal_id", "events", "id"),
+    ("markets", "event_id", "events", "id"),
     ("team_rankings", "team_id", "teams", "team_id"),
     ("position_exits", "position_internal_id", "positions", "id"),
     ("exit_attempts", "position_internal_id", "positions", "id"),
     ("market_snapshots", "market_id", "markets", "id"),
-    ("orders", "market_internal_id", "markets", "id"),
-    ("market_trades", "market_internal_id", "markets", "id"),
+    ("orders", "market_id", "markets", "id"),
+    ("market_trades", "market_id", "markets", "id"),
     ("predictions", "evaluation_run_id", "evaluation_runs", "id"),
     ("predictions", "market_id", "markets", "id"),
-    ("orderbook_snapshots", "market_internal_id", "markets", "id"),
+    ("orderbook_snapshots", "market_id", "markets", "id"),
     ("temporal_alignment", "market_id", "markets", "id"),
     ("temporal_alignment", "market_snapshot_id", "market_snapshots", "id"),
     ("temporal_alignment", "game_state_id", "game_states", "id"),
-    ("edges", "market_internal_id", "markets", "id"),
-    ("positions", "market_internal_id", "markets", "id"),
-    ("trades", "market_internal_id", "markets", "id"),
-    ("settlements", "market_internal_id", "markets", "id"),
+    ("edges", "market_id", "markets", "id"),
+    ("positions", "market_id", "markets", "id"),
+    ("trades", "market_id", "markets", "id"),
+    ("settlements", "market_id", "markets", "id"),
 ]
 
 ALL_FKS = SET_NULL_FKS + CASCADE_FKS
@@ -161,7 +161,7 @@ def fk_test_platform(db_pool: Any) -> Any:
             (platform_id,),
         )
         cur.execute(
-            "DELETE FROM orderbook_snapshots WHERE market_internal_id IN "
+            "DELETE FROM orderbook_snapshots WHERE market_id IN "
             "(SELECT id FROM markets WHERE platform_id = %s)",
             (platform_id,),
         )
@@ -210,8 +210,7 @@ def fk_test_platform(db_pool: Any) -> Any:
             (platform_id,),
         )
         cur.execute(
-            "DELETE FROM edges WHERE market_internal_id IN "
-            "(SELECT id FROM markets WHERE platform_id = %s)",
+            "DELETE FROM edges WHERE market_id IN (SELECT id FROM markets WHERE platform_id = %s)",
             (platform_id,),
         )
         cur.execute(
@@ -261,7 +260,7 @@ def fk_test_platform(db_pool: Any) -> Any:
             (platform_id,),
         )
         cur.execute(
-            "DELETE FROM orderbook_snapshots WHERE market_internal_id IN "
+            "DELETE FROM orderbook_snapshots WHERE market_id IN "
             "(SELECT id FROM markets WHERE platform_id = %s)",
             (platform_id,),
         )
@@ -310,8 +309,7 @@ def fk_test_platform(db_pool: Any) -> Any:
             (platform_id,),
         )
         cur.execute(
-            "DELETE FROM edges WHERE market_internal_id IN "
-            "(SELECT id FROM markets WHERE platform_id = %s)",
+            "DELETE FROM edges WHERE market_id IN (SELECT id FROM markets WHERE platform_id = %s)",
             (platform_id,),
         )
         cur.execute(
@@ -606,7 +604,7 @@ class TestRestrictBlocksDeletion:
             cur.execute(
                 """
                 INSERT INTO series (
-                    series_id, platform_id, external_id,
+                    series_key, platform_id, external_id,
                     category, title
                 )
                 VALUES (%s, %s, %s, 'sports', 'Test Series')
@@ -624,7 +622,7 @@ class TestRestrictBlocksDeletion:
         # Cleanup
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM series WHERE series_id = %s",
+                "DELETE FROM series WHERE series_key = %s",
                 ("MIG57-SERIES",),
             )
 
@@ -693,7 +691,7 @@ class TestRestrictBlocksDeletion:
             cur.execute(
                 """
                 INSERT INTO markets (
-                    platform_id, event_internal_id, external_id,
+                    platform_id, event_id, external_id,
                     ticker, title, market_type, status
                 )
                 VALUES (%s, %s, %s, %s, 'Test Market', 'binary', 'open')
@@ -708,7 +706,7 @@ class TestRestrictBlocksDeletion:
                 """
                 INSERT INTO orders (
                     platform_id, external_order_id,
-                    market_internal_id, strategy_id,
+                    market_id, strategy_id,
                     side, action, order_type,
                     requested_price, requested_quantity,
                     remaining_quantity, status,
@@ -829,7 +827,7 @@ class TestRestrictBlocksDeletion:
             cur.execute(
                 """
                 INSERT INTO positions (
-                    position_id, platform_id, market_internal_id,
+                    position_key, platform_id, market_id,
                     side, quantity, entry_price, current_price,
                     status, entry_time, last_check_time,
                     row_current_ind, row_start_ts,
@@ -954,11 +952,11 @@ class TestSCDDefaults:
         """New series row has correct SCD defaults."""
         series_id = "MIG57-SCD-DEFAULT-SERIES"
         with get_cursor(commit=True) as cur:
-            cur.execute("DELETE FROM series WHERE series_id = %s", (series_id,))
+            cur.execute("DELETE FROM series WHERE series_key = %s", (series_id,))
             cur.execute(
                 """
                 INSERT INTO series (
-                    series_id, platform_id, external_id,
+                    series_key, platform_id, external_id,
                     category, title
                 )
                 VALUES (%s, %s, %s, 'sports', 'SCD Default Test Series')
@@ -973,7 +971,7 @@ class TestSCDDefaults:
 
         # Cleanup
         with get_cursor(commit=True) as cur:
-            cur.execute("DELETE FROM series WHERE series_id = %s", (series_id,))
+            cur.execute("DELETE FROM series WHERE series_key = %s", (series_id,))
 
     def test_row_current_ind_can_be_set_false(self, db_pool: Any) -> None:
         """row_current_ind can be explicitly set to FALSE (for historical versioning)."""
@@ -1169,14 +1167,14 @@ class TestSCDUniqueConstraint:
             )
 
     def test_series_duplicate_current_blocked(self, db_pool: Any, fk_test_platform: str) -> None:
-        """Cannot have two current rows with same series_id."""
+        """Cannot have two current rows with same series_key."""
         series_id = "MIG57-DUP-SERIES"
         with get_cursor(commit=True) as cur:
-            cur.execute("DELETE FROM series WHERE series_id = %s", (series_id,))
+            cur.execute("DELETE FROM series WHERE series_key = %s", (series_id,))
             cur.execute(
                 """
                 INSERT INTO series (
-                    series_id, platform_id, external_id,
+                    series_key, platform_id, external_id,
                     category, title, row_current_ind
                 )
                 VALUES (%s, %s, %s, 'sports', 'Dup Series 1', TRUE)
@@ -1189,7 +1187,7 @@ class TestSCDUniqueConstraint:
                 cur.execute(
                     """
                     INSERT INTO series (
-                        series_id, platform_id, external_id,
+                        series_key, platform_id, external_id,
                         category, title, row_current_ind
                     )
                     VALUES (%s, %s, %s, 'sports', 'Dup Series 2', TRUE)
@@ -1199,7 +1197,7 @@ class TestSCDUniqueConstraint:
 
         # Cleanup
         with get_cursor(commit=True) as cur:
-            cur.execute("DELETE FROM series WHERE series_id = %s", (series_id,))
+            cur.execute("DELETE FROM series WHERE series_key = %s", (series_id,))
 
     def test_venues_null_espn_id_allows_multiple_current(self, db_pool: Any) -> None:
         """Multiple current venues with NULL espn_venue_id are allowed

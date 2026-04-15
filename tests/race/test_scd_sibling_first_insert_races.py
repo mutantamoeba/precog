@@ -446,7 +446,7 @@ def market_race_setup(db_pool: Any) -> Any:
         cur.execute(
             """
             INSERT INTO markets (
-                platform_id, event_internal_id, external_id, ticker, title,
+                platform_id, event_id, external_id, ticker, title,
                 market_type, status
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -588,7 +588,7 @@ def position_race_setup(db_pool: Any) -> Any:
     with get_cursor(commit=True) as cur:
         # Clean up any prior test data.
         cur.execute(
-            "DELETE FROM positions WHERE position_id LIKE %s",
+            "DELETE FROM positions WHERE position_key LIKE %s",
             (_TEST_POSITION_BK_PREFIX + "%",),
         )
         cur.execute(
@@ -605,7 +605,7 @@ def position_race_setup(db_pool: Any) -> Any:
         cur.execute(
             """
             INSERT INTO markets (
-                platform_id, event_internal_id, external_id, ticker, title,
+                platform_id, event_id, external_id, ticker, title,
                 market_type, status
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -632,7 +632,7 @@ def position_race_setup(db_pool: Any) -> Any:
         cur.execute(
             """
             INSERT INTO positions (
-                position_id, market_internal_id, side, quantity,
+                position_key, market_id, side, quantity,
                 entry_price, current_price,
                 status, entry_time, last_check_time,
                 row_current_ind, row_start_ts,
@@ -658,7 +658,7 @@ def position_race_setup(db_pool: Any) -> Any:
 
     try:
         with get_cursor(commit=True) as cur:
-            cur.execute("DELETE FROM positions WHERE position_id = %s", (position_bk,))
+            cur.execute("DELETE FROM positions WHERE position_key = %s", (position_bk,))
             cur.execute("DELETE FROM market_snapshots WHERE market_id = %s", (market_pk,))
             cur.execute("DELETE FROM markets WHERE id = %s", (market_pk,))
     except Exception:
@@ -672,11 +672,11 @@ def _reset_position(position_bk: str, market_pk: int) -> int:
     principle. Matches the seeding in position_race_setup.
     """
     with get_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM positions WHERE position_id = %s", (position_bk,))
+        cur.execute("DELETE FROM positions WHERE position_key = %s", (position_bk,))
         cur.execute(
             """
             INSERT INTO positions (
-                position_id, market_internal_id, side, quantity,
+                position_key, market_id, side, quantity,
                 entry_price, current_price,
                 status, entry_time, last_check_time,
                 row_current_ind, row_start_ts,
@@ -743,7 +743,7 @@ class TestUpdatePositionPriceConcurrentUpdate:
                         """
                         SELECT id, row_current_ind
                         FROM positions
-                        WHERE position_id = %s
+                        WHERE position_key = %s
                         """,
                         (position_bk,),
                     )
@@ -831,7 +831,7 @@ class TestClosePositionConcurrentClose:
                         """
                         SELECT id, row_current_ind, status
                         FROM positions
-                        WHERE position_id = %s
+                        WHERE position_key = %s
                         """,
                         (position_bk,),
                     )
@@ -957,7 +957,7 @@ class TestSetTrailingStopStateConcurrentUpdate:
                         SELECT id, row_current_ind, trailing_stop_state,
                                execution_environment
                         FROM positions
-                        WHERE position_id = %s
+                        WHERE position_key = %s
                         """,
                         (position_bk,),
                     )

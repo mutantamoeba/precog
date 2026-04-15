@@ -59,7 +59,7 @@ def _default_order_kwargs():
     return {
         "platform_id": "kalshi",
         "external_order_id": "abc-123",
-        "market_internal_id": 42,
+        "market_id": 42,
         "side": "yes",
         "action": "buy",
         "requested_price": Decimal("0.5500"),
@@ -200,7 +200,7 @@ class TestCreateOrder:
         result = create_order(
             platform_id="kalshi",
             external_order_id="xyz-789",
-            market_internal_id=42,
+            market_id=42,
             side="no",
             action="sell",
             requested_price=Decimal("0.4500"),
@@ -588,14 +588,14 @@ class TestGetOpenOrders:
 
     @patch("precog.database.crud_orders.fetch_all")
     def test_get_open_orders_market_filter(self, mock_fetch_all):
-        """Test filtering by market_internal_id."""
+        """Test filtering by market_id."""
         mock_fetch_all.return_value = []
 
-        get_open_orders(market_internal_id=42)
+        get_open_orders(market_id=42)
 
         query = mock_fetch_all.call_args[0][0]
         params = mock_fetch_all.call_args[0][1]
-        assert "market_internal_id = %s" in query
+        assert "market_id = %s" in query
         assert 42 in params
 
     @patch("precog.database.crud_orders.fetch_all")

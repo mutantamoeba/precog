@@ -87,7 +87,7 @@ _UNALIGNED_QUERY = """
             AS time_delta_raw
     FROM market_snapshots ms
     JOIN markets m ON ms.market_id = m.id
-    JOIN events e ON m.event_internal_id = e.id
+    JOIN events e ON m.event_id = e.id
     JOIN games g ON e.game_id = g.id
     CROSS JOIN LATERAL (
         SELECT gs_inner.id, gs_inner.row_start_ts, gs_inner.game_status,

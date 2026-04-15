@@ -296,7 +296,7 @@ def test_create_position(db_pool, clean_test_data, sample_market_data, sample_po
     market_id = create_market(**sample_market_data)
 
     # Create position
-    position_id = create_position(market_internal_id=market_id, **sample_position_data)
+    position_id = create_position(market_id=market_id, **sample_position_data)
 
     assert position_id is not None
 
@@ -307,7 +307,7 @@ def test_get_current_positions_filters_open(
 ):
     """Test filtering positions by status."""
     market_id = create_market(**sample_market_data)
-    position_id = create_position(market_internal_id=market_id, **sample_position_data)
+    position_id = create_position(market_id=market_id, **sample_position_data)
 
     # Get open positions
     positions = get_current_positions(status="open")
@@ -324,7 +324,7 @@ def test_update_position_price_versioning(
 ):
     """Test position price updates use SCD Type 2."""
     market_id = create_market(**sample_market_data)
-    position_id = create_position(market_internal_id=market_id, **sample_position_data)
+    position_id = create_position(market_id=market_id, **sample_position_data)
 
     # Update price
     new_position_id = update_position_price(
@@ -340,7 +340,7 @@ def test_update_position_price_versioning(
 def test_close_position(db_pool, clean_test_data, sample_market_data, sample_position_data):
     """Test closing position."""
     market_id = create_market(**sample_market_data)
-    position_id = create_position(market_internal_id=market_id, **sample_position_data)
+    position_id = create_position(market_id=market_id, **sample_position_data)
 
     # Close position
     closed_id = close_position(
@@ -366,7 +366,7 @@ def test_position_unrealized_pnl_calculation(
 ):
     """Test unrealized P&L calculation."""
     market_id = create_market(**sample_market_data)
-    position_id = create_position(market_internal_id=market_id, **sample_position_data)
+    position_id = create_position(market_id=market_id, **sample_position_data)
 
     # Update price to profitable level
     update_position_price(
@@ -376,7 +376,7 @@ def test_position_unrealized_pnl_calculation(
 
     # Get position with joined market data
     positions = get_current_positions()
-    pos = next((p for p in positions if p["market_internal_id"] == market_id), None)
+    pos = next((p for p in positions if p["market_id"] == market_id), None)
 
     # Unrealized P&L should be calculated
     # (0.5800 - 0.5200) * 100 contracts = $6.00
@@ -398,7 +398,7 @@ def test_create_trade_with_attribution(
     market_id = create_market(**sample_market_data)
 
     # Create trade
-    trade_id = create_trade(market_internal_id=market_id, **sample_trade_data)
+    trade_id = create_trade(market_id=market_id, **sample_trade_data)
 
     assert trade_id is not None
 
@@ -409,8 +409,8 @@ def test_get_trades_by_market(db_pool, clean_test_data, sample_market_data, samp
     market_id = create_market(**sample_market_data)
 
     # Create multiple trades
-    trade_id1 = create_trade(market_internal_id=market_id, **sample_trade_data)
-    trade_id2 = create_trade(market_internal_id=market_id, **sample_trade_data)
+    trade_id1 = create_trade(market_id=market_id, **sample_trade_data)
+    trade_id2 = create_trade(market_id=market_id, **sample_trade_data)
 
     # Retrieve trades
     trades = get_trades_by_market(market_id, limit=10)
@@ -424,7 +424,7 @@ def test_get_trades_by_market(db_pool, clean_test_data, sample_market_data, samp
 def test_get_recent_trades(db_pool, clean_test_data, sample_market_data, sample_trade_data):
     """Test retrieving recent trades across all markets."""
     market_id = create_market(**sample_market_data)
-    trade_id = create_trade(market_internal_id=market_id, **sample_trade_data)
+    trade_id = create_trade(market_id=market_id, **sample_trade_data)
 
     # Get recent trades
     trades = get_recent_trades(limit=10)
@@ -462,7 +462,7 @@ def test_trade_strategy_model_attribution(
     order_id = create_order(
         platform_id="test_platform",
         external_order_id=f"ORDER-{uuid.uuid4().hex[:8]}",
-        market_internal_id=market_id,
+        market_id=market_id,
         side="yes",
         action="buy",
         requested_price=sample_trade_data["price"],
@@ -473,7 +473,7 @@ def test_trade_strategy_model_attribution(
 
     # Create trade linked to order
     create_trade(
-        market_internal_id=market_id,
+        market_id=market_id,
         order_id=order_id,
         **sample_trade_data,
     )
@@ -711,14 +711,14 @@ def test_get_current_positions_with_market_id_filter(
     market_id2 = create_market(**sample_market_data)
 
     # Create positions for both markets
-    sample_position_data["market_internal_id"] = market_id1
+    sample_position_data["market_id"] = market_id1
     position1 = create_position(**sample_position_data)
 
-    sample_position_data["market_internal_id"] = market_id2
+    sample_position_data["market_id"] = market_id2
     _position2 = create_position(**sample_position_data)  # Intentionally unused - testing filter
 
     # Test: Get positions filtered by market_id1
-    positions = get_current_positions(market_internal_id=market_id1)
+    positions = get_current_positions(market_id=market_id1)
 
     # Should only return position1 (compare using surrogate id)
     assert len(positions) == 1
@@ -767,7 +767,7 @@ def test_get_recent_trades_with_strategy_filter(
     order_id1 = create_order(
         platform_id="test_platform",
         external_order_id=f"ORDER-{uuid.uuid4().hex[:8]}",
-        market_internal_id=market_id,
+        market_id=market_id,
         side="yes",
         action="buy",
         requested_price=sample_trade_data["price"],
@@ -778,7 +778,7 @@ def test_get_recent_trades_with_strategy_filter(
     order_id2 = create_order(
         platform_id="test_platform",
         external_order_id=f"ORDER-{uuid.uuid4().hex[:8]}",
-        market_internal_id=market_id,
+        market_id=market_id,
         side="yes",
         action="buy",
         requested_price=sample_trade_data["price"],
@@ -789,7 +789,7 @@ def test_get_recent_trades_with_strategy_filter(
 
     # Create trades linked to their respective orders
     trade1 = create_trade(
-        market_internal_id=market_id,
+        market_id=market_id,
         order_id=order_id1,
         side=sample_trade_data["side"],
         quantity=sample_trade_data["quantity"],
@@ -797,7 +797,7 @@ def test_get_recent_trades_with_strategy_filter(
         execution_environment="paper",  # required (#622+#686)
     )
     _trade2 = create_trade(  # Intentionally unused - testing filter
-        market_internal_id=market_id,
+        market_id=market_id,
         order_id=order_id2,
         side=sample_trade_data["side"],
         quantity=sample_trade_data["quantity"],
@@ -830,7 +830,7 @@ def test_create_settlement_rejects_float(db_pool, clean_test_data, sample_market
     # Test: Create settlement with float (should raise ValueError)
     with pytest.raises(ValueError, match="Payout must be Decimal"):
         create_settlement(
-            market_internal_id=market_id,
+            market_id=market_id,
             platform_id="kalshi",
             outcome="YES",
             payout=123.45,  # type: ignore[arg-type]  # Float not Decimal
@@ -903,7 +903,7 @@ def test_create_trade_with_execution_environment(
     market_id = create_market(**sample_market_data)
 
     # Create trade with paper environment (fixture default)
-    trade_id = create_trade(market_internal_id=market_id, **sample_trade_data)
+    trade_id = create_trade(market_id=market_id, **sample_trade_data)
     assert trade_id is not None
 
     # Retrieve and verify execution_environment is set
@@ -933,7 +933,7 @@ def test_create_trade_rejects_missing_execution_environment(
         k: v for k, v in sample_trade_data.items() if k != "execution_environment"
     }
     with pytest.raises(TypeError, match="execution_environment"):
-        create_trade(market_internal_id=market_id, **trade_data_without_exec_env)
+        create_trade(market_id=market_id, **trade_data_without_exec_env)
 
 
 @pytest.mark.integration
@@ -947,12 +947,10 @@ def test_get_trades_by_market_with_environment_filter(
     # per-call without TypeError ("got multiple values for keyword argument").
     trade_data_no_env = {k: v for k, v in sample_trade_data.items() if k != "execution_environment"}
     # Create trades in different environments
-    create_trade(market_internal_id=market_id, **trade_data_no_env, execution_environment="live")
-    create_trade(market_internal_id=market_id, **trade_data_no_env, execution_environment="paper")
-    create_trade(market_internal_id=market_id, **trade_data_no_env, execution_environment="paper")
-    create_trade(
-        market_internal_id=market_id, **trade_data_no_env, execution_environment="backtest"
-    )
+    create_trade(market_id=market_id, **trade_data_no_env, execution_environment="live")
+    create_trade(market_id=market_id, **trade_data_no_env, execution_environment="paper")
+    create_trade(market_id=market_id, **trade_data_no_env, execution_environment="paper")
+    create_trade(market_id=market_id, **trade_data_no_env, execution_environment="backtest")
 
     # Filter by paper environment
     paper_trades = get_trades_by_market(market_id, limit=10, execution_environment="paper")
@@ -978,8 +976,8 @@ def test_get_recent_trades_with_environment_filter(
 
     trade_data_no_env = {k: v for k, v in sample_trade_data.items() if k != "execution_environment"}
     # Create trades in different environments
-    create_trade(market_internal_id=market_id, **trade_data_no_env, execution_environment="live")
-    create_trade(market_internal_id=market_id, **trade_data_no_env, execution_environment="paper")
+    create_trade(market_id=market_id, **trade_data_no_env, execution_environment="live")
+    create_trade(market_id=market_id, **trade_data_no_env, execution_environment="paper")
 
     # Filter by paper environment
     paper_trades = get_recent_trades(limit=10, execution_environment="paper")
@@ -1000,7 +998,7 @@ def test_create_position_with_execution_environment(
     market_id = create_market(**sample_market_data)
 
     # Create position with paper environment (fixture default)
-    pos_id = create_position(market_internal_id=market_id, **sample_position_data)
+    pos_id = create_position(market_id=market_id, **sample_position_data)
     assert pos_id is not None
 
     # Retrieve and verify execution_environment is set
@@ -1026,7 +1024,7 @@ def test_create_position_rejects_missing_execution_environment(
         k: v for k, v in sample_position_data.items() if k != "execution_environment"
     }
     with pytest.raises(TypeError, match="execution_environment"):
-        create_position(market_internal_id=market_id, **pos_data_no_env)
+        create_position(market_id=market_id, **pos_data_no_env)
 
 
 @pytest.mark.integration
@@ -1041,13 +1039,13 @@ def test_get_current_positions_with_environment_filter(
     }
     # Create positions in different environments
     live_pos_id = create_position(
-        market_internal_id=market_id, **pos_data_no_env, execution_environment="live"
+        market_id=market_id, **pos_data_no_env, execution_environment="live"
     )
     paper_pos_id = create_position(
-        market_internal_id=market_id, **pos_data_no_env, execution_environment="paper"
+        market_id=market_id, **pos_data_no_env, execution_environment="paper"
     )
     backtest_pos_id = create_position(
-        market_internal_id=market_id, **pos_data_no_env, execution_environment="backtest"
+        market_id=market_id, **pos_data_no_env, execution_environment="backtest"
     )
 
     # Filter by paper environment
@@ -1075,7 +1073,7 @@ def test_get_current_positions_combined_filters(
     market_id = create_market(**sample_market_data)
 
     # Create open position in paper environment (fixture default)
-    paper_pos_id = create_position(market_internal_id=market_id, **sample_position_data)
+    paper_pos_id = create_position(market_id=market_id, **sample_position_data)
 
     # Filter by status AND environment
     open_paper_positions = get_current_positions(status="open", execution_environment="paper")
@@ -1109,7 +1107,7 @@ def test_insert_orderbook_snapshot(db_pool, clean_test_data, sample_market_data)
     market_id = create_market(**sample_market_data)
 
     snapshot_id = insert_orderbook_snapshot(
-        market_internal_id=market_id,
+        market_id=market_id,
         best_bid=Decimal("0.5000"),
         best_ask=Decimal("0.5200"),
         spread=Decimal("0.0200"),
@@ -1130,10 +1128,10 @@ def test_insert_orderbook_snapshot(db_pool, clean_test_data, sample_market_data)
 
 @pytest.mark.integration
 def test_insert_orderbook_snapshot_minimal(db_pool, clean_test_data, sample_market_data):
-    """Test inserting an orderbook snapshot with only required fields (market_internal_id)."""
+    """Test inserting an orderbook snapshot with only required fields (market_id)."""
     market_id = create_market(**sample_market_data)
 
-    snapshot_id = insert_orderbook_snapshot(market_internal_id=market_id)
+    snapshot_id = insert_orderbook_snapshot(market_id=market_id)
 
     assert snapshot_id is not None
     assert isinstance(snapshot_id, int)
@@ -1146,7 +1144,7 @@ def test_orderbook_snapshot_decimal_precision(db_pool, clean_test_data, sample_m
     market_id = create_market(**sample_market_data)
 
     insert_orderbook_snapshot(
-        market_internal_id=market_id,
+        market_id=market_id,
         best_bid=Decimal("0.4975"),
         best_ask=Decimal("0.5025"),
         spread=Decimal("0.0050"),
@@ -1154,7 +1152,7 @@ def test_orderbook_snapshot_decimal_precision(db_pool, clean_test_data, sample_m
         weighted_mid=Decimal("0.5001"),
     )
 
-    snapshot = get_latest_orderbook(market_internal_id=market_id)
+    snapshot = get_latest_orderbook(market_id=market_id)
     assert snapshot is not None
     assert snapshot["best_bid"] == Decimal("0.4975")
     assert snapshot["best_ask"] == Decimal("0.5025")
@@ -1170,21 +1168,21 @@ def test_get_latest_orderbook(db_pool, clean_test_data, sample_market_data):
 
     # Insert two snapshots — latest should be returned
     insert_orderbook_snapshot(
-        market_internal_id=market_id,
+        market_id=market_id,
         best_bid=Decimal("0.5000"),
         best_ask=Decimal("0.5200"),
         spread=Decimal("0.0200"),
         levels=2,
     )
     insert_orderbook_snapshot(
-        market_internal_id=market_id,
+        market_id=market_id,
         best_bid=Decimal("0.5100"),
         best_ask=Decimal("0.5300"),
         spread=Decimal("0.0200"),
         levels=3,
     )
 
-    snapshot = get_latest_orderbook(market_internal_id=market_id)
+    snapshot = get_latest_orderbook(market_id=market_id)
     assert snapshot is not None
     # Latest snapshot should have levels=3
     assert snapshot["levels"] == 3
@@ -1196,7 +1194,7 @@ def test_get_latest_orderbook_none(db_pool, clean_test_data, sample_market_data)
     """Test get_latest_orderbook returns None when no snapshots exist."""
     market_id = create_market(**sample_market_data)
 
-    snapshot = get_latest_orderbook(market_internal_id=market_id)
+    snapshot = get_latest_orderbook(market_id=market_id)
     assert snapshot is None
 
 
@@ -1208,7 +1206,7 @@ def test_get_orderbook_history(db_pool, clean_test_data, sample_market_data):
     # Insert 3 snapshots
     for i in range(3):
         insert_orderbook_snapshot(
-            market_internal_id=market_id,
+            market_id=market_id,
             best_bid=Decimal("0.5000") + Decimal(str(i)) * Decimal("0.0100"),
             best_ask=Decimal("0.5200") + Decimal(str(i)) * Decimal("0.0100"),
             spread=Decimal("0.0200"),
@@ -1216,14 +1214,14 @@ def test_get_orderbook_history(db_pool, clean_test_data, sample_market_data):
         )
 
     # Get all 3
-    history = get_orderbook_history(market_internal_id=market_id, limit=10)
+    history = get_orderbook_history(market_id=market_id, limit=10)
     assert len(history) == 3
     # Newest first (levels=3 was inserted last)
     assert history[0]["levels"] == 3
     assert history[2]["levels"] == 1
 
     # Test limit
-    limited = get_orderbook_history(market_internal_id=market_id, limit=2)
+    limited = get_orderbook_history(market_id=market_id, limit=2)
     assert len(limited) == 2
 
 
@@ -1238,7 +1236,7 @@ def test_orderbook_snapshot_array_fields(db_pool, clean_test_data, sample_market
     ask_quantities = [150, 250, 50]
 
     insert_orderbook_snapshot(
-        market_internal_id=market_id,
+        market_id=market_id,
         bid_prices=bid_prices,
         bid_quantities=bid_quantities,
         ask_prices=ask_prices,
@@ -1246,7 +1244,7 @@ def test_orderbook_snapshot_array_fields(db_pool, clean_test_data, sample_market
         levels=3,
     )
 
-    snapshot = get_latest_orderbook(market_internal_id=market_id)
+    snapshot = get_latest_orderbook(market_id=market_id)
     assert snapshot is not None
     assert snapshot["bid_prices"] == bid_prices
     assert snapshot["bid_quantities"] == bid_quantities
@@ -1261,7 +1259,7 @@ def test_orderbook_snapshot_empty_arrays(db_pool, clean_test_data, sample_market
     market_id = create_market(**sample_market_data)
 
     insert_orderbook_snapshot(
-        market_internal_id=market_id,
+        market_id=market_id,
         bid_prices=None,
         bid_quantities=None,
         ask_prices=None,
@@ -1269,7 +1267,7 @@ def test_orderbook_snapshot_empty_arrays(db_pool, clean_test_data, sample_market
         levels=0,
     )
 
-    snapshot = get_latest_orderbook(market_internal_id=market_id)
+    snapshot = get_latest_orderbook(market_id=market_id)
     assert snapshot is not None
     assert snapshot["bid_prices"] is None
     assert snapshot["ask_prices"] is None
@@ -1304,11 +1302,11 @@ def test_update_bracket_counts_single_event(db_pool, clean_test_data, sample_mar
 
 @pytest.mark.integration
 def test_update_bracket_counts_no_event(db_pool, clean_test_data, sample_market_data):
-    """Markets without event_internal_id get bracket_count = NULL."""
+    """Markets without event_id get bracket_count = NULL."""
     data = dict(sample_market_data)
     data["ticker"] = "TEST-BRACKET-ORPHAN"
     data["external_id"] = "TEST-BRACKET-ORPHAN-EXT"
-    data["event_internal_id"] = None
+    data["event_id"] = None
     create_market(**data)
 
     update_bracket_counts()
@@ -1341,7 +1339,7 @@ def test_update_bracket_counts_nulls_orphan_with_stale_value(
     data = dict(sample_market_data)
     data["ticker"] = "TEST-BRACKET-STALE"
     data["external_id"] = "TEST-BRACKET-STALE-EXT"
-    data["event_internal_id"] = None
+    data["event_id"] = None
     data["bracket_count"] = 5  # Stale value
     create_market(**data)
 
