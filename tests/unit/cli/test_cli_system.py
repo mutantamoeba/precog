@@ -93,7 +93,9 @@ class TestSystemHealth:
         result = cli_runner.invoke(app, ["health"])
 
         # Should attempt health check
-        assert result.exit_code in [0, 1]
+        assert result.exit_code in (0, 1), (
+            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        )
         output_lower = strip_ansi(result.stdout).lower()
         assert "database" in output_lower or "health" in output_lower or "check" in output_lower
 
@@ -104,7 +106,9 @@ class TestSystemHealth:
 
         result = cli_runner.invoke(app, ["health", "--verbose"])
 
-        assert result.exit_code in [0, 1]
+        assert result.exit_code in (0, 1), (
+            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        )
 
     @patch("precog.database.connection.get_cursor")
     def test_health_database_failure(self, mock_get_cursor, cli_runner):
@@ -114,7 +118,9 @@ class TestSystemHealth:
         result = cli_runner.invoke(app, ["health"])
 
         # Should report failure gracefully
-        assert result.exit_code in [0, 1]
+        assert result.exit_code in (0, 1), (
+            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        )
         output_lower = strip_ansi(result.stdout).lower()
         assert "failed" in output_lower or "error" in output_lower or "health" in output_lower
 
@@ -127,7 +133,9 @@ class TestSystemHealth:
         result = cli_runner.invoke(app, ["health"])
 
         # Should note missing credentials
-        assert result.exit_code in [0, 1]
+        assert result.exit_code in (0, 1), (
+            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        )
 
 
 class TestSystemVersion:
@@ -147,7 +155,9 @@ class TestSystemVersion:
         result = cli_runner.invoke(app, ["version"])
 
         # Should not raise exception
-        assert result.exception is None or result.exit_code in [0, 1]
+        assert result.exit_code == 0, (
+            f"version should always succeed, got {result.exit_code}: {result.output}"
+        )
 
 
 class TestSystemInfo:
@@ -290,7 +300,9 @@ class TestSystemEdgeCases:
         ):
             result = cli_runner.invoke(app, ["health"])
 
-        assert result.exit_code in [0, 1]
+        assert result.exit_code in (0, 1), (
+            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        )
 
     @patch("precog.database.connection.get_cursor")
     def test_health_partial_failure(self, mock_get_cursor, cli_runner):
@@ -301,4 +313,6 @@ class TestSystemEdgeCases:
             result = cli_runner.invoke(app, ["health"])
 
         # Should complete and report partial status
-        assert result.exit_code in [0, 1]
+        assert result.exit_code in (0, 1), (
+            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        )
