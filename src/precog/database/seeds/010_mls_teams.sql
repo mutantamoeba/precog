@@ -13,41 +13,41 @@
 -- ESPN IDs: VERIFIED against actual ESPN API on 2025-12-25
 -- Note: San Diego FC added as expansion team for 2025
 
-INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_id, current_elo_rating, conference, division) VALUES
+INSERT INTO teams (team_code, team_name, display_name, sport, league, sport_id, league_id, espn_team_id, current_elo_rating, conference, division) VALUES
 
 -- EASTERN CONFERENCE (15 Teams)
-('ATL', 'Atlanta United FC', 'Atlanta United', 'soccer', 'mls', '18418', 1500, 'Eastern', NULL),
-('CLT', 'Charlotte FC', 'Charlotte FC', 'soccer', 'mls', '21300', 1500, 'Eastern', NULL),
-('CHI', 'Chicago Fire FC', 'Chicago Fire', 'soccer', 'mls', '182', 1500, 'Eastern', NULL),
-('CIN', 'FC Cincinnati', 'FC Cincinnati', 'soccer', 'mls', '18267', 1500, 'Eastern', NULL),
-('CLB', 'Columbus Crew', 'Columbus Crew', 'soccer', 'mls', '183', 1500, 'Eastern', NULL),
-('DC', 'D.C. United', 'D.C. United', 'soccer', 'mls', '193', 1500, 'Eastern', NULL),
-('MIA', 'Inter Miami CF', 'Inter Miami', 'soccer', 'mls', '20232', 1500, 'Eastern', NULL),
-('MTL', 'CF Montréal', 'CF Montréal', 'soccer', 'mls', '9720', 1500, 'Eastern', NULL),
-('NE', 'New England Revolution', 'New England', 'soccer', 'mls', '189', 1500, 'Eastern', NULL),
-('NY', 'New York Red Bulls', 'NY Red Bulls', 'soccer', 'mls', '190', 1500, 'Eastern', NULL),
-('NYC', 'New York City FC', 'NYCFC', 'soccer', 'mls', '17606', 1500, 'Eastern', NULL),
-('ORL', 'Orlando City SC', 'Orlando City', 'soccer', 'mls', '12011', 1500, 'Eastern', NULL),
-('PHI', 'Philadelphia Union', 'Philadelphia', 'soccer', 'mls', '10739', 1500, 'Eastern', NULL),
-('TOR', 'Toronto FC', 'Toronto FC', 'soccer', 'mls', '7318', 1500, 'Eastern', NULL),
-('NSH', 'Nashville SC', 'Nashville', 'soccer', 'mls', '18986', 1500, 'Eastern', NULL),
+('ATL', 'Atlanta United FC', 'Atlanta United', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '18418', 1500, 'Eastern', NULL),
+('CLT', 'Charlotte FC', 'Charlotte FC', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '21300', 1500, 'Eastern', NULL),
+('CHI', 'Chicago Fire FC', 'Chicago Fire', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '182', 1500, 'Eastern', NULL),
+('CIN', 'FC Cincinnati', 'FC Cincinnati', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '18267', 1500, 'Eastern', NULL),
+('CLB', 'Columbus Crew', 'Columbus Crew', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '183', 1500, 'Eastern', NULL),
+('DC', 'D.C. United', 'D.C. United', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '193', 1500, 'Eastern', NULL),
+('MIA', 'Inter Miami CF', 'Inter Miami', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '20232', 1500, 'Eastern', NULL),
+('MTL', 'CF Montréal', 'CF Montréal', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '9720', 1500, 'Eastern', NULL),
+('NE', 'New England Revolution', 'New England', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '189', 1500, 'Eastern', NULL),
+('NY', 'New York Red Bulls', 'NY Red Bulls', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '190', 1500, 'Eastern', NULL),
+('NYC', 'New York City FC', 'NYCFC', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '17606', 1500, 'Eastern', NULL),
+('ORL', 'Orlando City SC', 'Orlando City', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '12011', 1500, 'Eastern', NULL),
+('PHI', 'Philadelphia Union', 'Philadelphia', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '10739', 1500, 'Eastern', NULL),
+('TOR', 'Toronto FC', 'Toronto FC', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '7318', 1500, 'Eastern', NULL),
+('NSH', 'Nashville SC', 'Nashville', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '18986', 1500, 'Eastern', NULL),
 
 -- WESTERN CONFERENCE (15 Teams - includes San Diego FC for 2025)
-('ATX', 'Austin FC', 'Austin FC', 'soccer', 'mls', '20906', 1500, 'Western', NULL),
-('COL', 'Colorado Rapids', 'Colorado', 'soccer', 'mls', '184', 1500, 'Western', NULL),
-('DAL', 'FC Dallas', 'FC Dallas', 'soccer', 'mls', '185', 1500, 'Western', NULL),
-('HOU', 'Houston Dynamo FC', 'Houston', 'soccer', 'mls', '6077', 1500, 'Western', NULL),
-('LA', 'LA Galaxy', 'LA Galaxy', 'soccer', 'mls', '187', 1500, 'Western', NULL),
-('LAFC', 'Los Angeles FC', 'LAFC', 'soccer', 'mls', '18966', 1500, 'Western', NULL),
-('MIN', 'Minnesota United FC', 'Minnesota', 'soccer', 'mls', '17362', 1500, 'Western', NULL),
-('POR', 'Portland Timbers', 'Portland', 'soccer', 'mls', '9723', 1500, 'Western', NULL),
-('RSL', 'Real Salt Lake', 'Real Salt Lake', 'soccer', 'mls', '4771', 1500, 'Western', NULL),
-('SD', 'San Diego FC', 'San Diego FC', 'soccer', 'mls', '22529', 1500, 'Western', NULL),
-('SJ', 'San Jose Earthquakes', 'San Jose', 'soccer', 'mls', '191', 1500, 'Western', NULL),
-('SEA', 'Seattle Sounders FC', 'Seattle', 'soccer', 'mls', '9726', 1500, 'Western', NULL),
-('SKC', 'Sporting Kansas City', 'Sporting KC', 'soccer', 'mls', '186', 1500, 'Western', NULL),
-('STL', 'St. Louis CITY SC', 'St. Louis', 'soccer', 'mls', '21812', 1500, 'Western', NULL),
-('VAN', 'Vancouver Whitecaps FC', 'Vancouver', 'soccer', 'mls', '9727', 1500, 'Western', NULL)
+('ATX', 'Austin FC', 'Austin FC', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '20906', 1500, 'Western', NULL),
+('COL', 'Colorado Rapids', 'Colorado', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '184', 1500, 'Western', NULL),
+('DAL', 'FC Dallas', 'FC Dallas', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '185', 1500, 'Western', NULL),
+('HOU', 'Houston Dynamo FC', 'Houston', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '6077', 1500, 'Western', NULL),
+('LA', 'LA Galaxy', 'LA Galaxy', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '187', 1500, 'Western', NULL),
+('LAFC', 'Los Angeles FC', 'LAFC', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '18966', 1500, 'Western', NULL),
+('MIN', 'Minnesota United FC', 'Minnesota', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '17362', 1500, 'Western', NULL),
+('POR', 'Portland Timbers', 'Portland', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '9723', 1500, 'Western', NULL),
+('RSL', 'Real Salt Lake', 'Real Salt Lake', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '4771', 1500, 'Western', NULL),
+('SD', 'San Diego FC', 'San Diego FC', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '22529', 1500, 'Western', NULL),
+('SJ', 'San Jose Earthquakes', 'San Jose', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '191', 1500, 'Western', NULL),
+('SEA', 'Seattle Sounders FC', 'Seattle', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '9726', 1500, 'Western', NULL),
+('SKC', 'Sporting Kansas City', 'Sporting KC', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '186', 1500, 'Western', NULL),
+('STL', 'St. Louis CITY SC', 'St. Louis', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '21812', 1500, 'Western', NULL),
+('VAN', 'Vancouver Whitecaps FC', 'Vancouver', 'soccer', 'mls', (SELECT id FROM sports WHERE sport_key = 'soccer'), (SELECT id FROM leagues WHERE league_key = 'mls'), '9727', 1500, 'Western', NULL)
 
 ON CONFLICT (espn_team_id, league) WHERE espn_team_id IS NOT NULL DO UPDATE SET
     team_code = EXCLUDED.team_code,

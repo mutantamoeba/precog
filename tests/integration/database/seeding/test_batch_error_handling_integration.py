@@ -87,11 +87,16 @@ def setup_test_teams(db_pool, db_cursor):
                 """
                 INSERT INTO teams (
                     team_id, team_code, team_name,
-                    conference, division, sport, current_elo_rating
+                    conference, division, sport, league,
+                    sport_id, league_id, current_elo_rating
                 )
                 VALUES
-                    (98001, 'KC', 'Kansas City Chiefs', 'AFC', 'West', 'football', 1624),
-                    (98002, 'BUF', 'Buffalo Bills', 'AFC', 'East', 'football', 1618)
+                    (98001, 'KC', 'Kansas City Chiefs', 'AFC', 'West', 'football', 'nfl',
+                     (SELECT id FROM sports WHERE sport_key = 'football'),
+                     (SELECT id FROM leagues WHERE league_key = 'nfl'), 1624),
+                    (98002, 'BUF', 'Buffalo Bills', 'AFC', 'East', 'football', 'nfl',
+                     (SELECT id FROM sports WHERE sport_key = 'football'),
+                     (SELECT id FROM leagues WHERE league_key = 'nfl'), 1618)
                 ON CONFLICT (team_id) DO NOTHING
                 RETURNING team_id
             """

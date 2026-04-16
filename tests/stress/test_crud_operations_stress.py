@@ -108,9 +108,12 @@ def setup_stress_teams(stress_postgres_container):
                 """
                 INSERT INTO teams (
                     team_id, team_code, team_name,
-                    espn_team_id, conference, division, sport, current_elo_rating
+                    espn_team_id, conference, division, sport, league,
+                    sport_id, league_id, current_elo_rating
                 )
-                VALUES (%s, %s, %s, %s, 'Test', 'Division', 'football', 1500)
+                VALUES (%s, %s, %s, %s, 'Test', 'Division', 'football', 'nfl',
+                        (SELECT id FROM sports WHERE sport_key = 'football'),
+                        (SELECT id FROM leagues WHERE league_key = 'nfl'), 1500)
                 ON CONFLICT (team_id) DO NOTHING
             """,
                 (

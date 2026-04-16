@@ -111,11 +111,16 @@ def setup_property_test_data(db_pool, clean_test_data):
             """
             INSERT INTO teams (
                 team_id, team_code, team_name,
-                espn_team_id, conference, division, sport, current_elo_rating
+                espn_team_id, conference, division, sport, league,
+                sport_id, league_id, current_elo_rating
             )
             VALUES
-                (99001, 'PT1', 'Property Team 1', '99001', 'Test', 'East', 'football', 1500),
-                (99002, 'PT2', 'Property Team 2', '99002', 'Test', 'West', 'football', 1500)
+                (99001, 'PT1', 'Property Team 1', '99001', 'Test', 'East', 'football', 'nfl',
+                 (SELECT id FROM sports WHERE sport_key = 'football'),
+                 (SELECT id FROM leagues WHERE league_key = 'nfl'), 1500),
+                (99002, 'PT2', 'Property Team 2', '99002', 'Test', 'West', 'football', 'nfl',
+                 (SELECT id FROM sports WHERE sport_key = 'football'),
+                 (SELECT id FROM leagues WHERE league_key = 'nfl'), 1500)
             ON CONFLICT (team_id) DO NOTHING
         """
         )

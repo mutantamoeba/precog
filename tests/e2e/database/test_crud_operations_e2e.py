@@ -57,13 +57,22 @@ def setup_e2e_teams(db_pool, clean_test_data):
             """
             INSERT INTO teams (
                 team_id, team_code, team_name,
-                espn_team_id, conference, division, sport, current_elo_rating
+                espn_team_id, conference, division, sport, league,
+                sport_id, league_id, current_elo_rating
             )
             VALUES
-                (88001, 'E2E-KC', 'E2E Chiefs', 'E2E-12', 'AFC', 'West', 'football', 1650),
-                (88002, 'E2E-LV', 'E2E Raiders', 'E2E-13', 'AFC', 'West', 'football', 1480),
-                (88003, 'E2E-DET', 'E2E Lions', 'E2E-8', 'NFC', 'North', 'football', 1580),
-                (88004, 'E2E-CHI', 'E2E Bears', 'E2E-3', 'NFC', 'North', 'football', 1420)
+                (88001, 'E2E-KC', 'E2E Chiefs', 'E2E-12', 'AFC', 'West', 'football', 'nfl',
+                 (SELECT id FROM sports WHERE sport_key = 'football'),
+                 (SELECT id FROM leagues WHERE league_key = 'nfl'), 1650),
+                (88002, 'E2E-LV', 'E2E Raiders', 'E2E-13', 'AFC', 'West', 'football', 'nfl',
+                 (SELECT id FROM sports WHERE sport_key = 'football'),
+                 (SELECT id FROM leagues WHERE league_key = 'nfl'), 1480),
+                (88003, 'E2E-DET', 'E2E Lions', 'E2E-8', 'NFC', 'North', 'football', 'nfl',
+                 (SELECT id FROM sports WHERE sport_key = 'football'),
+                 (SELECT id FROM leagues WHERE league_key = 'nfl'), 1580),
+                (88004, 'E2E-CHI', 'E2E Bears', 'E2E-3', 'NFC', 'North', 'football', 'nfl',
+                 (SELECT id FROM sports WHERE sport_key = 'football'),
+                 (SELECT id FROM leagues WHERE league_key = 'nfl'), 1420)
             ON CONFLICT (team_id) DO NOTHING
         """
         )

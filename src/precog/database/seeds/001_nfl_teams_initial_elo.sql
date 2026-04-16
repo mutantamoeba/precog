@@ -9,55 +9,55 @@
 -- Based on 2024 regular season performance and playoff results
 -- Scale: 1500 = league average, ~1650 = elite, ~1350 = rebuilding
 
-INSERT INTO teams (team_code, team_name, sport, current_elo_rating, conference, division) VALUES
+INSERT INTO teams (team_code, team_name, sport, league, sport_id, league_id, current_elo_rating, conference, division) VALUES
 
 -- AFC EAST
-('BUF', 'Buffalo Bills', 'football', 1620, 'AFC', 'East'),
-('MIA', 'Miami Dolphins', 'football', 1540, 'AFC', 'East'),
-('NYJ', 'New York Jets', 'football', 1460, 'AFC', 'East'),
-('NE', 'New England Patriots', 'football', 1380, 'AFC', 'East'),
+('BUF', 'Buffalo Bills', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1620, 'AFC', 'East'),
+('MIA', 'Miami Dolphins', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1540, 'AFC', 'East'),
+('NYJ', 'New York Jets', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1460, 'AFC', 'East'),
+('NE', 'New England Patriots', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1380, 'AFC', 'East'),
 
 -- AFC NORTH
-('BAL', 'Baltimore Ravens', 'football', 1610, 'AFC', 'North'),
-('CIN', 'Cincinnati Bengals', 'football', 1550, 'AFC', 'North'),
-('PIT', 'Pittsburgh Steelers', 'football', 1520, 'AFC', 'North'),
-('CLE', 'Cleveland Browns', 'football', 1440, 'AFC', 'North'),
+('BAL', 'Baltimore Ravens', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1610, 'AFC', 'North'),
+('CIN', 'Cincinnati Bengals', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1550, 'AFC', 'North'),
+('PIT', 'Pittsburgh Steelers', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1520, 'AFC', 'North'),
+('CLE', 'Cleveland Browns', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1440, 'AFC', 'North'),
 
 -- AFC SOUTH
-('HOU', 'Houston Texans', 'football', 1540, 'AFC', 'South'),
-('IND', 'Indianapolis Colts', 'football', 1480, 'AFC', 'South'),
-('JAX', 'Jacksonville Jaguars', 'football', 1420, 'AFC', 'South'),
-('TEN', 'Tennessee Titans', 'football', 1400, 'AFC', 'South'),
+('HOU', 'Houston Texans', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1540, 'AFC', 'South'),
+('IND', 'Indianapolis Colts', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1480, 'AFC', 'South'),
+('JAX', 'Jacksonville Jaguars', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1420, 'AFC', 'South'),
+('TEN', 'Tennessee Titans', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1400, 'AFC', 'South'),
 
 -- AFC WEST
-('KC', 'Kansas City Chiefs', 'football', 1660, 'AFC', 'West'),
-('LAC', 'Los Angeles Chargers', 'football', 1520, 'AFC', 'West'),
-('LV', 'Las Vegas Raiders', 'football', 1430, 'AFC', 'West'),
-('DEN', 'Denver Broncos', 'football', 1450, 'AFC', 'West'),
+('KC', 'Kansas City Chiefs', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1660, 'AFC', 'West'),
+('LAC', 'Los Angeles Chargers', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1520, 'AFC', 'West'),
+('LV', 'Las Vegas Raiders', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1430, 'AFC', 'West'),
+('DEN', 'Denver Broncos', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1450, 'AFC', 'West'),
 
 -- NFC EAST
-('PHI', 'Philadelphia Eagles', 'football', 1580, 'NFC', 'East'),
-('DAL', 'Dallas Cowboys', 'football', 1550, 'NFC', 'East'),
-('WAS', 'Washington Commanders', 'football', 1490, 'NFC', 'East'),
-('NYG', 'New York Giants', 'football', 1400, 'NFC', 'East'),
+('PHI', 'Philadelphia Eagles', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1580, 'NFC', 'East'),
+('DAL', 'Dallas Cowboys', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1550, 'NFC', 'East'),
+('WAS', 'Washington Commanders', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1490, 'NFC', 'East'),
+('NYG', 'New York Giants', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1400, 'NFC', 'East'),
 
 -- NFC NORTH
-('DET', 'Detroit Lions', 'football', 1600, 'NFC', 'North'),
-('GB', 'Green Bay Packers', 'football', 1560, 'NFC', 'North'),
-('MIN', 'Minnesota Vikings', 'football', 1530, 'NFC', 'North'),
-('CHI', 'Chicago Bears', 'football', 1440, 'NFC', 'North'),
+('DET', 'Detroit Lions', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1600, 'NFC', 'North'),
+('GB', 'Green Bay Packers', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1560, 'NFC', 'North'),
+('MIN', 'Minnesota Vikings', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1530, 'NFC', 'North'),
+('CHI', 'Chicago Bears', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1440, 'NFC', 'North'),
 
 -- NFC SOUTH
-('TB', 'Tampa Bay Buccaneers', 'football', 1520, 'NFC', 'South'),
-('ATL', 'Atlanta Falcons', 'football', 1480, 'NFC', 'South'),
-('NO', 'New Orleans Saints', 'football', 1460, 'NFC', 'South'),
-('CAR', 'Carolina Panthers', 'football', 1370, 'NFC', 'South'),
+('TB', 'Tampa Bay Buccaneers', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1520, 'NFC', 'South'),
+('ATL', 'Atlanta Falcons', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1480, 'NFC', 'South'),
+('NO', 'New Orleans Saints', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1460, 'NFC', 'South'),
+('CAR', 'Carolina Panthers', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1370, 'NFC', 'South'),
 
 -- NFC WEST
-('SF', 'San Francisco 49ers', 'football', 1630, 'NFC', 'West'),
-('LAR', 'Los Angeles Rams', 'football', 1540, 'NFC', 'West'),
-('SEA', 'Seattle Seahawks', 'football', 1500, 'NFC', 'West'),
-('ARI', 'Arizona Cardinals', 'football', 1430, 'NFC', 'West');
+('SF', 'San Francisco 49ers', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1630, 'NFC', 'West'),
+('LAR', 'Los Angeles Rams', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1540, 'NFC', 'West'),
+('SEA', 'Seattle Seahawks', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1500, 'NFC', 'West'),
+('ARI', 'Arizona Cardinals', 'football', 'nfl', (SELECT id FROM sports WHERE sport_key = 'football'), (SELECT id FROM leagues WHERE league_key = 'nfl'), 1430, 'NFC', 'West');
 
 -- ============================================================================
 -- VERIFICATION
