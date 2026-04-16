@@ -128,13 +128,13 @@ def trigger_test_scaffold(db_pool: Any) -> Any:
             """,
             (TEST_PLATFORM_ID,),
         )
-        market_internal_id = cur.fetchone()["id"]
+        market_id = cur.fetchone()["id"]
 
         # Position (FK target for trades, position_exits, exit_attempts)
         cur.execute(
             """
             INSERT INTO positions (
-                position_id, platform_id, market_internal_id, side, quantity,
+                position_key, platform_id, market_id, side, quantity,
                 entry_price, current_price, status, entry_time, last_check_time,
                 row_current_ind, row_start_ts, execution_environment
             )
@@ -147,7 +147,7 @@ def trigger_test_scaffold(db_pool: Any) -> Any:
             """,
             (
                 TEST_PLATFORM_ID,
-                market_internal_id,
+                market_id,
                 Decimal("0.5000"),
                 Decimal("0.5000"),
             ),
@@ -158,7 +158,7 @@ def trigger_test_scaffold(db_pool: Any) -> Any:
         "platform_id": TEST_PLATFORM_ID,
         "strategy_id": strategy_id,
         "model_id": model_id,
-        "market_internal_id": market_internal_id,
+        "market_id": market_id,
         "position_internal_id": position_internal_id,
     }
 
@@ -509,13 +509,13 @@ def _insert_append_only_row(
     """INSERT a minimal valid row into an append-only table. Returns PK."""
     pid = scaffold["platform_id"]
     pos_id = scaffold["position_internal_id"]
-    mkt_id = scaffold["market_internal_id"]
+    mkt_id = scaffold["market_id"]
 
     if table == "trades":
         cur.execute(
             """
             INSERT INTO trades (
-                platform_id, market_internal_id, side, price,
+                platform_id, market_id, side, price,
                 quantity, execution_environment
             )
             VALUES (%s, %s, 'buy', %s, 1, 'live')
@@ -529,7 +529,7 @@ def _insert_append_only_row(
         cur.execute(
             """
             INSERT INTO settlements (
-                platform_id, market_internal_id, outcome, payout,
+                platform_id, market_id, outcome, payout,
                 execution_environment
             )
             VALUES (%s, %s, 'yes', %s, 'live')

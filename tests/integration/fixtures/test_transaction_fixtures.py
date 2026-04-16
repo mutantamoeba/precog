@@ -57,7 +57,7 @@ class TestTransactionWithSetup:
         assert result["cnt"] == 1, "Test platform should exist"
 
         # Test series should exist
-        cursor.execute("SELECT COUNT(*) as cnt FROM series WHERE series_id = 'TEST-SERIES-NFL'")
+        cursor.execute("SELECT COUNT(*) as cnt FROM series WHERE series_key = 'TEST-SERIES-NFL'")
         result = cursor.fetchone()
         assert result["cnt"] == 1, "Test series should exist"
 

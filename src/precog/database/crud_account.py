@@ -368,7 +368,7 @@ def update_account_balance_with_versioning(
 
 
 def create_settlement(
-    market_internal_id: int,
+    market_id: int,
     platform_id: str,
     outcome: str,
     payout: Decimal,
@@ -380,7 +380,7 @@ def create_settlement(
     Once a market settles, the outcome and payout never change.
 
     Args:
-        market_internal_id: Integer foreign key to markets(id)
+        market_id: Integer foreign key to markets(id)
         platform_id: Foreign key to platforms table
         outcome: Settlement outcome ("yes", "no", or other)
         payout: Payout amount as DECIMAL(10,4)
@@ -406,7 +406,7 @@ def create_settlement(
     Example:
         >>> # Market resolved YES, position pays $1 per contract
         >>> settlement_id = create_settlement(
-        ...     market_internal_id=42,
+        ...     market_id=42,
         ...     platform_id="kalshi",
         ...     outcome="yes",
         ...     payout=Decimal("1.0000")  # $1.00 per contract
@@ -414,7 +414,7 @@ def create_settlement(
 
         >>> # Market resolved NO, YES position pays $0
         >>> settlement_id = create_settlement(
-        ...     market_internal_id=43,
+        ...     market_id=43,
         ...     platform_id="kalshi",
         ...     outcome="no",
         ...     payout=Decimal("0.0000")  # Worthless
@@ -430,13 +430,13 @@ def create_settlement(
 
     query = """
         INSERT INTO settlements (
-            market_internal_id, platform_id, outcome, payout, created_at
+            market_id, platform_id, outcome, payout, created_at
         )
         VALUES (%s, %s, %s, %s, NOW())
         RETURNING id
     """
 
-    params = (market_internal_id, platform_id, outcome, payout)
+    params = (market_id, platform_id, outcome, payout)
 
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)

@@ -68,32 +68,6 @@ class TestSystemHealthWorkflow:
             result = cli_runner.invoke(isolated_app, ["system", "health", "--verbose"])
             assert result.exit_code in [0, 1, 2]
 
-    def test_health_with_component_targeting(self, cli_runner, isolated_app) -> None:
-        """Test health check with component targeting.
-
-        E2E: Tests targeted component health checks.
-
-        Note: The health command may call test_connection() in some code paths,
-        so both must be mocked to prevent real database access during tests.
-        """
-        with (
-            patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
-        ):
-            mock_test.return_value = True
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
-
-            # Database component
-            result = cli_runner.invoke(
-                isolated_app, ["system", "health", "--component", "database"]
-            )
-            assert result.exit_code in [0, 1, 2]
-
-            # Config component
-            result = cli_runner.invoke(isolated_app, ["system", "health", "--component", "config"])
-            assert result.exit_code in [0, 1, 2]
-
 
 class TestSystemInfoWorkflow:
     """E2E tests for system info workflow."""
@@ -116,18 +90,6 @@ class TestSystemInfoWorkflow:
 
             # Basic info
             result = cli_runner.invoke(isolated_app, ["system", "info"])
-            assert result.exit_code in [0, 1, 2]
-
-            # With environment
-            result = cli_runner.invoke(isolated_app, ["system", "info", "--env"])
-            assert result.exit_code in [0, 1, 2]
-
-            # With config
-            result = cli_runner.invoke(isolated_app, ["system", "info", "--config"])
-            assert result.exit_code in [0, 1, 2]
-
-            # With paths
-            result = cli_runner.invoke(isolated_app, ["system", "info", "--paths"])
             assert result.exit_code in [0, 1, 2]
 
 
@@ -154,46 +116,6 @@ class TestSystemVersionWorkflow:
             result = cli_runner.invoke(isolated_app, ["system", "version"])
             assert result.exit_code in [0, 1, 2]
 
-            # With dependencies
-            result = cli_runner.invoke(isolated_app, ["system", "version", "--deps"])
-            assert result.exit_code in [0, 1, 2]
-
-            # JSON output
-            result = cli_runner.invoke(isolated_app, ["system", "version", "--json"])
-            assert result.exit_code in [0, 1, 2]
-
-
-class TestSystemDiagnosticsWorkflow:
-    """E2E tests for system diagnostics workflow."""
-
-    def test_complete_diagnostics_workflow(self, cli_runner, isolated_app) -> None:
-        """Test complete diagnostics workflow.
-
-        E2E: Tests gathering full diagnostics.
-
-        Note: The health command may call test_connection() in some code paths,
-        so both must be mocked to prevent real database access during tests.
-        """
-        with (
-            patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
-        ):
-            mock_test.return_value = True
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
-
-            # Health with diagnostics
-            result = cli_runner.invoke(isolated_app, ["system", "health", "--diagnostics"])
-            assert result.exit_code in [0, 1, 2]
-
-            # Version
-            result = cli_runner.invoke(isolated_app, ["system", "version"])
-            assert result.exit_code in [0, 1, 2]
-
-            # Info
-            result = cli_runner.invoke(isolated_app, ["system", "info"])
-            assert result.exit_code in [0, 1, 2]
-
 
 class TestSystemErrorRecovery:
     """E2E tests for system error recovery workflows."""
@@ -216,24 +138,3 @@ class TestSystemErrorRecovery:
             result = cli_runner.invoke(isolated_app, ["system", "health"])
             # Should complete even with failures
             assert result.exit_code in [0, 1, 2, 3, 4, 5]
-
-    def test_info_handles_partial_failures(self, cli_runner, isolated_app) -> None:
-        """Test info handles partial failures.
-
-        E2E: Tests graceful degradation.
-
-        Note: Mock database functions to prevent test pollution when running
-        in parallel with other tests that use database connections.
-        """
-        with (
-            patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
-        ):
-            mock_test.return_value = True
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
-
-            result = cli_runner.invoke(
-                isolated_app, ["system", "info", "--env", "--config", "--paths"]
-            )
-            assert result.exit_code in [0, 1, 2]

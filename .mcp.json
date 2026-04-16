@@ -1,15 +1,14 @@
 {
   "mcpServers": {
     "postgres-dev": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres@0.6.2"],
-      "env": {
-        "PGHOST": "localhost",
-        "PGPORT": "5432",
-        "PGDATABASE": "precog_dev",
-        "PGUSER": "${DEV_DB_USER}",
-        "PGPASSWORD": "${DEV_DB_PASSWORD}"
-      }
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-postgres@0.6.2",
+        "postgresql://${DEV_DB_USER}:${DEV_DB_PASSWORD}@${DEV_DB_HOST}:${DEV_DB_PORT}/${DEV_DB_NAME}"
+      ]
     }
   }
 }

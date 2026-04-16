@@ -73,7 +73,7 @@ _TERMINAL_ORDER_STATUSES = {"filled", "cancelled", "expired"}
 def create_order(
     platform_id: str,
     external_order_id: str,
-    market_internal_id: int,
+    market_id: int,
     side: str,
     action: str,
     requested_price: Decimal,
@@ -99,7 +99,7 @@ def create_order(
     Args:
         platform_id: FK to platforms(platform_id), e.g. 'kalshi'
         external_order_id: Exchange-assigned order ID (unique per platform)
-        market_internal_id: Integer FK to markets(id) surrogate PK
+        market_id: Integer FK to markets(id) surrogate PK
         side: 'yes' or 'no' (which outcome is being bet on)
         action: 'buy' or 'sell' (entering or exiting a position)
         requested_price: Limit price as DECIMAL(10,4) in [0, 1]
@@ -146,7 +146,7 @@ def create_order(
         >>> order_pk = create_order(
         ...     platform_id='kalshi',
         ...     external_order_id='abc-123',
-        ...     market_internal_id=42,
+        ...     market_id=42,
         ...     side='yes',
         ...     action='buy',
         ...     requested_price=Decimal("0.5500"),
@@ -189,7 +189,7 @@ def create_order(
     insert_query = """
         INSERT INTO orders (
             platform_id, external_order_id, client_order_id,
-            market_internal_id,
+            market_id,
             strategy_id, model_id, edge_id, position_id,
             side, action, order_type, time_in_force,
             requested_price, requested_quantity,
@@ -214,7 +214,7 @@ def create_order(
         platform_id,
         external_order_id,
         client_order_id,
-        market_internal_id,
+        market_id,
         strategy_id,
         model_id,
         edge_id,
@@ -488,7 +488,7 @@ def cancel_order(order_pk: int) -> bool:
 def get_open_orders(
     strategy_id: int | None = None,
     execution_environment: ExecutionEnvironment | None = None,
-    market_internal_id: int | None = None,
+    market_id: int | None = None,
     limit: int = 100,
 ) -> list[dict]:
     """
@@ -500,7 +500,7 @@ def get_open_orders(
     Args:
         strategy_id: Optional filter by strategy FK
         execution_environment: Optional filter by 'live', 'paper', or 'backtest'
-        market_internal_id: Optional filter by market FK
+        market_id: Optional filter by market FK
         limit: Maximum rows to return (default 100)
 
     Returns:
@@ -528,9 +528,9 @@ def get_open_orders(
         query += " AND execution_environment = %s"
         params.append(execution_environment)
 
-    if market_internal_id is not None:
-        query += " AND market_internal_id = %s"
-        params.append(market_internal_id)
+    if market_id is not None:
+        query += " AND market_id = %s"
+        params.append(market_id)
 
     query += " ORDER BY created_at DESC LIMIT %s"
     params.append(limit)

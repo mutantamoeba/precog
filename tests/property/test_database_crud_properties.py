@@ -111,22 +111,22 @@ def setup_kalshi_platform(db_pool, clean_test_data):
         # Create series for test markets (idempotent)
         cur.execute(
             """
-            INSERT INTO series (series_id, platform_id, external_id, title, category)
+            INSERT INTO series (series_key, platform_id, external_id, title, category)
             VALUES ('KXNFLGAME', 'kalshi', 'KXNFLGAME-EXT', 'NFL Game Series', 'sports')
-            ON CONFLICT (series_id) WHERE row_current_ind = TRUE DO NOTHING
+            ON CONFLICT (series_key) WHERE row_current_ind = TRUE DO NOTHING
         """
         )
         # Get the series surrogate PK for event FK
-        cur.execute("SELECT id FROM series WHERE series_id = 'KXNFLGAME'")
+        cur.execute("SELECT id FROM series WHERE series_key = 'KXNFLGAME'")
         series_row = cur.fetchone()
         series_pk = series_row["id"] if series_row else None
 
         # Create events for test markets (idempotent)
-        # Uses series_internal_id (integer FK) instead of old series_id VARCHAR
+        # Uses series_id (integer FK) instead of old series_key VARCHAR
         # Migration 0047: event_id column dropped, external_id is canonical business key
         cur.execute(
             """
-            INSERT INTO events (platform_id, series_internal_id, external_id, category, title, status)
+            INSERT INTO events (platform_id, series_id, external_id, category, title, status)
             VALUES
                 ('kalshi', %s, 'KXNFLGAME-25DEC15CLEKC', 'sports', 'NFL Games Dec 15', 'scheduled'),
                 ('kalshi', %s, 'KXNFLGAME-25DEC08LACKC', 'sports', 'NFL Games Dec 08', 'scheduled')
@@ -202,7 +202,7 @@ def test_decimal_precision_preserved_on_db_roundtrip(
     ticker = f"TEST-PROP-{yes_price}-{no_price}"
     market_pk = create_market(
         platform_id="kalshi",
-        event_internal_id=_get_test_event_pk(),
+        event_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
         ticker=ticker,
         title="Test Market",
@@ -268,7 +268,7 @@ def test_decimal_columns_reject_float(
     with pytest.raises((TypeError, ValueError), match=r"must be Decimal|expected Decimal"):
         create_market(
             platform_id="kalshi",
-            event_internal_id=_get_test_event_pk(),
+            event_id=_get_test_event_pk(),
             external_id=f"EXTERNAL-{ticker}",
             ticker=ticker,
             title="Float Test Market",
@@ -326,7 +326,7 @@ def test_scd_type2_at_most_one_current_row(db_pool, clean_test_data, setup_kalsh
     # Migration 0021: yes_price → yes_ask_price, returns (int, str) tuple
     market_pk = create_market(
         platform_id="kalshi",
-        event_internal_id=_get_test_event_pk(),
+        event_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
         ticker=ticker,
         title="Test Market",
@@ -447,7 +447,7 @@ def test_scd_type2_update_creates_new_row(
     ticker = f"SCD-{unique_id}"
     market_pk = create_market(
         platform_id="kalshi",
-        event_internal_id=_get_test_event_pk(),
+        event_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
         ticker=ticker,
         title="Test Market",
@@ -549,7 +549,7 @@ def test_unique_constraint_prevents_duplicate_current_rows(
     # Create first market
     market_pk = create_market(
         platform_id="kalshi",
-        event_internal_id=_get_test_event_pk(),
+        event_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
         ticker=ticker,
         title="Test Market",
@@ -565,7 +565,7 @@ def test_unique_constraint_prevents_duplicate_current_rows(
     with pytest.raises(IntegrityError, match=r"duplicate key|unique constraint|violates"):
         create_market(
             platform_id="kalshi",
-            event_internal_id=_get_test_event_pk(),
+            event_id=_get_test_event_pk(),
             external_id=f"EXTERNAL-DUP-{ticker}",
             ticker=ticker,  # Same ticker!
             title="Duplicate Market",
@@ -593,7 +593,7 @@ def test_foreign_key_prevents_orphan_markets(
 
     Validates:
     - Cannot create market with non-existent platform_id
-    - Cannot create market with non-existent event_internal_id
+    - Cannot create market with non-existent event_id
     - IntegrityError raised on foreign key violation
 
     Why This Matters:
@@ -618,7 +618,7 @@ def test_foreign_key_prevents_orphan_markets(
     with pytest.raises(IntegrityError, match=r"foreign key|violates|constraint"):
         create_market(
             platform_id="NONEXISTENT-PLATFORM",  # ❌ Foreign key violation
-            event_internal_id=_get_test_event_pk(),
+            event_id=_get_test_event_pk(),
             external_id=f"EXTERNAL-{ticker}",
             ticker=ticker,
             title="Test Market",
@@ -637,10 +637,10 @@ def test_foreign_key_prevents_invalid_event_reference(
     db_pool, clean_test_data, setup_kalshi_platform, ticker
 ):
     """
-    PROPERTY: Foreign key constraints prevent markets with invalid event_internal_id.
+    PROPERTY: Foreign key constraints prevent markets with invalid event_id.
 
     Validates:
-    - Cannot create market with non-existent event_internal_id
+    - Cannot create market with non-existent event_id
     - IntegrityError raised on foreign key violation
 
     Why This Matters:
@@ -650,7 +650,7 @@ def test_foreign_key_prevents_invalid_event_reference(
     with pytest.raises(IntegrityError, match=r"foreign key|violates|constraint"):
         create_market(
             platform_id="kalshi",
-            event_internal_id=999999,  # Non-existent integer FK -> IntegrityError
+            event_id=999999,  # Non-existent integer FK -> IntegrityError
             external_id=f"EXTERNAL-{ticker}",
             ticker=ticker,
             title="Test Market",
@@ -710,7 +710,7 @@ def test_not_null_constraint_on_required_fields(
     with pytest.raises((IntegrityError, TypeError), match=r"null|not-null|None|title"):
         create_market(
             platform_id="kalshi",
-            event_internal_id=_get_test_event_pk(),
+            event_id=_get_test_event_pk(),
             external_id=f"EXTERNAL-{ticker}",
             ticker=ticker,  # Use valid ticker
             title=None,  # type: ignore[arg-type]  # ❌ NOT NULL violation (intentional test)
@@ -775,7 +775,7 @@ def test_timestamp_monotonicity_on_updates(
     ticker = f"TIME-{unique_id}"
     _pk = create_market(
         platform_id="kalshi",
-        event_internal_id=_get_test_event_pk(),
+        event_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
         ticker=ticker,
         title="Test Market",
@@ -866,7 +866,7 @@ def test_transaction_rollback_on_constraint_violation(
     # Create initial market (should succeed)
     market_pk = create_market(
         platform_id="kalshi",
-        event_internal_id=_get_test_event_pk(),
+        event_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
         ticker=ticker,
         title="Test Market",
@@ -888,7 +888,7 @@ def test_transaction_rollback_on_constraint_violation(
     with pytest.raises(IntegrityError, match=r"duplicate key|unique constraint|violates"):
         create_market(
             platform_id="kalshi",
-            event_internal_id=_get_test_event_pk(),
+            event_id=_get_test_event_pk(),
             external_id=f"EXTERNAL-DUP-{ticker}",
             ticker=ticker,  # Same ticker - violates unique constraint
             title="Duplicate Market",
@@ -978,7 +978,7 @@ def test_check_constraints_enforced(db_pool, clean_test_data, setup_kalshi_platf
     ):
         create_market(
             platform_id="kalshi",
-            event_internal_id=_get_test_event_pk(),
+            event_id=_get_test_event_pk(),
             external_id=f"EXTERNAL-{ticker}",
             ticker=ticker,
             title="Bounds Test Market",
@@ -1067,7 +1067,7 @@ def test_restrict_prevents_platform_delete_with_markets(db_pool, clean_test_data
         # Create test series
         cur.execute(
             """
-            INSERT INTO series (series_id, platform_id, external_id, title, category)
+            INSERT INTO series (series_key, platform_id, external_id, title, category)
             VALUES (%s, %s, %s, 'Test Series', 'sports')
             RETURNING id
         """,
@@ -1075,11 +1075,11 @@ def test_restrict_prevents_platform_delete_with_markets(db_pool, clean_test_data
         )
         series_pk = cur.fetchone()["id"]
 
-        # Create test event (uses series_internal_id integer FK)
+        # Create test event (uses series_id integer FK to series.id)
         # Migration 0047: event_id column dropped, external_id is canonical
         cur.execute(
             """
-            INSERT INTO events (platform_id, series_internal_id, external_id, category, title, status)
+            INSERT INTO events (platform_id, series_id, external_id, category, title, status)
             VALUES (%s, %s, %s, 'sports', 'Test Event', 'scheduled')
             RETURNING id
         """,
@@ -1094,7 +1094,7 @@ def test_restrict_prevents_platform_delete_with_markets(db_pool, clean_test_data
     # Create market for this test platform
     market_pk = create_market(
         platform_id=test_platform_id,
-        event_internal_id=event_pk,
+        event_id=event_pk,
         external_id=f"EXTERNAL-{unique_id}",
         ticker=test_ticker,
         title="Test Market",
