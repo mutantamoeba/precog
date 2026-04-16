@@ -171,6 +171,10 @@ def create_position(
     # ⭐ ATTRIBUTION ARCHITECTURE (Migration 020) - NEW parameters
     calculated_probability: Decimal | None = None,
     market_price_at_entry: Decimal | None = None,
+    # Provenance FK (migration 0059, #725): the edge row that produced
+    # this position. Optional — callers without edge provenance pass
+    # None and the column stays NULL (forward-only adoption).
+    edge_id: int | None = None,
 ) -> int:
     """
     Create new position with status = 'open' and immutable entry-time attribution.
@@ -268,6 +272,12 @@ def create_position(
         edge_at_entry = calculated_probability - market_price_at_entry
 
     # Step 1: INSERT with placeholder position_key (will be updated immediately)
+    #
+    # Migration 0059 (#725): ``edge_id`` carries provenance back to the
+    # ``edges`` row that produced this position. Nullable; callers
+    # without edge context pass None. Must also appear in every SCD
+    # supersede INSERT below so Pattern 49 copy-forward does not silently
+    # NULL it on version transitions. Design memo: #725 Holden S57 §6.
     insert_query = """
         INSERT INTO positions (
             position_key, market_id, strategy_id, model_id, side,
@@ -276,9 +286,15 @@ def create_position(
             trailing_stop_state, position_metadata,
             status, row_current_ind, entry_time,
             calculated_probability, edge_at_entry, market_price_at_entry,
-            execution_environment
+            execution_environment,
+            edge_id
         )
-        VALUES ('TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'open', TRUE, NOW(), %s, %s, %s, %s)
+        VALUES (
+            'TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            'open', TRUE, NOW(),
+            %s, %s, %s, %s,
+            %s
+        )
         RETURNING id
     """
 
@@ -310,6 +326,7 @@ def create_position(
         edge_at_entry,
         market_price_at_entry,
         execution_environment,
+        edge_id,
     )
 
     with get_cursor(commit=True) as cur:
@@ -585,6 +602,12 @@ def update_position_price(
             # as the JSONB string ``"null"`` instead of a SQL NULL, silently
             # breaking ``WHERE trailing_stop_state IS NULL`` queries. Fixes
             # #666 (latent dict-adapter bug on the update path).
+            # Migration 0059 (#725) Pattern 49 copy-forward checklist:
+            #   edge_id must appear in this INSERT's column list AND its
+            #   params tuple, sourced from current["edge_id"]. Omitting
+            #   either silently NULLs the provenance FK on the new SCD
+            #   version — the exact SET NULL behavior 0057 was built to
+            #   prevent. See migration 0059 docstring and Holden memo §6.
             cur.execute(
                 """
                 INSERT INTO positions (
@@ -594,9 +617,18 @@ def update_position_price(
                     target_price, stop_loss_price,
                     trailing_stop_state, position_metadata,
                     status, entry_time, last_check_time, execution_environment,
+                    edge_id,
                     row_start_ts
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s,
+                    %s, %s,
+                    %s, %s,
+                    %s, %s, %s, %s,
+                    %s,
+                    %s
+                )
                 RETURNING id
                 """,
                 (
@@ -620,6 +652,7 @@ def update_position_price(
                     current["entry_time"],
                     now,  # last_check_time
                     current["execution_environment"],  # Preserve execution environment
+                    current["edge_id"],  # Pattern 49 copy-forward (#725, migration 0059)
                     now,  # row_start_ts
                 ),
             )
@@ -792,6 +825,12 @@ def close_position(
             # ``current["trailing_stop_state"]`` was already decoded from
             # JSONB to a plain ``dict`` by psycopg2's JSONB adapter when the
             # row was re-fetched on line 693 above, so it is safe to rewrap.
+            # Migration 0059 (#725) Pattern 49 copy-forward checklist:
+            #   edge_id must appear in this INSERT's column list AND its
+            #   params tuple, sourced from current["edge_id"]. Omitting
+            #   either silently NULLs the provenance FK on the new SCD
+            #   version — the exact SET NULL behavior 0057 was built to
+            #   prevent. See migration 0059 docstring and Holden memo §6.
             cur.execute(
                 """
                 INSERT INTO positions (
@@ -801,9 +840,18 @@ def close_position(
                     target_price, stop_loss_price,
                     trailing_stop_state, position_metadata,
                     status, entry_time, exit_time, execution_environment,
+                    edge_id,
                     row_start_ts
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'closed', %s, %s, %s, %s)
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s,
+                    %s, %s,
+                    %s, %s,
+                    'closed', %s, %s, %s,
+                    %s,
+                    %s
+                )
                 RETURNING id
                 """,
                 (
@@ -826,6 +874,7 @@ def close_position(
                     current["entry_time"],
                     now,  # exit_time
                     current["execution_environment"],  # Preserve execution environment
+                    current["edge_id"],  # Pattern 49 copy-forward (#725, migration 0059)
                     now,  # row_start_ts
                 ),
             )
@@ -1096,6 +1145,12 @@ def set_trailing_stop_state(
             # a JSONB column. The sibling ``update_position_price``,
             # ``close_position``, and ``create_position`` functions were
             # updated to adopt the same pattern (#666, #706).
+            # Migration 0059 (#725) Pattern 49 copy-forward checklist:
+            #   edge_id must appear in this INSERT's column list AND its
+            #   params tuple, sourced from current["edge_id"]. Omitting
+            #   either silently NULLs the provenance FK on the new SCD
+            #   version — the exact SET NULL behavior 0057 was built to
+            #   prevent. See migration 0059 docstring and Holden memo §6.
             cur.execute(
                 """
                 INSERT INTO positions (
@@ -1108,6 +1163,7 @@ def set_trailing_stop_state(
                     exit_price, exit_reason, exit_time,
                     calculated_probability, edge_at_entry, market_price_at_entry,
                     execution_environment,
+                    edge_id,
                     row_start_ts, row_current_ind
                 )
                 VALUES (
@@ -1119,6 +1175,7 @@ def set_trailing_stop_state(
                     %s, %s, %s,
                     %s, %s, %s,
                     %s, %s, %s,
+                    %s,
                     %s,
                     %s, TRUE
                 )
@@ -1157,6 +1214,7 @@ def set_trailing_stop_state(
                     current["edge_at_entry"],
                     current["market_price_at_entry"],
                     current["execution_environment"],  # Preserve execution environment
+                    current["edge_id"],  # Pattern 49 copy-forward (#725, migration 0059)
                     now,  # row_start_ts
                 ),
             )
