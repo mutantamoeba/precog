@@ -22,6 +22,7 @@ Mock Level Notes (#764):
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 import typer
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
@@ -59,6 +60,16 @@ def _make_supervised_mock() -> MagicMock:
         "per_service": {},
     }
     return mock_supervisor
+
+
+@pytest.fixture(autouse=True)
+def _mock_migration_check():
+    """Bypass migration parity check in all scheduler CLI tests."""
+    from precog.database.migration_check import MigrationStatus
+
+    ok = MigrationStatus(is_current=True, db_version="0057", head_version="0057")
+    with patch("precog.database.migration_check.check_migration_parity", return_value=ok):
+        yield
 
 
 class TestSchedulerArgumentInvariants:

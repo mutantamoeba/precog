@@ -302,9 +302,12 @@ def game_odds_race_setup(db_pool: Any) -> Any:
             """
             INSERT INTO games (
                 sport, game_date, home_team_code, away_team_code,
-                season, league, game_status, data_source
+                season, league, game_status, data_source,
+                sport_id, league_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
+                    (SELECT id FROM sports WHERE sport_key = 'football'),
+                    (SELECT id FROM leagues WHERE league_key = 'nfl'))
             RETURNING id
             """,
             (

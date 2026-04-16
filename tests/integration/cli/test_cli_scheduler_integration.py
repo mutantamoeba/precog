@@ -78,6 +78,16 @@ def _make_supervised_mock_supervisor() -> MagicMock:
     return mock_supervisor
 
 
+@pytest.fixture(autouse=True)
+def _mock_migration_check():
+    """Bypass migration parity check in all scheduler CLI tests."""
+    from precog.database.migration_check import MigrationStatus
+
+    ok = MigrationStatus(is_current=True, db_version="0057", head_version="0057")
+    with patch("precog.database.migration_check.check_migration_parity", return_value=ok):
+        yield
+
+
 class TestSchedulerStartIntegration:
     """Integration tests for scheduler start command (supervised path)."""
 

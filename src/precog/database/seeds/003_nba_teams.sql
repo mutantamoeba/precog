@@ -11,49 +11,49 @@
 -- Initial Elo: 1500 = league average, adjusted based on 2024-25 season performance
 -- Scale: ~1650 = championship contender, ~1350 = rebuilding
 
-INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_id, current_elo_rating, conference, division) VALUES
+INSERT INTO teams (team_code, team_name, display_name, sport, league, sport_id, league_id, espn_team_id, current_elo_rating, conference, division) VALUES
 
 -- EASTERN CONFERENCE - Atlantic Division
-('BOS', 'Boston Celtics', 'Celtics', 'basketball', 'nba', '2', 1660, 'Eastern', 'Atlantic'),
-('BKN', 'Brooklyn Nets', 'Nets', 'basketball', 'nba', '17', 1420, 'Eastern', 'Atlantic'),
-('NYK', 'New York Knicks', 'Knicks', 'basketball', 'nba', '18', 1580, 'Eastern', 'Atlantic'),
-('PHI', 'Philadelphia 76ers', '76ers', 'basketball', 'nba', '20', 1520, 'Eastern', 'Atlantic'),
-('TOR', 'Toronto Raptors', 'Raptors', 'basketball', 'nba', '28', 1400, 'Eastern', 'Atlantic'),
+('BOS', 'Boston Celtics', 'Celtics', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '2', 1660, 'Eastern', 'Atlantic'),
+('BKN', 'Brooklyn Nets', 'Nets', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '17', 1420, 'Eastern', 'Atlantic'),
+('NYK', 'New York Knicks', 'Knicks', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '18', 1580, 'Eastern', 'Atlantic'),
+('PHI', 'Philadelphia 76ers', '76ers', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '20', 1520, 'Eastern', 'Atlantic'),
+('TOR', 'Toronto Raptors', 'Raptors', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '28', 1400, 'Eastern', 'Atlantic'),
 
 -- EASTERN CONFERENCE - Central Division
-('CHI', 'Chicago Bulls', 'Bulls', 'basketball', 'nba', '4', 1450, 'Eastern', 'Central'),
-('CLE', 'Cleveland Cavaliers', 'Cavaliers', 'basketball', 'nba', '5', 1620, 'Eastern', 'Central'),
-('DET', 'Detroit Pistons', 'Pistons', 'basketball', 'nba', '8', 1380, 'Eastern', 'Central'),
-('IND', 'Indiana Pacers', 'Pacers', 'basketball', 'nba', '11', 1540, 'Eastern', 'Central'),
-('MIL', 'Milwaukee Bucks', 'Bucks', 'basketball', 'nba', '15', 1600, 'Eastern', 'Central'),
+('CHI', 'Chicago Bulls', 'Bulls', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '4', 1450, 'Eastern', 'Central'),
+('CLE', 'Cleveland Cavaliers', 'Cavaliers', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '5', 1620, 'Eastern', 'Central'),
+('DET', 'Detroit Pistons', 'Pistons', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '8', 1380, 'Eastern', 'Central'),
+('IND', 'Indiana Pacers', 'Pacers', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '11', 1540, 'Eastern', 'Central'),
+('MIL', 'Milwaukee Bucks', 'Bucks', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '15', 1600, 'Eastern', 'Central'),
 
 -- EASTERN CONFERENCE - Southeast Division
-('ATL', 'Atlanta Hawks', 'Hawks', 'basketball', 'nba', '1', 1460, 'Eastern', 'Southeast'),
-('CHA', 'Charlotte Hornets', 'Hornets', 'basketball', 'nba', '30', 1380, 'Eastern', 'Southeast'),
-('MIA', 'Miami Heat', 'Heat', 'basketball', 'nba', '14', 1520, 'Eastern', 'Southeast'),
-('ORL', 'Orlando Magic', 'Magic', 'basketball', 'nba', '19', 1560, 'Eastern', 'Southeast'),
-('WAS', 'Washington Wizards', 'Wizards', 'basketball', 'nba', '27', 1350, 'Eastern', 'Southeast'),
+('ATL', 'Atlanta Hawks', 'Hawks', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '1', 1460, 'Eastern', 'Southeast'),
+('CHA', 'Charlotte Hornets', 'Hornets', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '30', 1380, 'Eastern', 'Southeast'),
+('MIA', 'Miami Heat', 'Heat', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '14', 1520, 'Eastern', 'Southeast'),
+('ORL', 'Orlando Magic', 'Magic', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '19', 1560, 'Eastern', 'Southeast'),
+('WAS', 'Washington Wizards', 'Wizards', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '27', 1350, 'Eastern', 'Southeast'),
 
 -- WESTERN CONFERENCE - Northwest Division
-('DEN', 'Denver Nuggets', 'Nuggets', 'basketball', 'nba', '7', 1600, 'Western', 'Northwest'),
-('MIN', 'Minnesota Timberwolves', 'Timberwolves', 'basketball', 'nba', '16', 1580, 'Western', 'Northwest'),
-('OKC', 'Oklahoma City Thunder', 'Thunder', 'basketball', 'nba', '25', 1640, 'Western', 'Northwest'),
-('POR', 'Portland Trail Blazers', 'Trail Blazers', 'basketball', 'nba', '22', 1380, 'Western', 'Northwest'),
-('UTA', 'Utah Jazz', 'Jazz', 'basketball', 'nba', '26', 1400, 'Western', 'Northwest'),
+('DEN', 'Denver Nuggets', 'Nuggets', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '7', 1600, 'Western', 'Northwest'),
+('MIN', 'Minnesota Timberwolves', 'Timberwolves', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '16', 1580, 'Western', 'Northwest'),
+('OKC', 'Oklahoma City Thunder', 'Thunder', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '25', 1640, 'Western', 'Northwest'),
+('POR', 'Portland Trail Blazers', 'Trail Blazers', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '22', 1380, 'Western', 'Northwest'),
+('UTA', 'Utah Jazz', 'Jazz', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '26', 1400, 'Western', 'Northwest'),
 
 -- WESTERN CONFERENCE - Pacific Division
-('GSW', 'Golden State Warriors', 'Warriors', 'basketball', 'nba', '9', 1540, 'Western', 'Pacific'),
-('LAC', 'LA Clippers', 'Clippers', 'basketball', 'nba', '12', 1500, 'Western', 'Pacific'),
-('LAL', 'Los Angeles Lakers', 'Lakers', 'basketball', 'nba', '13', 1540, 'Western', 'Pacific'),
-('PHX', 'Phoenix Suns', 'Suns', 'basketball', 'nba', '21', 1520, 'Western', 'Pacific'),
-('SAC', 'Sacramento Kings', 'Kings', 'basketball', 'nba', '23', 1500, 'Western', 'Pacific'),
+('GSW', 'Golden State Warriors', 'Warriors', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '9', 1540, 'Western', 'Pacific'),
+('LAC', 'LA Clippers', 'Clippers', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '12', 1500, 'Western', 'Pacific'),
+('LAL', 'Los Angeles Lakers', 'Lakers', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '13', 1540, 'Western', 'Pacific'),
+('PHX', 'Phoenix Suns', 'Suns', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '21', 1520, 'Western', 'Pacific'),
+('SAC', 'Sacramento Kings', 'Kings', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '23', 1500, 'Western', 'Pacific'),
 
 -- WESTERN CONFERENCE - Southwest Division
-('DAL', 'Dallas Mavericks', 'Mavericks', 'basketball', 'nba', '6', 1560, 'Western', 'Southwest'),
-('HOU', 'Houston Rockets', 'Rockets', 'basketball', 'nba', '10', 1520, 'Western', 'Southwest'),
-('MEM', 'Memphis Grizzlies', 'Grizzlies', 'basketball', 'nba', '29', 1480, 'Western', 'Southwest'),
-('NOP', 'New Orleans Pelicans', 'Pelicans', 'basketball', 'nba', '3', 1460, 'Western', 'Southwest'),
-('SAS', 'San Antonio Spurs', 'Spurs', 'basketball', 'nba', '24', 1420, 'Western', 'Southwest');
+('DAL', 'Dallas Mavericks', 'Mavericks', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '6', 1560, 'Western', 'Southwest'),
+('HOU', 'Houston Rockets', 'Rockets', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '10', 1520, 'Western', 'Southwest'),
+('MEM', 'Memphis Grizzlies', 'Grizzlies', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '29', 1480, 'Western', 'Southwest'),
+('NOP', 'New Orleans Pelicans', 'Pelicans', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '3', 1460, 'Western', 'Southwest'),
+('SAS', 'San Antonio Spurs', 'Spurs', 'basketball', 'nba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'nba'), '24', 1420, 'Western', 'Southwest');
 
 -- ============================================================================
 -- VERIFICATION

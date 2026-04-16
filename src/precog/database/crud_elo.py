@@ -13,6 +13,7 @@ from decimal import Decimal
 from typing import Any, cast
 
 from .connection import fetch_all, fetch_one, get_cursor
+from .crud_lookups import get_league_id_or_none
 
 logger = logging.getLogger(__name__)
 
@@ -322,6 +323,8 @@ def insert_elo_calculation_log(
         - Migration 0013: elo_calculation_log table schema
         - ADR-109: Elo Rating Computation Engine Architecture
     """
+    # Dual-write (#738 A1): populate league_id FK alongside the VARCHAR.
+    league_id_value = get_league_id_or_none(league)
     query = """
         INSERT INTO elo_calculation_log (
             league, game_date, home_team_id, away_team_id,
@@ -335,12 +338,12 @@ def insert_elo_calculation_log(
             home_elo_change, away_elo_change,
             home_elo_after, away_elo_after,
             home_epa_adjustment, away_epa_adjustment,
-            calculation_source, calculation_version
+            calculation_source, calculation_version, league_id
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s
         )
         RETURNING elo_log_id
     """
@@ -372,6 +375,7 @@ def insert_elo_calculation_log(
         away_epa_adjustment,
         calculation_source,
         calculation_version,
+        league_id_value,
     )
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
