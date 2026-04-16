@@ -229,6 +229,34 @@ def get_sport_id_from_league_or_none(league_key: str | None) -> int | None:
     return _league_key_to_sport_id.get(league_key)
 
 
+def resolve_league_id_via_game(game_id: int | None) -> int | None:
+    """Resolve league_id for game_odds by looking up the games row.
+
+    game_odds has no native `league` VARCHAR column — the league context
+    comes from the linked `games.league` value.  This helper fetches the
+    games row's league key (via game_id) and resolves it to a leagues.id.
+
+    Returns None if game_id is None, the games row doesn't exist, or the
+    games.league value isn't in the lookup cache (same permissive semantics
+    as the other `*_or_none` helpers during the A1 -> A2 window).
+    """
+    if game_id is None:
+        return None
+    try:
+        from .connection import fetch_one
+
+        row = fetch_one(
+            "SELECT league FROM games WHERE id = %s",
+            (game_id,),
+        )
+    except Exception:
+        return None
+    if row is None:
+        return None
+    league_key = row.get("league")
+    return get_league_id_or_none(league_key)
+
+
 def resolve_sport_id_for_mixed_value(value: str | None) -> int | None:
     """Handle the `game_odds.sport` mixed-convention case.
 
