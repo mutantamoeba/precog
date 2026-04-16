@@ -356,8 +356,10 @@ def fk_test_team(db_pool: Any) -> Any:
 
         cur.execute(
             """
-            INSERT INTO teams (team_code, team_name, sport, league)
-            VALUES (%s, 'Migration 0057 Test Team', 'football', 'nfl')
+            INSERT INTO teams (team_code, team_name, sport, league, sport_id, league_id)
+            VALUES (%s, 'Migration 0057 Test Team', 'football', 'nfl',
+                    (SELECT id FROM sports WHERE sport_key = 'football'),
+                    (SELECT id FROM leagues WHERE league_key = 'nfl'))
             RETURNING team_id
             """,
             (team_code,),
@@ -908,8 +910,10 @@ class TestSCDDefaults:
             )
             cur.execute(
                 """
-                INSERT INTO teams (team_code, team_name, sport, league)
-                VALUES (%s, 'Default Test Team', 'football', 'nfl')
+                INSERT INTO teams (team_code, team_name, sport, league, sport_id, league_id)
+                VALUES (%s, 'Default Test Team', 'football', 'nfl',
+                        (SELECT id FROM sports WHERE sport_key = 'football'),
+                        (SELECT id FROM leagues WHERE league_key = 'nfl'))
                 RETURNING row_current_ind, row_start_ts, row_end_ts
                 """,
                 (team_code,),
@@ -984,9 +988,11 @@ class TestSCDDefaults:
             cur.execute(
                 """
                 INSERT INTO teams (
-                    team_code, team_name, sport, league, row_current_ind
+                    team_code, team_name, sport, league, sport_id, league_id, row_current_ind
                 )
-                VALUES (%s, 'Historical Test Team', 'football', 'nfl', FALSE)
+                VALUES (%s, 'Historical Test Team', 'football', 'nfl',
+                        (SELECT id FROM sports WHERE sport_key = 'football'),
+                        (SELECT id FROM leagues WHERE league_key = 'nfl'), FALSE)
                 RETURNING row_current_ind
                 """,
                 (team_code,),
@@ -1015,9 +1021,11 @@ class TestSCDDefaults:
                 cur.execute(
                     """
                     INSERT INTO teams (
-                        team_code, team_name, sport, league, row_current_ind
+                        team_code, team_name, sport, league, sport_id, league_id, row_current_ind
                     )
-                    VALUES (%s, 'Null Current Team', 'football', 'nfl', NULL)
+                    VALUES (%s, 'Null Current Team', 'football', 'nfl',
+                            (SELECT id FROM sports WHERE sport_key = 'football'),
+                            (SELECT id FROM leagues WHERE league_key = 'nfl'), NULL)
                     """,
                     (team_code,),
                 )
@@ -1044,9 +1052,11 @@ class TestSCDDefaults:
                 cur.execute(
                     """
                     INSERT INTO teams (
-                        team_code, team_name, sport, league, row_start_ts
+                        team_code, team_name, sport, league, sport_id, league_id, row_start_ts
                     )
-                    VALUES (%s, 'Null Start Team', 'football', 'nfl', NULL)
+                    VALUES (%s, 'Null Start Team', 'football', 'nfl',
+                            (SELECT id FROM sports WHERE sport_key = 'football'),
+                            (SELECT id FROM leagues WHERE league_key = 'nfl'), NULL)
                     """,
                     (team_code,),
                 )
@@ -1069,9 +1079,11 @@ class TestSCDDefaults:
             cur.execute(
                 """
                 INSERT INTO teams (
-                    team_code, team_name, sport, league, row_end_ts
+                    team_code, team_name, sport, league, sport_id, league_id, row_end_ts
                 )
-                VALUES (%s, 'Nullable End Team', 'football', 'nfl', NULL)
+                VALUES (%s, 'Nullable End Team', 'football', 'nfl',
+                        (SELECT id FROM sports WHERE sport_key = 'football'),
+                        (SELECT id FROM leagues WHERE league_key = 'nfl'), NULL)
                 RETURNING row_end_ts
                 """,
                 (team_code,),
@@ -1106,8 +1118,10 @@ class TestSCDUniqueConstraint:
             )
             cur.execute(
                 """
-                INSERT INTO teams (team_code, team_name, sport, league, row_current_ind)
-                VALUES (%s, 'Dup Test Team 1', 'football', 'nfl', TRUE)
+                INSERT INTO teams (team_code, team_name, sport, league, sport_id, league_id, row_current_ind)
+                VALUES (%s, 'Dup Test Team 1', 'football', 'nfl',
+                        (SELECT id FROM sports WHERE sport_key = 'football'),
+                        (SELECT id FROM leagues WHERE league_key = 'nfl'), TRUE)
                 """,
                 (team_code,),
             )
@@ -1116,8 +1130,10 @@ class TestSCDUniqueConstraint:
             with get_cursor(commit=True) as cur:
                 cur.execute(
                     """
-                    INSERT INTO teams (team_code, team_name, sport, league, row_current_ind)
-                    VALUES (%s, 'Dup Test Team 2', 'football', 'nfl', TRUE)
+                    INSERT INTO teams (team_code, team_name, sport, league, sport_id, league_id, row_current_ind)
+                    VALUES (%s, 'Dup Test Team 2', 'football', 'nfl',
+                            (SELECT id FROM sports WHERE sport_key = 'football'),
+                            (SELECT id FROM leagues WHERE league_key = 'nfl'), TRUE)
                     """,
                     (team_code,),
                 )
@@ -1140,15 +1156,19 @@ class TestSCDUniqueConstraint:
             # Insert two historical rows -- both FALSE, no unique violation
             cur.execute(
                 """
-                INSERT INTO teams (team_code, team_name, sport, league, row_current_ind)
-                VALUES (%s, 'Hist Team V1', 'football', 'nfl', FALSE)
+                INSERT INTO teams (team_code, team_name, sport, league, sport_id, league_id, row_current_ind)
+                VALUES (%s, 'Hist Team V1', 'football', 'nfl',
+                        (SELECT id FROM sports WHERE sport_key = 'football'),
+                        (SELECT id FROM leagues WHERE league_key = 'nfl'), FALSE)
                 """,
                 (team_code,),
             )
             cur.execute(
                 """
-                INSERT INTO teams (team_code, team_name, sport, league, row_current_ind)
-                VALUES (%s, 'Hist Team V2', 'football', 'nfl', FALSE)
+                INSERT INTO teams (team_code, team_name, sport, league, sport_id, league_id, row_current_ind)
+                VALUES (%s, 'Hist Team V2', 'football', 'nfl',
+                        (SELECT id FROM sports WHERE sport_key = 'football'),
+                        (SELECT id FROM leagues WHERE league_key = 'nfl'), FALSE)
                 """,
                 (team_code,),
             )
@@ -1283,8 +1303,10 @@ class TestDeleteWithoutChildren:
             )
             cur.execute(
                 """
-                INSERT INTO teams (team_code, team_name, sport, league)
-                VALUES (%s, 'Orphan Test Team', 'football', 'nfl')
+                INSERT INTO teams (team_code, team_name, sport, league, sport_id, league_id)
+                VALUES (%s, 'Orphan Test Team', 'football', 'nfl',
+                        (SELECT id FROM sports WHERE sport_key = 'football'),
+                        (SELECT id FROM leagues WHERE league_key = 'nfl'))
                 RETURNING team_id
                 """,
                 (team_code,),

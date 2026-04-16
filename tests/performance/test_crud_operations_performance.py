@@ -51,9 +51,12 @@ def setup_perf_teams(db_pool, clean_test_data):
                 """
                 INSERT INTO teams (
                     team_id, team_code, team_name,
-                    espn_team_id, conference, division, sport, current_elo_rating
+                    espn_team_id, conference, division, sport, league,
+                    sport_id, league_id, current_elo_rating
                 )
-                VALUES (%s, %s, %s, %s, 'Perf', 'Div', 'football', 1500)
+                VALUES (%s, %s, %s, %s, 'Perf', 'Div', 'football', 'nfl',
+                        (SELECT id FROM sports WHERE sport_key = 'football'),
+                        (SELECT id FROM leagues WHERE league_key = 'nfl'), 1500)
                 ON CONFLICT (team_id) DO NOTHING
             """,
                 (

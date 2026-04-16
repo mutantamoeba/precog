@@ -64,12 +64,19 @@ def setup_test_teams(db_pool, clean_test_data):
             """
             INSERT INTO teams (
                 team_id, team_code, team_name,
-                espn_team_id, conference, division, sport, current_elo_rating
+                espn_team_id, conference, division, sport, league,
+                sport_id, league_id, current_elo_rating
             )
             VALUES
-                (9001, 'TEST-KC', 'Test Chiefs', 'TEST-12', 'AFC', 'West', 'football', 1650),
-                (9002, 'TEST-SF', 'Test 49ers', 'TEST-25', 'NFC', 'West', 'football', 1620),
-                (9003, 'TEST-OSU', 'Test Buckeyes', 'TEST-194', 'Big Ten', 'East', 'football', 1600)
+                (9001, 'TEST-KC', 'Test Chiefs', 'TEST-12', 'AFC', 'West', 'football', 'nfl',
+                 (SELECT id FROM sports WHERE sport_key = 'football'),
+                 (SELECT id FROM leagues WHERE league_key = 'nfl'), 1650),
+                (9002, 'TEST-SF', 'Test 49ers', 'TEST-25', 'NFC', 'West', 'football', 'nfl',
+                 (SELECT id FROM sports WHERE sport_key = 'football'),
+                 (SELECT id FROM leagues WHERE league_key = 'nfl'), 1620),
+                (9003, 'TEST-OSU', 'Test Buckeyes', 'TEST-194', 'Big Ten', 'East', 'football', 'ncaaf',
+                 (SELECT id FROM sports WHERE sport_key = 'football'),
+                 (SELECT id FROM leagues WHERE league_key = 'ncaaf'), 1600)
             ON CONFLICT (team_id) DO NOTHING
         """
         )
