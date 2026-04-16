@@ -15,6 +15,11 @@ from decimal import Decimal
 from typing import Any, cast
 
 from .connection import fetch_all, fetch_one, get_cursor
+from .crud_lookups import (
+    get_league_id_or_none,
+    get_sport_id_or_none,
+    resolve_sport_id_for_mixed_value,
+)
 from .crud_shared import retry_on_scd_unique_conflict
 
 logger = logging.getLogger(__name__)
@@ -146,17 +151,19 @@ def create_game_state(
         - ADR-029: ESPN Data Model with Normalized Schema
         - Pattern 2: Dual Versioning System (SCD Type 2)
     """
+    # Dual-write (#738 A1): populate league_id FK alongside the VARCHAR.
+    league_id_value = get_league_id_or_none(league)
     insert_query = """
         INSERT INTO game_states (
             espn_event_id, home_team_id, away_team_id, venue_id,
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
-            data_source, game_id, row_current_ind, row_start_ts
+            data_source, game_id, league_id, row_current_ind, row_start_ts
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, TRUE, NOW()
+            %s, %s, %s, TRUE, NOW()
         )
         RETURNING id
     """
@@ -184,6 +191,7 @@ def create_game_state(
                 json.dumps(linescores) if linescores else None,
                 data_source,
                 game_id,
+                league_id_value,
             ),
         )
         result = cur.fetchone()
@@ -440,17 +448,19 @@ def upsert_game_state(
           AND row_current_ind = TRUE
     """
 
+    # Dual-write (#738 A1): populate league_id FK alongside the VARCHAR.
+    league_id_value = get_league_id_or_none(league)
     insert_query = """
         INSERT INTO game_states (
             espn_event_id, home_team_id, away_team_id, venue_id,
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
-            data_source, game_id, row_current_ind, row_start_ts
+            data_source, game_id, league_id, row_current_ind, row_start_ts
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, TRUE, %s
+            %s, %s, %s, TRUE, %s
         )
         RETURNING id
     """
@@ -502,6 +512,7 @@ def upsert_game_state(
                     json.dumps(linescores) if linescores else None,
                     data_source,
                     game_id,
+                    league_id_value,
                     now,
                 ),
             )
@@ -758,6 +769,11 @@ def get_or_create_game(
             f"Phase B rename. Pass league explicitly."
         )
 
+    # Dual-write (#738 A1): populate sport_id + league_id FKs alongside the
+    # VARCHARs.  The `sport` column uses sport names ('football'); the
+    # `league` column uses league codes ('nfl').
+    sport_id_value = get_sport_id_or_none(sport)
+    league_id_value = get_league_id_or_none(league)
     query = """
         INSERT INTO games (
             sport, game_date, home_team_code, away_team_code,
@@ -766,12 +782,14 @@ def get_or_create_game(
             neutral_site, is_playoff, game_type,
             game_time, espn_event_id, external_game_id,
             game_status, data_source,
-            home_score, away_score, source_file, attendance
+            home_score, away_score, source_file, attendance,
+            sport_id, league_id
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s
         )
         ON CONFLICT (sport, game_date, home_team_code, away_team_code) DO UPDATE SET
             updated_at = NOW(),
@@ -794,7 +812,9 @@ def get_or_create_game(
             away_score = COALESCE(EXCLUDED.away_score, games.away_score),
             data_source = EXCLUDED.data_source,
             source_file = COALESCE(EXCLUDED.source_file, games.source_file),
-            attendance = COALESCE(EXCLUDED.attendance, games.attendance)
+            attendance = COALESCE(EXCLUDED.attendance, games.attendance),
+            sport_id = COALESCE(EXCLUDED.sport_id, games.sport_id),
+            league_id = COALESCE(EXCLUDED.league_id, games.league_id)
         RETURNING id
     """
     params = (
@@ -822,6 +842,8 @@ def get_or_create_game(
         away_score,
         source_file,
         attendance,
+        sport_id_value,
+        league_id_value,
     )
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
@@ -1457,6 +1479,10 @@ def upsert_game_odds(
                 )
 
             # Step 4: Insert new version with matching row_start_ts.
+            # Dual-write (#738 A1): `game_odds.sport` holds EITHER sport
+            # names OR league codes (mixed convention, migration 0048);
+            # `resolve_sport_id_for_mixed_value` handles both shapes.
+            sport_id_value = resolve_sport_id_for_mixed_value(sport)
             cur.execute(
                 """
                 INSERT INTO game_odds (
@@ -1474,6 +1500,7 @@ def upsert_game_odds(
                     home_favorite_at_open, away_favorite_at_open,
                     details_text,
                     home_team_id, away_team_id,
+                    sport_id,
                     row_current_ind, row_start_ts, updated_at
                 )
                 VALUES (
@@ -1485,6 +1512,7 @@ def upsert_game_odds(
                     %s, %s, %s, %s,
                     %s,
                     %s, %s,
+                    %s,
                     TRUE, %s, %s
                 )
                 RETURNING id
@@ -1520,6 +1548,7 @@ def upsert_game_odds(
                     details_text,
                     home_team_id,
                     away_team_id,
+                    sport_id_value,
                     now,
                     now,
                 ),

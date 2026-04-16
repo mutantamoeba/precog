@@ -46,6 +46,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from precog.database.connection import get_cursor
+from precog.database.crud_lookups import (
+    get_league_id_or_none,
+    get_sport_id_or_none,
+)
 from precog.database.seeding.batch_result import (
     BatchInsertResult,
     ErrorHandlingMode,
@@ -539,6 +543,10 @@ def bulk_insert_historical_games(
 
             league_code = record["sport"]
             sport_name = _LEAGUE_TO_SPORT.get(league_code, league_code)
+            # Dual-write (#738 A1): resolve FK ids for games.sport_id and
+            # games.league_id.  sport_name may be a sport ('football') or
+            # a league code fallback (if the map misses); use the direct
+            # sport lookup — misses are OK during A1 (nullable).
             batch.append(
                 (
                     sport_name,
@@ -559,6 +567,8 @@ def bulk_insert_historical_games(
                     record["external_game_id"],
                     league_code,  # league = league code for historical imports
                     game_status,
+                    get_sport_id_or_none(sport_name),
+                    get_league_id_or_none(league_code),
                 )
             )
 
@@ -596,13 +606,14 @@ def _flush_games_batch(batch: list[tuple[Any, ...]]) -> int:
     with get_cursor(commit=True) as cursor:
         from psycopg2.extras import execute_values
 
+        # Dual-write (#738 A1): batch tuples now include sport_id + league_id at tail.
         query = """
             INSERT INTO games (
                 sport, season, game_date, home_team_code, away_team_code,
                 home_team_id, away_team_id, home_score, away_score,
                 neutral_site, is_playoff, game_type, venue_name,
                 data_source, source_file, external_game_id,
-                league, game_status
+                league, game_status, sport_id, league_id
             ) VALUES %s
             ON CONFLICT (sport, game_date, home_team_code, away_team_code) DO UPDATE SET
                 home_team_id = COALESCE(EXCLUDED.home_team_id, games.home_team_id),
@@ -616,7 +627,9 @@ def _flush_games_batch(batch: list[tuple[Any, ...]]) -> int:
                 data_source = EXCLUDED.data_source,
                 source_file = COALESCE(EXCLUDED.source_file, games.source_file),
                 external_game_id = COALESCE(EXCLUDED.external_game_id, games.external_game_id),
-                updated_at = NOW()
+                updated_at = NOW(),
+                sport_id = COALESCE(EXCLUDED.sport_id, games.sport_id),
+                league_id = COALESCE(EXCLUDED.league_id, games.league_id)
         """
         execute_values(cursor, query, batch)
         return len(batch)

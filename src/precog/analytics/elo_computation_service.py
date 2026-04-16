@@ -44,6 +44,7 @@ from precog.analytics.elo_engine import (
     EloEngine,
     EloUpdateResult,
 )
+from precog.database.crud_lookups import get_league_id_or_none
 from precog.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -366,14 +367,18 @@ class EloComputationService:
                 home_elo_after,
                 away_elo_after,
                 calculation_source,
-                calculation_version
+                calculation_version,
+                league_id
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s
             )
         """
 
         # Determine league from game data
         league = game.get("league") or self._current_league
+        # Dual-write (#738 A1): also populate league_id FK.
+        league_id_value = get_league_id_or_none(league)
 
         params = [
             game["id"],
@@ -398,6 +403,7 @@ class EloComputationService:
             result.away_elo_after,
             self.calculation_source,
             self.calculation_version,
+            league_id_value,
         ]
 
         cursor.execute(query, params)

@@ -45,6 +45,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from precog.database.connection import get_cursor
+from precog.database.crud_lookups import resolve_sport_id_for_mixed_value
 from precog.database.seeding.batch_result import (
     BatchInsertResult,
     ErrorHandlingMode,
@@ -174,6 +175,9 @@ def insert_game_odds(record: OddsRecord) -> bool:
     source = normalize_source_name(record["source"])
     sportsbook = record.get("sportsbook") or "consensus"
 
+    # Dual-write (#738 A1): game_odds.sport holds EITHER sport names OR
+    # league codes (mixed convention).  Resolve via the helper.
+    sport_id_value = resolve_sport_id_for_mixed_value(record["sport"])
     with get_cursor(commit=True) as cursor:
         cursor.execute(
             """
@@ -187,13 +191,13 @@ def insert_game_odds(record: OddsRecord) -> bool:
                 total_open, total_close,
                 over_odds_open, over_odds_close,
                 home_covered, game_went_over,
-                source, source_file
+                source, source_file, sport_id
             ) VALUES (
                 %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s,
                 %s, %s, %s, %s,
                 %s, %s, %s, %s,
-                %s, %s, %s, %s
+                %s, %s, %s, %s, %s
             )
             ON CONFLICT (sport, game_date, home_team_code, away_team_code, sportsbook)
                 WHERE row_current_ind = TRUE
@@ -214,7 +218,8 @@ def insert_game_odds(record: OddsRecord) -> bool:
                 home_covered = COALESCE(EXCLUDED.home_covered, game_odds.home_covered),
                 game_went_over = COALESCE(EXCLUDED.game_went_over, game_odds.game_went_over),
                 source = EXCLUDED.source,
-                source_file = EXCLUDED.source_file
+                source_file = EXCLUDED.source_file,
+                sport_id = COALESCE(EXCLUDED.sport_id, game_odds.sport_id)
             """,
             (
                 game_id,
@@ -239,6 +244,7 @@ def insert_game_odds(record: OddsRecord) -> bool:
                 record.get("game_went_over"),
                 source,
                 record.get("source_file"),
+                sport_id_value,
             ),
         )
         return True
@@ -313,6 +319,9 @@ def bulk_insert_game_odds(
             source = normalize_source_name(record["source"])
             sportsbook = record.get("sportsbook") or "consensus"
 
+            # Dual-write (#738 A1): resolve sport_id for the mixed-
+            # convention `sport` column (sport names OR league codes).
+            sport_id_value = resolve_sport_id_for_mixed_value(record["sport"])
             batch.append(
                 (
                     game_id,
@@ -337,6 +346,7 @@ def bulk_insert_game_odds(
                     record.get("game_went_over"),
                     source,
                     record.get("source_file"),
+                    sport_id_value,
                 )
             )
 
@@ -374,6 +384,7 @@ def _flush_odds_batch(batch: list[tuple[Any, ...]]) -> int:
     with get_cursor(commit=True) as cursor:
         from psycopg2.extras import execute_values
 
+        # Dual-write (#738 A1): batch tuples now include sport_id at tail.
         query = """
             INSERT INTO game_odds (
                 game_id, sport, game_date,
@@ -385,7 +396,7 @@ def _flush_odds_batch(batch: list[tuple[Any, ...]]) -> int:
                 total_open, total_close,
                 over_odds_open, over_odds_close,
                 home_covered, game_went_over,
-                source, source_file
+                source, source_file, sport_id
             ) VALUES %s
             ON CONFLICT (sport, game_date, home_team_code, away_team_code, sportsbook)
                 WHERE row_current_ind = TRUE
@@ -396,7 +407,8 @@ def _flush_odds_batch(batch: list[tuple[Any, ...]]) -> int:
                 home_covered = COALESCE(EXCLUDED.home_covered, game_odds.home_covered),
                 game_went_over = COALESCE(EXCLUDED.game_went_over, game_odds.game_went_over),
                 source = EXCLUDED.source,
-                source_file = EXCLUDED.source_file
+                source_file = EXCLUDED.source_file,
+                sport_id = COALESCE(EXCLUDED.sport_id, game_odds.sport_id)
         """
         execute_values(cursor, query, batch)
         return len(batch)
