@@ -83,7 +83,7 @@ CONSTRAINT_NAMES = {
 def migration_test_platform(db_pool: Any) -> Any:
     """Create an isolated platform + market + position.
 
-    Returns (platform_id, market_internal_id, position_internal_id).
+    Returns (platform_id, market_id, position_internal_id).
     Children of position_internal_id (position_exits, exit_attempts) can
     reference it. Children of platform_id (account_ledger, settlements)
     can reference it directly. Cleanup deletes all 4 tables + position +
@@ -111,7 +111,7 @@ def migration_test_platform(db_pool: Any) -> Any:
             (platform_id,),
         )
 
-        # Market (FK target for settlements via market_internal_id)
+        # Market (FK target for settlements via market_id)
         cur.execute(
             """
             INSERT INTO markets (
@@ -123,7 +123,7 @@ def migration_test_platform(db_pool: Any) -> Any:
             """,
             (platform_id,),
         )
-        market_internal_id = cur.fetchone()["id"]
+        market_id = cur.fetchone()["id"]
 
         # Position (FK target for position_exits / exit_attempts via
         # position_internal_id). Uses a unique business key so concurrent
@@ -131,7 +131,7 @@ def migration_test_platform(db_pool: Any) -> Any:
         cur.execute(
             """
             INSERT INTO positions (
-                position_id, platform_id, market_internal_id, side, quantity,
+                position_key, platform_id, market_id, side, quantity,
                 entry_price, current_price, status, entry_time, last_check_time,
                 row_current_ind, row_start_ts, execution_environment
             )
@@ -145,14 +145,14 @@ def migration_test_platform(db_pool: Any) -> Any:
             (
                 "MIG-52-55-POS",
                 platform_id,
-                market_internal_id,
+                market_id,
                 Decimal("0.5000"),
                 Decimal("0.5000"),
             ),
         )
         position_internal_id = cur.fetchone()["id"]
 
-    yield platform_id, market_internal_id, position_internal_id
+    yield platform_id, market_id, position_internal_id
 
     # Teardown in reverse FK order.
     with get_cursor(commit=True) as cur:
@@ -174,7 +174,7 @@ def _insert_row(
     execution_environment: str | None,
     *,
     platform_id: str,
-    market_internal_id: int,
+    market_id: int,
     position_internal_id: int,
 ) -> None:
     """INSERT a minimal valid row into one of the 4 target tables.
@@ -210,22 +210,22 @@ def _insert_row(
             cur.execute(
                 """
                 INSERT INTO settlements (
-                    platform_id, market_internal_id, outcome, payout
+                    platform_id, market_id, outcome, payout
                 )
                 VALUES (%s, %s, 'yes', 10.0000)
                 """,
-                (platform_id, market_internal_id),
+                (platform_id, market_id),
             )
         else:
             cur.execute(
                 """
                 INSERT INTO settlements (
-                    platform_id, market_internal_id, outcome, payout,
+                    platform_id, market_id, outcome, payout,
                     execution_environment
                 )
                 VALUES (%s, %s, 'yes', 10.0000, %s)
                 """,
-                (platform_id, market_internal_id, execution_environment),
+                (platform_id, market_id, execution_environment),
             )
     elif table == "position_exits":
         if execution_environment is None:
@@ -389,7 +389,7 @@ class TestInsertValidValues:
                     "account_ledger",
                     env,
                     platform_id=platform_id,
-                    market_internal_id=market_id,
+                    market_id=market_id,
                     position_internal_id=position_id,
                 )
 
@@ -415,7 +415,7 @@ class TestInsertValidValues:
                     "settlements",
                     env,
                     platform_id=platform_id,
-                    market_internal_id=market_id,
+                    market_id=market_id,
                     position_internal_id=position_id,
                 )
 
@@ -438,7 +438,7 @@ class TestInsertValidValues:
                     "position_exits",
                     env,
                     platform_id=platform_id,
-                    market_internal_id=market_id,
+                    market_id=market_id,
                     position_internal_id=position_id,
                 )
 
@@ -462,7 +462,7 @@ class TestInsertValidValues:
                     "exit_attempts",
                     env,
                     platform_id=platform_id,
-                    market_internal_id=market_id,
+                    market_id=market_id,
                     position_internal_id=position_id,
                 )
 
@@ -498,7 +498,7 @@ class TestCheckConstraintRejects:
                     table,
                     "Live",  # wrong case
                     platform_id=platform_id,
-                    market_internal_id=market_id,
+                    market_id=market_id,
                     position_internal_id=position_id,
                 )
 
@@ -515,7 +515,7 @@ class TestCheckConstraintRejects:
                     table,
                     "demo",
                     platform_id=platform_id,
-                    market_internal_id=market_id,
+                    market_id=market_id,
                     position_internal_id=position_id,
                 )
 
@@ -539,7 +539,7 @@ class TestCheckConstraintRejects:
                     table,
                     "unknown",
                     platform_id=platform_id,
-                    market_internal_id=market_id,
+                    market_id=market_id,
                     position_internal_id=position_id,
                 )
 
@@ -574,6 +574,6 @@ class TestNotNullEnforcement:
                     table,
                     None,  # omit column entirely
                     platform_id=platform_id,
-                    market_internal_id=market_id,
+                    market_id=market_id,
                     position_internal_id=position_id,
                 )

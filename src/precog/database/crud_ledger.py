@@ -643,7 +643,7 @@ _VALID_TAKER_SIDES = frozenset({"yes", "no"})
 def upsert_market_trade(
     platform_id: str,
     external_trade_id: str,
-    market_internal_id: int,
+    market_id: int,
     count: int,
     trade_time: datetime,
     yes_price: Decimal | None = None,
@@ -659,7 +659,7 @@ def upsert_market_trade(
     Args:
         platform_id: FK to platforms(platform_id), e.g. 'kalshi'
         external_trade_id: Kalshi's trade UUID (unique per platform)
-        market_internal_id: FK to markets(id) -- integer surrogate PK
+        market_id: FK to markets(id) -- integer surrogate PK
         count: Number of contracts in this trade (must be > 0)
         trade_time: When the trade was executed on the exchange
         yes_price: Executed yes-side price as DECIMAL(10,4), or None
@@ -678,7 +678,7 @@ def upsert_market_trade(
         >>> trade_id = upsert_market_trade(
         ...     platform_id='kalshi',
         ...     external_trade_id='abc-123-def',
-        ...     market_internal_id=42,
+        ...     market_id=42,
         ...     count=10,
         ...     trade_time=datetime(2026, 1, 15, 20, 30, 0, tzinfo=UTC),
         ...     yes_price=Decimal("0.5500"),
@@ -702,7 +702,7 @@ def upsert_market_trade(
 
     insert_query = """
         INSERT INTO market_trades (
-            platform_id, external_trade_id, market_internal_id,
+            platform_id, external_trade_id, market_id,
             count, yes_price, no_price, taker_side,
             trade_time
         )
@@ -714,7 +714,7 @@ def upsert_market_trade(
     params = (
         platform_id,
         external_trade_id,
-        market_internal_id,
+        market_id,
         count,
         yes_price,
         no_price,
@@ -741,7 +741,7 @@ def upsert_market_trades_batch(trades: list[dict]) -> int:
         trades: List of dicts, each with keys:
             - platform_id (str): FK to platforms(platform_id)
             - external_trade_id (str): Kalshi's trade UUID
-            - market_internal_id (int): FK to markets(id)
+            - market_id (int): FK to markets(id)
             - count (int): Number of contracts (must be > 0)
             - trade_time (datetime): When trade was executed
             - yes_price (Decimal | None): Optional executed yes price
@@ -760,7 +760,7 @@ def upsert_market_trades_batch(trades: list[dict]) -> int:
         ...     {
         ...         "platform_id": "kalshi",
         ...         "external_trade_id": "abc-123",
-        ...         "market_internal_id": 42,
+        ...         "market_id": 42,
         ...         "count": 10,
         ...         "trade_time": datetime(2026, 1, 15, 20, 30, 0, tzinfo=UTC),
         ...         "yes_price": Decimal("0.5500"),
@@ -802,7 +802,7 @@ def upsert_market_trades_batch(trades: list[dict]) -> int:
             (
                 row["platform_id"],
                 row["external_trade_id"],
-                row["market_internal_id"],
+                row["market_id"],
                 count,
                 yes_price,
                 no_price,
@@ -813,7 +813,7 @@ def upsert_market_trades_batch(trades: list[dict]) -> int:
 
     insert_query = """
         INSERT INTO market_trades (
-            platform_id, external_trade_id, market_internal_id,
+            platform_id, external_trade_id, market_id,
             count, yes_price, no_price, taker_side,
             trade_time
         )
@@ -829,7 +829,7 @@ def upsert_market_trades_batch(trades: list[dict]) -> int:
 
 
 def get_market_trades(
-    market_internal_id: int,
+    market_id: int,
     limit: int = 100,
     since: datetime | None = None,
 ) -> list[dict]:
@@ -837,7 +837,7 @@ def get_market_trades(
     Retrieve public market trades for a market, ordered by trade_time DESC.
 
     Args:
-        market_internal_id: FK to markets(id)
+        market_id: FK to markets(id)
         limit: Maximum rows to return (default 100)
         since: Optional datetime filter -- only trades after this time
 
@@ -858,8 +858,8 @@ def get_market_trades(
         - Migration 0028: market_trades
         - Issue #402: Add market_trades table for public trade tape
     """
-    query = "SELECT * FROM market_trades WHERE market_internal_id = %s"
-    params: list = [market_internal_id]
+    query = "SELECT * FROM market_trades WHERE market_id = %s"
+    params: list = [market_id]
 
     if since is not None:
         query += " AND trade_time >= %s"
@@ -871,7 +871,7 @@ def get_market_trades(
     return fetch_all(query, tuple(params))
 
 
-def get_latest_trade_time(market_internal_id: int) -> datetime | None:
+def get_latest_trade_time(market_id: int) -> datetime | None:
     """
     Return trade_time from the most recent public trade for a market.
 
@@ -880,7 +880,7 @@ def get_latest_trade_time(market_internal_id: int) -> datetime | None:
     entire tape on every poll cycle.
 
     Args:
-        market_internal_id: FK to markets(id)
+        market_id: FK to markets(id)
 
     Returns:
         datetime of the latest trade, or None if no trades exist for this market.
@@ -898,12 +898,12 @@ def get_latest_trade_time(market_internal_id: int) -> datetime | None:
     """
     query = """
         SELECT trade_time FROM market_trades
-        WHERE market_internal_id = %s
+        WHERE market_id = %s
         ORDER BY trade_time DESC, id DESC
         LIMIT 1
     """
 
-    result = fetch_one(query, (market_internal_id,))
+    result = fetch_one(query, (market_id,))
     if result is None:
         return None
     return cast("datetime", result["trade_time"])

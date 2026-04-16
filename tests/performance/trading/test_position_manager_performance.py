@@ -35,8 +35,8 @@ def mock_position() -> dict[str, Any]:
     """Create a mock position dict."""
     return {
         "id": 123,
-        "position_id": "POS-2025-001",
-        "market_internal_id": 1,
+        "position_key": "POS-2025-001",
+        "market_id": 1,
         "strategy_id": 1,
         "model_id": 1,
         "side": "YES",
@@ -168,7 +168,7 @@ class TestQueryLatency:
         positions = []
         for i in range(100):
             pos = mock_position.copy()
-            pos["market_internal_id"] = i + 1
+            pos["market_id"] = i + 1
             pos["strategy_id"] = i
             positions.append(pos)
         mock_get_positions.return_value = positions
@@ -177,7 +177,7 @@ class TestQueryLatency:
         latencies = []
         for i in range(50):
             start = time.perf_counter()
-            manager.get_open_positions(market_internal_id=i + 1)
+            manager.get_open_positions(market_id=i + 1)
             latency = (time.perf_counter() - start) * 1000
             latencies.append(latency)
 

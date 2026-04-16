@@ -92,7 +92,7 @@ def test_property_edge_calculation_invariant(
     def check_edge_invariant(calculated_prob, market_price):
         """Property: edge = calculated_probability - market_price"""
         trade_id = create_trade(
-            market_internal_id=sample_market,
+            market_id=sample_market,
             strategy_id=sample_strategy,
             model_id=sample_model,
             side="buy",
@@ -140,7 +140,7 @@ def test_property_attribution_immutability(
     def check_immutability(calc_prob, mkt_price):
         """Property: Attribution fields are immutable after creation"""
         position_id = create_position(
-            market_internal_id=sample_market,
+            market_id=sample_market,
             strategy_id=sample_strategy,
             model_id=sample_model,
             side="yes",
@@ -209,7 +209,7 @@ def test_e2e_full_attribution_workflow(
 
     market_id = create_market(
         platform_id=sample_platform,
-        event_internal_id=event_pk,
+        event_id=event_pk,
         external_id=f"E2E-TEST-{unique_suffix}",
         ticker=f"E2E-TEST-{unique_suffix}",
         title="E2E Test Market",
@@ -222,7 +222,7 @@ def test_e2e_full_attribution_workflow(
 
     # Step 2: Create trade with attribution
     trade_id = create_trade(
-        market_internal_id=market_id,
+        market_id=market_id,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",
@@ -236,7 +236,7 @@ def test_e2e_full_attribution_workflow(
 
     # Step 3: Create position from trade
     position_id = create_position(
-        market_internal_id=market_id,
+        market_id=market_id,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="yes",
@@ -295,7 +295,7 @@ def test_stress_bulk_trade_creation(
         mkt_price = Decimal("0.5000") + (Decimal(i % 30) / Decimal("100"))  # 0.50 to 0.799
 
         trade_id = create_trade(
-            market_internal_id=sample_market,
+            market_id=sample_market,
             strategy_id=sample_strategy,
             model_id=sample_model,
             side="buy",
@@ -347,7 +347,7 @@ def test_stress_bulk_position_creation(
         entry_price = Decimal("0.5200") + (Decimal(i % 25) / Decimal("100"))
 
         position_id = create_position(
-            market_internal_id=sample_market,
+            market_id=sample_market,
             strategy_id=sample_strategy,
             model_id=sample_model,
             side="yes",
@@ -397,7 +397,7 @@ def test_race_concurrent_trade_creation(
         trade_ids = []
         for i in range(count):
             trade_id = create_trade(
-                market_internal_id=sample_market,
+                market_id=sample_market,
                 strategy_id=sample_strategy,
                 model_id=sample_model,
                 side="buy",
@@ -473,7 +473,7 @@ def test_performance_analytics_query_with_large_dataset(
         mkt_price = Decimal("0.5000")
 
         create_trade(
-            market_internal_id=sample_market,
+            market_id=sample_market,
             strategy_id=sample_strategy,
             model_id=model_id,
             side="buy",
@@ -543,7 +543,7 @@ def test_chaos_trade_with_null_attribution_fields(
     """
     # Trade with NO attribution fields (model_id required but attribution optional)
     trade_id = create_trade(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,  # Required parameter (even if attribution fields NULL)
         side="buy",
@@ -590,7 +590,7 @@ def test_chaos_position_with_automatic_edge_calculation(
     """
     # Position with attribution fields (edge calculated automatically)
     position_id = create_position(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="yes",
@@ -629,7 +629,7 @@ def test_chaos_trade_with_probability_boundary_values(
     """
     # Test 1: Probability = 0.0 (minimum)
     trade_1 = create_trade(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="sell",  # Short position (bearish)
@@ -647,7 +647,7 @@ def test_chaos_trade_with_probability_boundary_values(
 
     # Test 2: Probability = 1.0 (maximum)
     trade_2 = create_trade(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",
@@ -665,7 +665,7 @@ def test_chaos_trade_with_probability_boundary_values(
 
     # Test 3: Probability = 0.999999 (just below max)
     trade_3 = create_trade(
-        market_internal_id=sample_market,
+        market_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",

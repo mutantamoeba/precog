@@ -49,7 +49,7 @@ _VALID_ENTITY_TYPES = frozenset({"model", "strategy", "evaluation_run", "backtes
 
 
 def create_edge(
-    market_internal_id: int,
+    market_id: int,
     model_id: int,
     expected_value: Decimal,
     true_win_probability: Decimal,
@@ -79,7 +79,7 @@ def create_edge(
     snapshot at the moment of edge detection.
 
     Args:
-        market_internal_id: Integer FK to markets(id) surrogate PK
+        market_id: Integer FK to markets(id) surrogate PK
         model_id: FK to probability_models(model_id) that detected this edge
         expected_value: Expected value of the edge as DECIMAL(10,4)
         true_win_probability: Model's predicted probability [0, 1]
@@ -113,7 +113,7 @@ def create_edge(
     Educational Note:
         Dual-Key Structure (Migration 017):
         - id SERIAL (surrogate key) - returned by this function
-        - edge_id VARCHAR (business key) - auto-generated as EDGE-{id}
+        - edge_key VARCHAR (business key) - auto-generated as EDGE-{id}
         - Enables SCD Type 2 versioning (multiple versions of same edge)
 
         Edge Lifecycle (Migration 0023):
@@ -124,7 +124,7 @@ def create_edge(
 
     Example:
         >>> edge_pk = create_edge(
-        ...     market_internal_id=42,
+        ...     market_id=42,
         ...     model_id=2,
         ...     expected_value=Decimal("0.0500"),
         ...     true_win_probability=Decimal("0.5700"),
@@ -136,7 +136,7 @@ def create_edge(
         ...     confidence_level='high',
         ...     execution_environment='paper',
         ... )
-        >>> # Returns surrogate id (e.g., 1), edge_id auto-set to 'EDGE-1'
+        >>> # Returns surrogate id (e.g., 1), edge_key auto-set to 'EDGE-1'
 
     References:
         - Migration 0023: edges enrichment and cleanup
@@ -174,7 +174,7 @@ def create_edge(
 
     insert_query = """
         INSERT INTO edges (
-            edge_id, market_internal_id, model_id,
+            edge_key, market_id, model_id,
             expected_value, true_win_probability,
             market_implied_probability, market_price,
             yes_ask_price, no_ask_price, spread,
@@ -198,7 +198,7 @@ def create_edge(
     """
 
     params = (
-        market_internal_id,
+        market_id,
         model_id,
         expected_value,
         true_win_probability,
@@ -226,9 +226,9 @@ def create_edge(
         result = cur.fetchone()
         surrogate_id = cast("int", result["id"])
 
-        # Update to set correct edge_id (EDGE-{id} format)
+        # Update to set correct edge_key (EDGE-{id} format)
         cur.execute(
-            "UPDATE edges SET edge_id = %s WHERE id = %s",
+            "UPDATE edges SET edge_key = %s WHERE id = %s",
             (f"EDGE-{surrogate_id}", surrogate_id),
         )
 
@@ -249,7 +249,7 @@ def update_edge_outcome(
     Also sets edge_status to 'settled'.
 
     Args:
-        edge_pk: Surrogate PK (edges.id), NOT the edge_id business key
+        edge_pk: Surrogate PK (edges.id), NOT the edge_key business key
         actual_outcome: Settlement result - 'yes', 'no', 'void', or 'unresolved'
         settlement_value: Actual settlement price as DECIMAL(10,4)
             (0.0000 or 1.0000 for binary markets)
@@ -308,7 +308,7 @@ def update_edge_status(
     transitions track lifecycle progression, not identity changes.
 
     Args:
-        edge_pk: Surrogate PK (edges.id), NOT the edge_id business key
+        edge_pk: Surrogate PK (edges.id), NOT the edge_key business key
         new_status: New lifecycle status. Valid values:
             'detected', 'recommended', 'acted_on', 'expired', 'settled', 'void'
 
@@ -368,13 +368,13 @@ def get_edges_by_strategy(
     Example:
         >>> edges = get_edges_by_strategy(strategy_id=1, edge_status='detected')
         >>> for edge in edges:
-        ...     print(f"Edge {edge['edge_id']}: EV={edge['expected_value']}")
+        ...     print(f"Edge {edge['edge_key']}: EV={edge['expected_value']}")
 
     References:
         - Migration 0023: strategy_id column + idx_edges_strategy index
     """
     query = """
-        SELECT id, edge_id, market_internal_id, model_id, strategy_id,
+        SELECT id, edge_key, market_id, model_id, strategy_id,
                expected_value, true_win_probability, market_implied_probability,
                market_price, yes_ask_price, no_ask_price, spread,
                volume, open_interest, last_price, liquidity,
@@ -402,7 +402,7 @@ def get_edges_by_strategy(
 
 
 def get_edge_lifecycle(
-    market_internal_id: int | None = None,
+    market_id: int | None = None,
     strategy_id: int | None = None,
     limit: int = 100,
 ) -> list[dict]:
@@ -415,7 +415,7 @@ def get_edge_lifecycle(
     - hours_to_resolution: time from edge creation to resolution in hours
 
     Args:
-        market_internal_id: Optional filter by market
+        market_id: Optional filter by market
         strategy_id: Optional filter by strategy
         limit: Maximum rows to return (default 100)
 
@@ -426,13 +426,13 @@ def get_edge_lifecycle(
         >>> lifecycle = get_edge_lifecycle(strategy_id=1)
         >>> for edge in lifecycle:
         ...     if edge['realized_pnl'] is not None:
-        ...         print(f"Edge {edge['edge_id']}: P&L={edge['realized_pnl']}")
+        ...         print(f"Edge {edge['edge_key']}: P&L={edge['realized_pnl']}")
 
     References:
         - Migration 0023: edge_lifecycle view definition
     """
     query = """
-        SELECT id, edge_id, market_internal_id, model_id, strategy_id,
+        SELECT id, edge_key, market_id, model_id, strategy_id,
                expected_value, true_win_probability, market_implied_probability,
                market_price, yes_ask_price, no_ask_price,
                edge_status, actual_outcome, settlement_value,
@@ -444,9 +444,9 @@ def get_edge_lifecycle(
     """
     params: list = []
 
-    if market_internal_id is not None:
-        query += " AND market_internal_id = %s"
-        params.append(market_internal_id)
+    if market_id is not None:
+        query += " AND market_id = %s"
+        params.append(market_id)
 
     if strategy_id is not None:
         query += " AND strategy_id = %s"

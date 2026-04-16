@@ -143,9 +143,9 @@ class TestKalshiPollerDatabaseIntegration:
         The bug: create_market() was called without first creating the event.
 
         Educational Note:
-            The markets table has: event_internal_id REFERENCES events(id)
+            The markets table has: event_id REFERENCES events(id)
             Without the event existing first, INSERT fails with:
-            "violates foreign key constraint on event_internal_id"
+            "violates foreign key constraint on event_id"
         """
         from precog.schedulers.kalshi_poller import KalshiMarketPoller
 
@@ -295,7 +295,7 @@ class TestKalshiPollerDatabaseIntegration:
                     # Migration 0021: pricing in market_snapshots, use view
                     cur.execute("""
                         SELECT ticker, title, market_type, status,
-                               yes_ask_price, no_ask_price, platform_id, event_internal_id
+                               yes_ask_price, no_ask_price, platform_id, event_id
                         FROM current_markets
                         WHERE platform_id = 'kalshi'
                         LIMIT 5
@@ -309,7 +309,7 @@ class TestKalshiPollerDatabaseIntegration:
                         assert market["market_type"] == "binary", "market_type should be 'binary'"
                         assert market["status"] in {"open", "closed", "settled", "halted"}
                         assert market["platform_id"] == "kalshi"
-                        assert market["event_internal_id"], "event_internal_id should not be empty"
+                        assert market["event_id"], "event_id should not be empty"
         finally:
             poller.kalshi_client.close()
 

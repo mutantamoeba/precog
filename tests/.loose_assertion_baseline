@@ -1,0 +1,5 @@
+# Loose assertion baseline — ratchet hook (#770, Hook 1.5)
+# This count must never increase. Fix loose assertions to lower it.
+# Patterns counted: `exit_code in [` and `isinstance(result.exit_code, int)`
+# Updated: 2026-04-13 (session 54) — tightened 20 in test_cli_system.py + test_cli_db.py
+133

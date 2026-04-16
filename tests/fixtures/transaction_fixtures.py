@@ -176,21 +176,21 @@ def db_transaction_with_setup(
 
     # Create test series
     cursor.execute("""
-        INSERT INTO series (series_id, platform_id, external_id, title, category)
+        INSERT INTO series (series_key, platform_id, external_id, title, category)
         VALUES ('TEST-SERIES-NFL', 'test_platform', 'TEST-EXT-SERIES', 'Test NFL Series', 'sports')
-        ON CONFLICT (series_id) WHERE row_current_ind = TRUE DO NOTHING
+        ON CONFLICT (series_key) WHERE row_current_ind = TRUE DO NOTHING
     """)
 
-    # Get series surrogate PK for event FK (migration 0019: series_internal_id)
-    cursor.execute("SELECT id FROM series WHERE series_id = 'TEST-SERIES-NFL'")
+    # Get series surrogate PK for event FK (migration 0019: series_key)
+    cursor.execute("SELECT id FROM series WHERE series_key = 'TEST-SERIES-NFL'")
     _sr = cursor.fetchone()
     _series_pk = _sr["id"] if _sr else None
 
-    # Create test event (uses series_internal_id integer FK)
+    # Create test event (uses series_id integer FK to series.id)
     # external_id is the canonical business key (migration 0047 dropped event_id column)
     cursor.execute(
         """
-        INSERT INTO events (platform_id, series_internal_id, external_id, category, title, status)
+        INSERT INTO events (platform_id, series_id, external_id, category, title, status)
         VALUES ('test_platform', %s, 'TEST-EVT-NFL-KC-BUF', 'sports', 'Test Event: KC vs BUF', 'scheduled')
         ON CONFLICT (platform_id, external_id) DO NOTHING
     """,
@@ -200,7 +200,7 @@ def db_transaction_with_setup(
     # Create additional test event for compatibility
     cursor.execute(
         """
-        INSERT INTO events (platform_id, series_internal_id, external_id, category, title, status)
+        INSERT INTO events (platform_id, series_id, external_id, category, title, status)
         VALUES ('test_platform', %s, 'TEST-EVT-2', 'sports', 'Test Event 2', 'scheduled')
         ON CONFLICT (platform_id, external_id) DO NOTHING
     """,

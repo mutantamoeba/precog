@@ -70,8 +70,8 @@ def mock_position_with_trailing_stop():
     """
     return {
         "id": 123,
-        "position_id": "POS-2025-001",
-        "market_internal_id": 1,
+        "position_key": "POS-2025-001",
+        "market_id": 1,
         "strategy_id": 1,
         "model_id": 1,
         "side": "YES",
@@ -156,7 +156,7 @@ def test_initialize_trailing_stop_success(position_manager, valid_trailing_confi
     # Mock current position without trailing stop
     mock_position = {
         "id": 123,
-        "position_id": "POS-2025-001",
+        "position_key": "POS-2025-001",
         "current_price": Decimal("0.60"),
         "stop_loss_price": Decimal("0.35"),
         "status": "open",
@@ -283,7 +283,7 @@ def test_initialize_trailing_stop_closed_position(position_manager, valid_traili
     """
     mock_position = {
         "id": 123,
-        "position_id": "POS-2025-001",
+        "position_key": "POS-2025-001",
         "status": "closed",  # Non-open status
     }
     _mock_conn, _mock_cursor, crud_mock = _mock_trailing_stop_write_path(

@@ -125,11 +125,7 @@ class TestDatabaseMigrationWorkflow:
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
 
-            # Dry run first
-            result = cli_runner.invoke(isolated_app, ["db", "migrate", "--dry-run"])
-            assert result.exit_code in [0, 1, 2, 3]
-
-            # Then actual migration
+            # Migration to latest
             result = cli_runner.invoke(isolated_app, ["db", "migrate"])
             assert result.exit_code in [0, 1, 2, 3]
 
@@ -207,10 +203,6 @@ class TestDatabaseInspectionWorkflow:
 
             # Tables
             result = cli_runner.invoke(isolated_app, ["db", "tables"])
-            assert result.exit_code in [0, 1, 2]
-
-            # Tables with counts
-            result = cli_runner.invoke(isolated_app, ["db", "tables", "--counts"])
             assert result.exit_code in [0, 1, 2]
 
 

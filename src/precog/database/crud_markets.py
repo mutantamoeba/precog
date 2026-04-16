@@ -33,13 +33,13 @@ logger = logging.getLogger(__name__)
 # New columns: yes_bid_price, no_bid_price, last_price, liquidity
 #
 # Migration 0022: downstream tables (edges/positions/trades/settlements) now use
-# market_internal_id INTEGER FK → markets(id). VARCHAR market_id is dropped.
+# market_id INTEGER FK → markets(id). VARCHAR market_id is dropped.
 # =============================================================================
 
 
 def create_market(
     platform_id: str,
-    event_internal_id: int | None,
+    event_id: int | None,
     external_id: str,
     ticker: str,
     title: str,
@@ -82,7 +82,7 @@ def create_market(
 
     Args:
         platform_id: Foreign key to platforms table (VARCHAR)
-        event_internal_id: Integer FK to events(id) surrogate PK. This is the
+        event_id: Integer FK to events(id) surrogate PK. This is the
             integer returned by get_or_create_event().
             None if the market has no associated event.
         external_id: External market ID from platform
@@ -137,7 +137,7 @@ def create_market(
     Example:
         >>> market_pk = create_market(
         ...     platform_id="kalshi",
-        ...     event_internal_id=7,
+        ...     event_id=7,
         ...     external_id="KXNFLKCBUF",
         ...     ticker="NFL-KC-BUF-YES",
         ...     title="Chiefs to beat Bills",
@@ -190,7 +190,7 @@ def create_market(
         cur.execute(
             """
             INSERT INTO markets (
-                platform_id, event_internal_id, external_id,
+                platform_id, event_id, external_id,
                 ticker, title, market_type, status, settlement_value,
                 subtitle, open_time, close_time, expiration_time,
                 outcome_label, subcategory, bracket_count, source_url,
@@ -202,7 +202,7 @@ def create_market(
             """,
             (
                 platform_id,
-                event_internal_id,
+                event_id,
                 external_id,
                 ticker,
                 title,
@@ -294,7 +294,7 @@ def get_current_market(ticker: str) -> dict[str, Any] | None:
         SELECT
             m.id,
             m.platform_id,
-            m.event_internal_id,
+            m.event_id,
             m.external_id,
             m.ticker,
             m.title,
@@ -392,7 +392,7 @@ def count_open_markets_by_subcategory(subcategory: str) -> int:
     query = """
         SELECT COUNT(*) AS count
         FROM markets m
-        LEFT JOIN events e ON e.id = m.event_internal_id
+        LEFT JOIN events e ON e.id = m.event_id
         WHERE m.status = 'open'
           AND LOWER(COALESCE(m.subcategory, e.subcategory)) = LOWER(%s)
     """
@@ -813,7 +813,7 @@ def get_markets_summary(
         LEFT JOIN market_snapshots ms
             ON ms.market_id = m.id AND ms.row_current_ind = TRUE
         LEFT JOIN events e
-            ON e.id = m.event_internal_id
+            ON e.id = m.event_id
         WHERE 1=1
     """
     params: list[Any] = []
@@ -843,7 +843,7 @@ def get_markets_summary(
 
 
 def insert_orderbook_snapshot(
-    market_internal_id: int,
+    market_id: int,
     best_bid: Decimal | None = None,
     best_ask: Decimal | None = None,
     spread: Decimal | None = None,
@@ -864,7 +864,7 @@ def insert_orderbook_snapshot(
     This is append-only time-series data (not SCD Type 2).
 
     Args:
-        market_internal_id: Integer FK to markets(id)
+        market_id: Integer FK to markets(id)
         best_bid: Best bid price as DECIMAL(10,4)
         best_ask: Best ask price as DECIMAL(10,4)
         spread: Bid-ask spread as DECIMAL(10,4), must be >= 0
@@ -883,7 +883,7 @@ def insert_orderbook_snapshot(
 
     Example:
         >>> snapshot_id = insert_orderbook_snapshot(
-        ...     market_internal_id=42,
+        ...     market_id=42,
         ...     best_bid=Decimal("0.5000"),
         ...     best_ask=Decimal("0.5200"),
         ...     spread=Decimal("0.0200"),
@@ -904,7 +904,7 @@ def insert_orderbook_snapshot(
     """
     query = """
         INSERT INTO orderbook_snapshots (
-            market_internal_id, best_bid, best_ask, spread,
+            market_id, best_bid, best_ask, spread,
             bid_depth_total, ask_depth_total, depth_imbalance, weighted_mid,
             bid_prices, bid_quantities, ask_prices, ask_quantities, levels,
             snapshot_time
@@ -914,7 +914,7 @@ def insert_orderbook_snapshot(
     """
 
     params = (
-        market_internal_id,
+        market_id,
         best_bid,
         best_ask,
         spread,
@@ -935,18 +935,18 @@ def insert_orderbook_snapshot(
         return cast("int", result["id"])
 
 
-def get_latest_orderbook(market_internal_id: int) -> dict[str, Any] | None:
+def get_latest_orderbook(market_id: int) -> dict[str, Any] | None:
     """
     Get the most recent order book snapshot for a market.
 
     Args:
-        market_internal_id: Integer FK to markets(id)
+        market_id: Integer FK to markets(id)
 
     Returns:
         Dictionary of snapshot columns, or None if no snapshots exist
 
     Example:
-        >>> snapshot = get_latest_orderbook(market_internal_id=42)
+        >>> snapshot = get_latest_orderbook(market_id=42)
         >>> if snapshot:
         ...     print(snapshot['spread'], snapshot['depth_imbalance'])
 
@@ -955,29 +955,29 @@ def get_latest_orderbook(market_internal_id: int) -> dict[str, Any] | None:
     """
     query = """
         SELECT * FROM orderbook_snapshots
-        WHERE market_internal_id = %s
+        WHERE market_id = %s
         ORDER BY snapshot_time DESC
         LIMIT 1
     """
-    return fetch_one(query, (market_internal_id,))
+    return fetch_one(query, (market_id,))
 
 
 def get_orderbook_history(
-    market_internal_id: int,
+    market_id: int,
     limit: int = 100,
 ) -> list[dict[str, Any]]:
     """
     Get order book snapshot history for a market, newest first.
 
     Args:
-        market_internal_id: Integer FK to markets(id)
+        market_id: Integer FK to markets(id)
         limit: Maximum number of snapshots to return (default: 100)
 
     Returns:
         List of snapshot dictionaries, ordered by snapshot_time DESC
 
     Example:
-        >>> history = get_orderbook_history(market_internal_id=42, limit=50)
+        >>> history = get_orderbook_history(market_id=42, limit=50)
         >>> for snap in history:
         ...     print(snap['snapshot_time'], snap['spread'], snap['levels'])
 
@@ -986,11 +986,11 @@ def get_orderbook_history(
     """
     query = """
         SELECT * FROM orderbook_snapshots
-        WHERE market_internal_id = %s
+        WHERE market_id = %s
         ORDER BY snapshot_time DESC
         LIMIT %s
     """
-    return fetch_all(query, (market_internal_id, limit))
+    return fetch_all(query, (market_id, limit))
 
 
 # =============================================================================

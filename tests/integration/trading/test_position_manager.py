@@ -58,7 +58,7 @@ def test_market_pks(db_cursor, clean_test_data):
                 cur.execute(
                     """
                     INSERT INTO markets (
-                        platform_id, event_internal_id, external_id, ticker, title,
+                        platform_id, event_id, external_id, ticker, title,
                         market_type, status
                     )
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -114,7 +114,7 @@ def position_params(db_cursor, clean_test_data, test_market_pks):
         - Creates real FK dependencies (strategy_id, model_id) in database
         - All prices/probabilities use Decimal (Pattern 1)
         - Follows Kalshi pricing cheat sheet ([0.01, 0.99] range)
-        - Migration 0022: uses market_internal_id (integer FK) instead of market_id (VARCHAR)
+        - Migration 0022: uses market_id (integer FK) instead of market_id (VARCHAR)
 
     Example:
         >>> params = position_params
@@ -161,7 +161,7 @@ def position_params(db_cursor, clean_test_data, test_market_pks):
         release_connection(conn)
 
     return {
-        "market_internal_id": test_market_pks["NFL-TEST-001"],
+        "market_id": test_market_pks["NFL-TEST-001"],
         "strategy_id": strategy_id,
         "model_id": model_id,
         "side": "YES",
@@ -213,12 +213,12 @@ def test_open_position_success(db_pool, db_cursor, clean_test_data, position_par
     # Verify returned position has correct structure
     assert isinstance(position, dict)
     assert "id" in position  # Surrogate key
-    assert "position_id" in position  # Business key
+    assert "position_key" in position  # Business key
     assert isinstance(position["id"], int)
-    assert position["position_id"].startswith("POS-")  # Format: POS-{id}
+    assert position["position_key"].startswith("POS-")  # Format: POS-{id}
 
     # Verify position data
-    assert position["market_internal_id"] == position_params["market_internal_id"]
+    assert position["market_id"] == position_params["market_id"]
     assert position["strategy_id"] == position_params["strategy_id"]
     assert position["model_id"] == position_params["model_id"]
     assert position["side"] == position_params["side"]
@@ -322,14 +322,14 @@ def test_update_position_creates_new_version(db_cursor, clean_test_data, positio
         - Old version: row_current_ind = FALSE (archived)
         - New version: row_current_ind = TRUE (current)
         - Surrogate id CHANGES (old id -> new id)
-        - Business key STAYS SAME (position_id copied to new version)
+        - Business key STAYS SAME (position_key copied to new version)
     """
     manager = PositionManager()
 
     # Open position
     position = manager.open_position(**position_params)
     old_id = position["id"]
-    business_key = position["position_id"]
+    business_key = position["position_key"]
 
     # Update price (creates new version)
     updated_position = manager.update_position(
@@ -339,7 +339,7 @@ def test_update_position_creates_new_version(db_cursor, clean_test_data, positio
 
     # Verify new version created
     assert updated_position["id"] != old_id  # NEW surrogate id
-    assert updated_position["position_id"] == business_key  # SAME business key
+    assert updated_position["position_key"] == business_key  # SAME business key
     assert updated_position["current_price"] == Decimal("0.5200")
     assert updated_position["row_current_ind"] is True
 
@@ -363,20 +363,20 @@ def test_update_position_multiple_updates(db_cursor, clean_test_data, position_p
 
     # Open position
     position = manager.open_position(**position_params)
-    business_key = position["position_id"]
+    business_key = position["position_key"]
 
     # Update 1: Price goes up to 0.52
     v1 = manager.update_position(position_id=position["id"], current_price=Decimal("0.5200"))
-    assert v1["position_id"] == business_key
+    assert v1["position_key"] == business_key
 
     # Update 2: Price goes up to 0.55
     v2 = manager.update_position(position_id=v1["id"], current_price=Decimal("0.5500"))
-    assert v2["position_id"] == business_key
+    assert v2["position_key"] == business_key
     assert v2["id"] != v1["id"]  # Different surrogate ids
 
     # Update 3: Price goes down to 0.50
     v3 = manager.update_position(position_id=v2["id"], current_price=Decimal("0.5000"))
-    assert v3["position_id"] == business_key
+    assert v3["position_key"] == business_key
     assert v3["id"] != v2["id"]  # Different surrogate ids
 
     # Verify final P&L
@@ -423,7 +423,7 @@ def test_close_position_profit_target(db_cursor, clean_test_data, position_param
 
     # Verify closed state
     assert closed_position["status"] == "closed"
-    assert closed_position["position_id"] == position["position_id"]  # Same business key
+    assert closed_position["position_key"] == position["position_key"]  # Same business key
     assert closed_position["id"] != position["id"]  # Different surrogate id
 
     # Verify realized P&L
@@ -490,8 +490,8 @@ def test_get_open_positions_all(db_cursor, clean_test_data, position_params, tes
 
     # Open 3 positions in different markets
     manager.open_position(**position_params)
-    manager.open_position(**{**position_params, "market_internal_id": test_market_pks["NFL-002"]})
-    manager.open_position(**{**position_params, "market_internal_id": test_market_pks["NFL-003"]})
+    manager.open_position(**{**position_params, "market_id": test_market_pks["NFL-002"]})
+    manager.open_position(**{**position_params, "market_id": test_market_pks["NFL-003"]})
 
     # Get all open positions
     positions = manager.get_open_positions()
@@ -504,22 +504,22 @@ def test_get_open_positions_all(db_cursor, clean_test_data, position_params, tes
 def test_get_open_positions_filter_by_market(
     db_cursor, clean_test_data, position_params, test_market_pks
 ):
-    """Test filtering open positions by market_internal_id."""
+    """Test filtering open positions by market_id."""
     manager = PositionManager()
 
     nfl_001_pk = test_market_pks["NFL-001"]
     nfl_002_pk = test_market_pks["NFL-002"]
 
     # Open positions in different markets
-    manager.open_position(**{**position_params, "market_internal_id": nfl_001_pk})
-    manager.open_position(**{**position_params, "market_internal_id": nfl_002_pk})
-    manager.open_position(**{**position_params, "market_internal_id": nfl_001_pk})
+    manager.open_position(**{**position_params, "market_id": nfl_001_pk})
+    manager.open_position(**{**position_params, "market_id": nfl_002_pk})
+    manager.open_position(**{**position_params, "market_id": nfl_001_pk})
 
     # Filter by market
-    positions = manager.get_open_positions(market_internal_id=nfl_001_pk)
+    positions = manager.get_open_positions(market_id=nfl_001_pk)
 
     assert len(positions) == 2
-    assert all(p["market_internal_id"] == nfl_001_pk for p in positions)
+    assert all(p["market_id"] == nfl_001_pk for p in positions)
 
 
 def test_get_open_positions_filter_by_strategy(db_cursor, clean_test_data, position_params):
@@ -560,12 +560,8 @@ def test_get_open_positions_excludes_closed(
 
     # Open 3 positions in different markets
     p1 = manager.open_position(**position_params)
-    p2 = manager.open_position(
-        **{**position_params, "market_internal_id": test_market_pks["NFL-002"]}
-    )
-    p3 = manager.open_position(
-        **{**position_params, "market_internal_id": test_market_pks["NFL-003"]}
-    )
+    p2 = manager.open_position(**{**position_params, "market_id": test_market_pks["NFL-002"]})
+    p3 = manager.open_position(**{**position_params, "market_id": test_market_pks["NFL-003"]})
 
     # Close one position
     manager.close_position(
@@ -693,16 +689,16 @@ def test_complete_position_lifecycle(db_cursor, clean_test_data, position_params
     position = manager.open_position(**position_params)
     assert position["status"] == "open"
     assert position["entry_price"] == Decimal("0.4975")
-    business_key = position["position_id"]
+    business_key = position["position_key"]
 
     # Step 2: First price update (price goes up)
     v1 = manager.update_position(position_id=position["id"], current_price=Decimal("0.5200"))
-    assert v1["position_id"] == business_key
+    assert v1["position_key"] == business_key
     assert v1["unrealized_pnl"] == Decimal("0.2250")  # 10 * (0.52 - 0.4975) = $0.225
 
     # Step 3: Second price update (price goes higher)
     v2 = manager.update_position(position_id=v1["id"], current_price=Decimal("0.6000"))
-    assert v2["position_id"] == business_key
+    assert v2["position_key"] == business_key
     assert v2["unrealized_pnl"] == Decimal("1.0250")  # 10 * (0.60 - 0.4975) = $1.025
 
     # Step 4: Close position at profit
@@ -711,7 +707,7 @@ def test_complete_position_lifecycle(db_cursor, clean_test_data, position_params
         exit_price=Decimal("0.7000"),
         exit_reason="profit_target",
     )
-    assert final["position_id"] == business_key
+    assert final["position_key"] == business_key
     assert final["status"] == "closed"
     assert final["realized_pnl"] == Decimal("2.0250")  # 10 * (0.70 - 0.4975) = $2.025
 
@@ -744,7 +740,7 @@ def test_margin_calculation_yes_vs_no(db_cursor, clean_test_data, position_param
     # Test NO position at 0.75 with same margin should FAIL
     no_params = {
         **position_params,
-        "market_internal_id": test_market_pks["NFL-002"],  # Different market
+        "market_id": test_market_pks["NFL-002"],  # Different market
         "side": "NO",
         "entry_price": Decimal("0.7500"),
         "available_margin": Decimal("3.00"),  # Need $7.50 -> should FAIL

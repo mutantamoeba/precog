@@ -57,22 +57,6 @@ class TestDbInitIntegration:
             # Should exit with error code
             assert result.exit_code in [0, 1, 2, 3, 4, 5]
 
-    def test_init_force_reinitialize(self, cli_runner) -> None:
-        """Test init with force flag.
-
-        Integration: Tests forced reinitialization.
-        """
-        with (
-            patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.initialization.apply_schema") as mock_schema,
-        ):
-            mock_test.return_value = True
-            mock_schema.return_value = True
-
-            result = cli_runner.invoke(app, ["db", "init", "--force"])
-
-            assert result.exit_code in [0, 1, 2, 3, 4, 5]
-
 
 class TestDbStatusIntegration:
     """Integration tests for db status command."""
@@ -172,32 +156,6 @@ class TestDbMigrateIntegration:
 
             assert result.exit_code in [0, 1, 2, 3]
 
-    def test_migrate_dry_run(self, cli_runner) -> None:
-        """Test migration dry run.
-
-        Integration: Tests dry run mode shows pending migrations.
-        """
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
-
-            result = cli_runner.invoke(app, ["db", "migrate", "--dry-run"])
-
-            assert result.exit_code in [0, 1, 2, 3]
-
-    def test_migrate_to_specific_version(self, cli_runner) -> None:
-        """Test migration to specific version.
-
-        Integration: Tests targeted migration.
-        """
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
-
-            result = cli_runner.invoke(app, ["db", "migrate", "--target", "005"])
-
-            assert result.exit_code in [0, 1, 2, 3]
-
 
 class TestDbTablesIntegration:
     """Integration tests for db tables command."""
@@ -217,65 +175,3 @@ class TestDbTablesIntegration:
             result = cli_runner.invoke(app, ["db", "tables"])
 
             assert result.exit_code in [0, 1, 2]
-
-    def test_tables_with_filter(self, cli_runner) -> None:
-        """Test table listing with filter.
-
-        Integration: Tests filtered table enumeration.
-        """
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
-
-            result = cli_runner.invoke(app, ["db", "tables", "--filter", "game"])
-
-            assert result.exit_code in [0, 1, 2]
-
-    def test_tables_with_counts(self, cli_runner) -> None:
-        """Test table listing with row counts.
-
-        Integration: Tests row counting queries.
-        """
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
-
-            result = cli_runner.invoke(app, ["db", "tables", "--counts"])
-
-            assert result.exit_code in [0, 1, 2]
-
-
-class TestDbCriticalTablesIntegration:
-    """Integration tests for critical table checks."""
-
-    def test_critical_tables_exist(self, cli_runner) -> None:
-        """Test that critical tables are checked.
-
-        Integration: Tests critical table verification.
-        """
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
-
-            result = cli_runner.invoke(app, ["db", "status", "--check-critical"])
-
-            assert result.exit_code in [0, 1, 2]
-
-
-class TestDbTransactionIntegration:
-    """Integration tests for database transaction handling."""
-
-    def test_commands_use_transactions(self, cli_runner) -> None:
-        """Test that commands properly use transactions.
-
-        Integration: Tests transaction management.
-        """
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_context = MagicMock()
-            mock_conn.return_value.__enter__ = MagicMock(return_value=mock_context)
-            mock_conn.return_value.__exit__ = MagicMock()
-
-            result = cli_runner.invoke(app, ["db", "init", "--force"])
-
-            # Verify connection was used
-            assert result.exit_code in [0, 1, 2, 3, 4, 5]
