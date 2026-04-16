@@ -12,6 +12,7 @@ import logging
 from typing import Any, cast
 
 from .connection import fetch_all, get_cursor
+from .crud_lookups import get_sport_id_from_league_or_none
 
 logger = logging.getLogger(__name__)
 
@@ -88,18 +89,23 @@ def insert_historical_stat(
 
     # Use a composite conflict target for upsert
     # This handles re-imports of the same data gracefully
+    # Dual-write (#738 A1): historical_stats.sport holds league codes
+    # ('nfl', 'ncaaf', ...) despite the column name.  Resolve via leagues
+    # -> sports join.
+    sport_id_value = get_sport_id_from_league_or_none(sport)
     query = """
         INSERT INTO historical_stats (
             sport, season, week, team_code, player_id, player_name,
-            stat_category, stats, source, source_file
+            stat_category, stats, source, source_file, sport_id
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (sport, season, COALESCE(week, -1), COALESCE(team_code, ''),
                      COALESCE(player_id, ''), stat_category, source)
         DO UPDATE SET
             player_name = EXCLUDED.player_name,
             stats = EXCLUDED.stats,
-            source_file = EXCLUDED.source_file
+            source_file = EXCLUDED.source_file,
+            sport_id = COALESCE(EXCLUDED.sport_id, historical_stats.sport_id)
         RETURNING historical_stat_id
     """
     with get_cursor(commit=True) as cur:
@@ -120,6 +126,7 @@ def insert_historical_stat(
                 stats_json,
                 source,
                 source_file,
+                sport_id_value,
             ),
         )
         result = cur.fetchone()
@@ -171,18 +178,21 @@ def insert_historical_stats_batch(
     if not records:
         return (0, 0)
 
+    # Dual-write (#738 A1): resolve sport_id from the league-code stored in
+    # the `sport` column (historical_stats uses league codes, not sport names).
     query = """
         INSERT INTO historical_stats (
             sport, season, week, team_code, player_id, player_name,
-            stat_category, stats, source, source_file
+            stat_category, stats, source, source_file, sport_id
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (sport, season, COALESCE(week, -1), COALESCE(team_code, ''),
                      COALESCE(player_id, ''), stat_category, source)
         DO UPDATE SET
             player_name = EXCLUDED.player_name,
             stats = EXCLUDED.stats,
-            source_file = EXCLUDED.source_file
+            source_file = EXCLUDED.source_file,
+            sport_id = COALESCE(EXCLUDED.sport_id, historical_stats.sport_id)
     """
     total_inserted = 0
 
@@ -201,6 +211,7 @@ def insert_historical_stats_batch(
                     json.dumps(r["stats"]),
                     r["source"],
                     r.get("source_file"),
+                    get_sport_id_from_league_or_none(r["sport"]),
                 )
                 for r in batch
             ]
@@ -478,12 +489,15 @@ def insert_historical_ranking(
         - uq_historical_rankings_team_poll_week unique constraint
         - ADR-106: Historical Data Collection Architecture
     """
+    # Dual-write (#738 A1): resolve sport_id from the league-code stored in
+    # `sport` (historical_rankings uses league codes).
+    sport_id_value = get_sport_id_from_league_or_none(sport)
     query = """
         INSERT INTO historical_rankings (
             sport, season, week, team_code, rank, previous_rank,
-            points, first_place_votes, poll_type, source, source_file
+            points, first_place_votes, poll_type, source, source_file, sport_id
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (sport, season, week, team_code, poll_type)
         DO UPDATE SET
             rank = EXCLUDED.rank,
@@ -491,7 +505,8 @@ def insert_historical_ranking(
             points = EXCLUDED.points,
             first_place_votes = EXCLUDED.first_place_votes,
             source = EXCLUDED.source,
-            source_file = EXCLUDED.source_file
+            source_file = EXCLUDED.source_file,
+            sport_id = COALESCE(EXCLUDED.sport_id, historical_rankings.sport_id)
         RETURNING historical_ranking_id
     """
     with get_cursor(commit=True) as cur:
@@ -509,6 +524,7 @@ def insert_historical_ranking(
                 poll_type,
                 source,
                 source_file,
+                sport_id_value,
             ),
         )
         result = cur.fetchone()
@@ -550,12 +566,14 @@ def insert_historical_rankings_batch(
     if not records:
         return (0, 0)
 
+    # Dual-write (#738 A1): resolve sport_id for each record from its
+    # league-code `sport` value.
     query = """
         INSERT INTO historical_rankings (
             sport, season, week, team_code, rank, previous_rank,
-            points, first_place_votes, poll_type, source, source_file
+            points, first_place_votes, poll_type, source, source_file, sport_id
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (sport, season, week, team_code, poll_type)
         DO UPDATE SET
             rank = EXCLUDED.rank,
@@ -563,7 +581,8 @@ def insert_historical_rankings_batch(
             points = EXCLUDED.points,
             first_place_votes = EXCLUDED.first_place_votes,
             source = EXCLUDED.source,
-            source_file = EXCLUDED.source_file
+            source_file = EXCLUDED.source_file,
+            sport_id = COALESCE(EXCLUDED.sport_id, historical_rankings.sport_id)
     """
     total_inserted = 0
 
@@ -583,6 +602,7 @@ def insert_historical_rankings_batch(
                     r["poll_type"],
                     r["source"],
                     r.get("source_file"),
+                    get_sport_id_from_league_or_none(r["sport"]),
                 )
                 for r in batch
             ]

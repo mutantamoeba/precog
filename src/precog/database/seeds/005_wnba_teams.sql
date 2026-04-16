@@ -11,23 +11,23 @@
 -- Initial Elo: 1500 = league average, adjusted based on 2024 season performance
 -- Scale: ~1650 = championship contender, ~1350 = rebuilding
 
-INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_id, current_elo_rating, conference, division) VALUES
+INSERT INTO teams (team_code, team_name, display_name, sport, league, sport_id, league_id, espn_team_id, current_elo_rating, conference, division) VALUES
 
 -- EASTERN CONFERENCE
-('ATL', 'Atlanta Dream', 'Dream', 'basketball', 'wnba', '3', 1480, 'Eastern', NULL),
-('CHI', 'Chicago Sky', 'Sky', 'basketball', 'wnba', '4', 1500, 'Eastern', NULL),
-('CON', 'Connecticut Sun', 'Sun', 'basketball', 'wnba', '5', 1580, 'Eastern', NULL),
-('IND', 'Indiana Fever', 'Fever', 'basketball', 'wnba', '7', 1460, 'Eastern', NULL),
-('NYL', 'New York Liberty', 'Liberty', 'basketball', 'wnba', '9', 1660, 'Eastern', NULL),
-('WAS', 'Washington Mystics', 'Mystics', 'basketball', 'wnba', '14', 1420, 'Eastern', NULL),
+('ATL', 'Atlanta Dream', 'Dream', 'basketball', 'wnba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'wnba'), '3', 1480, 'Eastern', NULL),
+('CHI', 'Chicago Sky', 'Sky', 'basketball', 'wnba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'wnba'), '4', 1500, 'Eastern', NULL),
+('CON', 'Connecticut Sun', 'Sun', 'basketball', 'wnba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'wnba'), '5', 1580, 'Eastern', NULL),
+('IND', 'Indiana Fever', 'Fever', 'basketball', 'wnba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'wnba'), '7', 1460, 'Eastern', NULL),
+('NYL', 'New York Liberty', 'Liberty', 'basketball', 'wnba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'wnba'), '9', 1660, 'Eastern', NULL),
+('WAS', 'Washington Mystics', 'Mystics', 'basketball', 'wnba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'wnba'), '14', 1420, 'Eastern', NULL),
 
 -- WESTERN CONFERENCE
-('DAL', 'Dallas Wings', 'Wings', 'basketball', 'wnba', '6', 1400, 'Western', NULL),
-('LVA', 'Las Vegas Aces', 'Aces', 'basketball', 'wnba', '18', 1640, 'Western', NULL),
-('LAX', 'Los Angeles Sparks', 'Sparks', 'basketball', 'wnba', '8', 1380, 'Western', NULL),
-('MIN', 'Minnesota Lynx', 'Lynx', 'basketball', 'wnba', '16', 1620, 'Western', NULL),
-('PHO', 'Phoenix Mercury', 'Mercury', 'basketball', 'wnba', '11', 1460, 'Western', NULL),
-('SEA', 'Seattle Storm', 'Storm', 'basketball', 'wnba', '17', 1520, 'Western', NULL);
+('DAL', 'Dallas Wings', 'Wings', 'basketball', 'wnba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'wnba'), '6', 1400, 'Western', NULL),
+('LVA', 'Las Vegas Aces', 'Aces', 'basketball', 'wnba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'wnba'), '18', 1640, 'Western', NULL),
+('LAX', 'Los Angeles Sparks', 'Sparks', 'basketball', 'wnba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'wnba'), '8', 1380, 'Western', NULL),
+('MIN', 'Minnesota Lynx', 'Lynx', 'basketball', 'wnba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'wnba'), '16', 1620, 'Western', NULL),
+('PHO', 'Phoenix Mercury', 'Mercury', 'basketball', 'wnba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'wnba'), '11', 1460, 'Western', NULL),
+('SEA', 'Seattle Storm', 'Storm', 'basketball', 'wnba', (SELECT id FROM sports WHERE sport_key = 'basketball'), (SELECT id FROM leagues WHERE league_key = 'wnba'), '17', 1520, 'Western', NULL);
 
 -- ============================================================================
 -- VERIFICATION

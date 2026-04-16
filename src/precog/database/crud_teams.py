@@ -17,6 +17,7 @@ from typing import Any, cast
 import psycopg2.errors
 
 from .connection import fetch_all, fetch_one, get_cursor
+from .crud_lookups import get_league_id_or_none, get_sport_id_or_none
 
 logger = logging.getLogger(__name__)
 
@@ -301,13 +302,20 @@ def create_team(
             )
             return team_id
 
-    # Step 3: Team doesn't exist — INSERT it
+    # Step 3: Team doesn't exist — INSERT it.
+    # Dual-write (#738 A1): populate both the VARCHAR sport/league and the
+    # new FK columns sport_id/league_id.  FK resolution is best-effort —
+    # unknown keys leave the FK NULL, which is valid during A1 (columns are
+    # nullable).  A2 enforces NOT NULL and B drops the VARCHAR.
+    sport_id_value = get_sport_id_or_none(sport)
+    league_id_value = get_league_id_or_none(league)
     insert_query = """
         INSERT INTO teams (
             team_code, team_name, display_name, sport, league,
-            espn_team_id, current_elo_rating, conference, division
+            espn_team_id, current_elo_rating, conference, division,
+            sport_id, league_id
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING team_id
     """
     params = (
@@ -320,6 +328,8 @@ def create_team(
         current_elo_rating,
         conference,
         division,
+        sport_id_value,
+        league_id_value,
     )
 
     try:
@@ -723,16 +733,28 @@ def create_external_team_code(
         - Issue #516: External team codes table
         - Migration 0045: CREATE TABLE external_team_codes
     """
+    # Dual-write (#738 A1): also populate league_id FK.
+    league_id_value = get_league_id_or_none(league)
     query = """
         INSERT INTO external_team_codes
-            (team_id, source, source_team_code, league, confidence, verified_at, notes)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+            (team_id, source, source_team_code, league, confidence,
+             verified_at, notes, league_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
     """
     with get_cursor(commit=True) as cur:
         cur.execute(
             query,
-            (team_id, source, source_team_code, league, confidence, verified_at, notes),
+            (
+                team_id,
+                source,
+                source_team_code,
+                league,
+                confidence,
+                verified_at,
+                notes,
+                league_id_value,
+            ),
         )
         row = cur.fetchone()
         return cast("int", row["id"])
@@ -886,20 +908,26 @@ def upsert_external_team_code(
         - Issue #516: External team codes table
         - scripts/seed_external_team_codes.py: Primary consumer
     """
+    # Dual-write (#738 A1): also populate league_id FK.
+    league_id_value = get_league_id_or_none(league)
     query = """
         INSERT INTO external_team_codes
-            (team_id, source, source_team_code, league, confidence, notes)
-        VALUES (%s, %s, %s, %s, %s, %s)
+            (team_id, source, source_team_code, league, confidence, notes, league_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (source, source_team_code, league)
         DO UPDATE SET
             team_id = EXCLUDED.team_id,
             confidence = EXCLUDED.confidence,
             notes = EXCLUDED.notes,
+            league_id = COALESCE(EXCLUDED.league_id, external_team_codes.league_id),
             updated_at = NOW()
         RETURNING id
     """
     with get_cursor(commit=True) as cur:
-        cur.execute(query, (team_id, source, source_team_code, league, confidence, notes))
+        cur.execute(
+            query,
+            (team_id, source, source_team_code, league, confidence, notes, league_id_value),
+        )
         row = cur.fetchone()
         return cast("int", row["id"])
 

@@ -40,6 +40,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from sqlalchemy import text
 
+from precog.database.crud_lookups import get_sport_id_from_league_or_none
 from precog.database.seeding.sources.sports.nflreadpy_adapter import (
     EPARecord,
     NFLReadPySource,
@@ -318,6 +319,11 @@ class EPASeeder:
         """
         now = datetime.datetime.now(datetime.UTC)
 
+        # Dual-write (#738 A1): historical_epa.sport uses league codes
+        # (only 'nfl' today, per migration 0013 CHECK).  Populate both the
+        # VARCHAR and the sport_id FK.  The `sport` column has a server
+        # default of 'nfl' so prior callers omitted it; we now set it
+        # explicitly to keep the INSERT self-documenting.
         self.connection.execute(
             text(
                 """
@@ -326,13 +332,13 @@ class EPASeeder:
                     off_epa_per_play, pass_epa_per_play, rush_epa_per_play,
                     def_epa_per_play, def_pass_epa_per_play, def_rush_epa_per_play,
                     epa_differential, games_played, source,
-                    created_at, updated_at
+                    created_at, updated_at, sport, sport_id
                 ) VALUES (
                     :team_id, :season, :week,
                     :off_epa, :pass_epa, :rush_epa,
                     :def_epa, :def_pass_epa, :def_rush_epa,
                     :epa_diff, :games_played, :source,
-                    :created_at, :updated_at
+                    :created_at, :updated_at, :sport, :sport_id
                 )
                 """
             ),
@@ -351,6 +357,8 @@ class EPASeeder:
                 "source": record["source"],
                 "created_at": now,
                 "updated_at": now,
+                "sport": "nfl",
+                "sport_id": get_sport_id_from_league_or_none("nfl"),
             },
         )
 

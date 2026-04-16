@@ -13,49 +13,49 @@
 -- ESPN IDs: VERIFIED against actual ESPN API on 2025-12-25
 -- Note: Oakland Athletics now listed as "Athletics" (moving to Sacramento)
 
-INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_id, current_elo_rating, conference, division) VALUES
+INSERT INTO teams (team_code, team_name, display_name, sport, league, sport_id, league_id, espn_team_id, current_elo_rating, conference, division) VALUES
 
 -- AMERICAN LEAGUE EAST (5 Teams)
-('NYY', 'New York Yankees', 'Yankees', 'baseball', 'mlb', '10', 1580, 'AL', 'AL East'),
-('BOS', 'Boston Red Sox', 'Red Sox', 'baseball', 'mlb', '2', 1500, 'AL', 'AL East'),
-('BAL', 'Baltimore Orioles', 'Orioles', 'baseball', 'mlb', '1', 1560, 'AL', 'AL East'),
-('TB', 'Tampa Bay Rays', 'Rays', 'baseball', 'mlb', '30', 1520, 'AL', 'AL East'),
-('TOR', 'Toronto Blue Jays', 'Blue Jays', 'baseball', 'mlb', '14', 1480, 'AL', 'AL East'),
+('NYY', 'New York Yankees', 'Yankees', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '10', 1580, 'AL', 'AL East'),
+('BOS', 'Boston Red Sox', 'Red Sox', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '2', 1500, 'AL', 'AL East'),
+('BAL', 'Baltimore Orioles', 'Orioles', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '1', 1560, 'AL', 'AL East'),
+('TB', 'Tampa Bay Rays', 'Rays', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '30', 1520, 'AL', 'AL East'),
+('TOR', 'Toronto Blue Jays', 'Blue Jays', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '14', 1480, 'AL', 'AL East'),
 
 -- AMERICAN LEAGUE CENTRAL (5 Teams)
-('CLE', 'Cleveland Guardians', 'Guardians', 'baseball', 'mlb', '5', 1540, 'AL', 'AL Central'),
-('MIN', 'Minnesota Twins', 'Twins', 'baseball', 'mlb', '9', 1520, 'AL', 'AL Central'),
-('DET', 'Detroit Tigers', 'Tigers', 'baseball', 'mlb', '6', 1500, 'AL', 'AL Central'),
-('KC', 'Kansas City Royals', 'Royals', 'baseball', 'mlb', '7', 1500, 'AL', 'AL Central'),
-('CWS', 'Chicago White Sox', 'White Sox', 'baseball', 'mlb', '4', 1380, 'AL', 'AL Central'),
+('CLE', 'Cleveland Guardians', 'Guardians', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '5', 1540, 'AL', 'AL Central'),
+('MIN', 'Minnesota Twins', 'Twins', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '9', 1520, 'AL', 'AL Central'),
+('DET', 'Detroit Tigers', 'Tigers', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '6', 1500, 'AL', 'AL Central'),
+('KC', 'Kansas City Royals', 'Royals', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '7', 1500, 'AL', 'AL Central'),
+('CWS', 'Chicago White Sox', 'White Sox', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '4', 1380, 'AL', 'AL Central'),
 
 -- AMERICAN LEAGUE WEST (5 Teams)
-('HOU', 'Houston Astros', 'Astros', 'baseball', 'mlb', '18', 1560, 'AL', 'AL West'),
-('TEX', 'Texas Rangers', 'Rangers', 'baseball', 'mlb', '13', 1520, 'AL', 'AL West'),
-('SEA', 'Seattle Mariners', 'Mariners', 'baseball', 'mlb', '12', 1520, 'AL', 'AL West'),
-('LAA', 'Los Angeles Angels', 'Angels', 'baseball', 'mlb', '3', 1440, 'AL', 'AL West'),
-('OAK', 'Oakland Athletics', 'Athletics', 'baseball', 'mlb', '11', 1400, 'AL', 'AL West'),
+('HOU', 'Houston Astros', 'Astros', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '18', 1560, 'AL', 'AL West'),
+('TEX', 'Texas Rangers', 'Rangers', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '13', 1520, 'AL', 'AL West'),
+('SEA', 'Seattle Mariners', 'Mariners', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '12', 1520, 'AL', 'AL West'),
+('LAA', 'Los Angeles Angels', 'Angels', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '3', 1440, 'AL', 'AL West'),
+('OAK', 'Oakland Athletics', 'Athletics', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '11', 1400, 'AL', 'AL West'),
 
 -- NATIONAL LEAGUE EAST (5 Teams)
-('ATL', 'Atlanta Braves', 'Braves', 'baseball', 'mlb', '15', 1580, 'NL', 'NL East'),
-('PHI', 'Philadelphia Phillies', 'Phillies', 'baseball', 'mlb', '22', 1580, 'NL', 'NL East'),
-('NYM', 'New York Mets', 'Mets', 'baseball', 'mlb', '21', 1540, 'NL', 'NL East'),
-('MIA', 'Miami Marlins', 'Marlins', 'baseball', 'mlb', '28', 1420, 'NL', 'NL East'),
-('WSH', 'Washington Nationals', 'Nationals', 'baseball', 'mlb', '20', 1440, 'NL', 'NL East'),
+('ATL', 'Atlanta Braves', 'Braves', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '15', 1580, 'NL', 'NL East'),
+('PHI', 'Philadelphia Phillies', 'Phillies', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '22', 1580, 'NL', 'NL East'),
+('NYM', 'New York Mets', 'Mets', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '21', 1540, 'NL', 'NL East'),
+('MIA', 'Miami Marlins', 'Marlins', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '28', 1420, 'NL', 'NL East'),
+('WSH', 'Washington Nationals', 'Nationals', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '20', 1440, 'NL', 'NL East'),
 
 -- NATIONAL LEAGUE CENTRAL (5 Teams)
-('MIL', 'Milwaukee Brewers', 'Brewers', 'baseball', 'mlb', '8', 1560, 'NL', 'NL Central'),
-('CHC', 'Chicago Cubs', 'Cubs', 'baseball', 'mlb', '16', 1500, 'NL', 'NL Central'),
-('STL', 'St. Louis Cardinals', 'Cardinals', 'baseball', 'mlb', '24', 1480, 'NL', 'NL Central'),
-('CIN', 'Cincinnati Reds', 'Reds', 'baseball', 'mlb', '17', 1480, 'NL', 'NL Central'),
-('PIT', 'Pittsburgh Pirates', 'Pirates', 'baseball', 'mlb', '23', 1440, 'NL', 'NL Central'),
+('MIL', 'Milwaukee Brewers', 'Brewers', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '8', 1560, 'NL', 'NL Central'),
+('CHC', 'Chicago Cubs', 'Cubs', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '16', 1500, 'NL', 'NL Central'),
+('STL', 'St. Louis Cardinals', 'Cardinals', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '24', 1480, 'NL', 'NL Central'),
+('CIN', 'Cincinnati Reds', 'Reds', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '17', 1480, 'NL', 'NL Central'),
+('PIT', 'Pittsburgh Pirates', 'Pirates', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '23', 1440, 'NL', 'NL Central'),
 
 -- NATIONAL LEAGUE WEST (5 Teams)
-('LAD', 'Los Angeles Dodgers', 'Dodgers', 'baseball', 'mlb', '19', 1620, 'NL', 'NL West'),
-('SD', 'San Diego Padres', 'Padres', 'baseball', 'mlb', '25', 1540, 'NL', 'NL West'),
-('ARI', 'Arizona Diamondbacks', 'D-backs', 'baseball', 'mlb', '29', 1540, 'NL', 'NL West'),
-('SF', 'San Francisco Giants', 'Giants', 'baseball', 'mlb', '26', 1480, 'NL', 'NL West'),
-('COL', 'Colorado Rockies', 'Rockies', 'baseball', 'mlb', '27', 1400, 'NL', 'NL West')
+('LAD', 'Los Angeles Dodgers', 'Dodgers', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '19', 1620, 'NL', 'NL West'),
+('SD', 'San Diego Padres', 'Padres', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '25', 1540, 'NL', 'NL West'),
+('ARI', 'Arizona Diamondbacks', 'D-backs', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '29', 1540, 'NL', 'NL West'),
+('SF', 'San Francisco Giants', 'Giants', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '26', 1480, 'NL', 'NL West'),
+('COL', 'Colorado Rockies', 'Rockies', 'baseball', 'mlb', (SELECT id FROM sports WHERE sport_key = 'baseball'), (SELECT id FROM leagues WHERE league_key = 'mlb'), '27', 1400, 'NL', 'NL West')
 
 ON CONFLICT (espn_team_id, league) WHERE espn_team_id IS NOT NULL DO UPDATE SET
     team_code = EXCLUDED.team_code,

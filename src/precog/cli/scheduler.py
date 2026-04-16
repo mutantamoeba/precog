@@ -556,6 +556,11 @@ def start(
         "-V",
         help="Enable verbose output",
     ),
+    skip_migration_check: bool = typer.Option(
+        False,
+        "--skip-migration-check",
+        help="Skip database migration parity check (emergency debugging only)",
+    ),
 ) -> None:
     """Start data collection schedulers for ESPN and/or Kalshi.
 
@@ -596,6 +601,30 @@ def start(
 
     if verbose:
         logger.info("Verbose mode enabled")
+
+    # Migration parity check — refuse to start if DB is behind alembic head (#792)
+    if not skip_migration_check:
+        from precog.database.migration_check import check_migration_parity
+
+        status = check_migration_parity()
+        if status.error:
+            console.print(
+                f"[bold yellow]WARNING: Migration check failed: {status.error}[/bold yellow]"
+            )
+            console.print("  Continuing anyway — use --skip-migration-check to suppress")
+        elif not status.is_current:
+            behind = status.versions_behind
+            gap = f" ({behind} migrations behind)" if behind else ""
+            console.print(f"\n[bold red]ERROR: Database schema is out of date{gap}[/bold red]")
+            console.print(f"  DB version:   {status.db_version or 'NONE'}")
+            console.print(f"  Head version: {status.head_version}")
+            console.print("\n  Fix: cd src/precog/database && python -m alembic upgrade head")
+            console.print(
+                "  Skip: precog scheduler start --skip-migration-check (emergency only)\n"
+            )
+            raise typer.Exit(code=1)
+        elif verbose:
+            console.print(f"[green]Migration check OK — DB at {status.db_version}[/green]")
 
     # Use supervised mode for production-grade service management
     if supervised:
@@ -1034,6 +1063,11 @@ def poll_once(
         "-V",
         help="Enable verbose output",
     ),
+    skip_migration_check: bool = typer.Option(
+        False,
+        "--skip-migration-check",
+        help="Skip database migration parity check (emergency debugging only)",
+    ),
 ) -> None:
     """Execute a single poll cycle (no background scheduling).
 
@@ -1052,6 +1086,25 @@ def poll_once(
 
     if verbose:
         logger.info("Verbose mode enabled")
+
+    # Migration parity check (#792)
+    if not skip_migration_check:
+        from precog.database.migration_check import check_migration_parity
+
+        status = check_migration_parity()
+        if status.error:
+            console.print(
+                f"[bold yellow]WARNING: Migration check failed: {status.error}[/bold yellow]"
+            )
+        elif not status.is_current:
+            behind = status.versions_behind
+            gap = f" ({behind} migrations behind)" if behind else ""
+            console.print(f"\n[bold red]ERROR: Database schema is out of date{gap}[/bold red]")
+            console.print(f"  DB version:   {status.db_version or 'NONE'}")
+            console.print(f"  Head version: {status.head_version}")
+            console.print("\n  Fix: cd src/precog/database && python -m alembic upgrade head")
+            console.print("  Skip: precog scheduler poll-once --skip-migration-check\n")
+            raise typer.Exit(code=1)
 
     console.print("\n[bold cyan]Executing Single Poll Cycle[/bold cyan]\n")
 
