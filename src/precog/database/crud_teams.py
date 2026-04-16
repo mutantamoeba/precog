@@ -919,7 +919,7 @@ def upsert_external_team_code(
             team_id = EXCLUDED.team_id,
             confidence = EXCLUDED.confidence,
             notes = EXCLUDED.notes,
-            league_id = EXCLUDED.league_id,
+            league_id = COALESCE(EXCLUDED.league_id, external_team_codes.league_id),
             updated_at = NOW()
         RETURNING id
     """
