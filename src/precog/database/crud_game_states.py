@@ -18,6 +18,7 @@ from .connection import fetch_all, fetch_one, get_cursor
 from .crud_lookups import (
     get_league_id_or_none,
     get_sport_id_or_none,
+    resolve_league_id_via_game,
     resolve_sport_id_for_mixed_value,
 )
 from .crud_shared import retry_on_scd_unique_conflict
@@ -1483,6 +1484,9 @@ def upsert_game_odds(
             # names OR league codes (mixed convention, migration 0048);
             # `resolve_sport_id_for_mixed_value` handles both shapes.
             sport_id_value = resolve_sport_id_for_mixed_value(sport)
+            # Dual-write (#738 A1 amendment): resolve league_id via the
+            # linked games row (game_odds has no native `league` VARCHAR).
+            league_id_value = resolve_league_id_via_game(game_id)
             cur.execute(
                 """
                 INSERT INTO game_odds (
@@ -1500,7 +1504,7 @@ def upsert_game_odds(
                     home_favorite_at_open, away_favorite_at_open,
                     details_text,
                     home_team_id, away_team_id,
-                    sport_id,
+                    sport_id, league_id,
                     row_current_ind, row_start_ts, updated_at
                 )
                 VALUES (
@@ -1512,7 +1516,7 @@ def upsert_game_odds(
                     %s, %s, %s, %s,
                     %s,
                     %s, %s,
-                    %s,
+                    %s, %s,
                     TRUE, %s, %s
                 )
                 RETURNING id
@@ -1549,6 +1553,7 @@ def upsert_game_odds(
                     home_team_id,
                     away_team_id,
                     sport_id_value,
+                    league_id_value,
                     now,
                     now,
                 ),

@@ -10,7 +10,8 @@ Scope of A1:
   * Create `sports` (6 seeds: football, basketball, hockey, baseball, soccer, mma).
   * Create `leagues` (11 seeds: nfl, ncaaf, nba, ncaab, ncaaw, wnba, nhl, mlb,
     mls, soccer, ufc — each linked to parent `sport_id`).
-  * Add NULLABLE `sport_id` / `league_id` FK columns on 10 tables, with partial
+  * Add NULLABLE `sport_id` / `league_id` FK columns on 10 tables (12 columns
+    total — `game_odds` gets both `sport_id` AND `league_id`), with partial
     indexes on non-NULL values (per-table set — see `_FK_COLUMN_SPEC`).
   * Backfill the new FK columns from existing VARCHAR values.  Supports the
     mixed-convention case (`game_odds.sport` holds either sport names OR
@@ -104,6 +105,15 @@ _LEAGUES_SEED = [
 #       "sport_or_league"     - varchar holds EITHER a sport_key OR a
 #                               league_key; try sport first, fall back to
 #                               leagues.sport_id
+#       "join_via_game"       - the table has no sport/league varchar of its
+#                               own; resolve league_id by joining through
+#                               game_id -> games.league -> leagues.id.
+#                               Used for `game_odds.league_id`: schema
+#                               symmetry with other multi-sport tables, but
+#                               game_odds has no `league` varchar column.
+#                               Allows NULL when game_id IS NULL (unmatched
+#                               imports), since those rows have no game row
+#                               to join through.
 #
 # Partial index name: idx_<table>_<new_fk_column>
 # =========================================================================
@@ -122,6 +132,14 @@ _FK_COLUMN_SPEC = [
     ("game_states", "league", "league_id", "league_direct"),
     ("elo_calculation_log", "league", "league_id", "league_direct"),
     ("external_team_codes", "league", "league_id", "league_direct"),
+    # game_odds.league_id: no native VARCHAR `league` column on this table,
+    # so resolve via JOIN through game_id -> games.league -> leagues.id.
+    # Rows with NULL game_id are permitted to remain NULL in league_id (the
+    # zero-NULL assertion explicitly filters those out).  Listed AFTER
+    # games.league_id so the games row is guaranteed populated when this
+    # backfill runs (although the backfill SQL joins via games.league
+    # VARCHAR, which is independent of games.league_id).
+    ("game_odds", None, "league_id", "join_via_game"),
 ]
 
 
@@ -157,7 +175,7 @@ def _insert_seeds(conn: sa.engine.Connection) -> None:
 def _backfill_fk_column(
     conn: sa.engine.Connection,
     table: str,
-    varchar_col: str,
+    varchar_col: str | None,
     new_fk_col: str,
     lookup_kind: str,
 ) -> None:
@@ -216,32 +234,61 @@ def _backfill_fk_column(
                 f"  AND {table}.{varchar_col} IN (SELECT league_key FROM leagues)"
             )
         )
+    elif lookup_kind == "join_via_game":
+        # No native VARCHAR column — resolve league_id by joining through
+        # game_id -> games.league -> leagues.league_key.  Works regardless
+        # of whether games.league_id has been backfilled yet (joins to the
+        # VARCHAR games.league value directly).
+        # Rows with NULL game_id are left NULL (no game to join through).
+        conn.execute(
+            sa.text(
+                f"UPDATE {table} SET {new_fk_col} = "  # noqa: S608
+                f"  (SELECT l.id FROM leagues l "
+                f"   JOIN games g ON g.league = l.league_key "
+                f"   WHERE g.id = {table}.game_id) "
+                f"WHERE {table}.game_id IS NOT NULL"
+            )
+        )
     else:
         raise ValueError(f"Unknown lookup_kind for {table}.{new_fk_col}: {lookup_kind!r}")
 
-    # Zero-NULL assertion: every row with a non-NULL varchar must have
+    # Zero-NULL assertion: every row with a non-NULL source column must have
     # resolved to a FK.  If any row failed to backfill, the migration
     # raises here rather than silently leaving holes (per PM direction).
+    #
+    # For "join_via_game" (varchar_col is None), the source key is game_id:
+    # any row with non-NULL game_id must have resolved; rows with NULL
+    # game_id are allowed to remain NULL in the FK column (no game to join
+    # through).
+    if lookup_kind == "join_via_game":
+        # Filter: only rows with a joinable game_id must have resolved.
+        null_count_filter = f"WHERE game_id IS NOT NULL AND {new_fk_col} IS NULL"
+        null_count_label = "game_id"
+    else:
+        null_count_filter = f"WHERE {varchar_col} IS NOT NULL AND {new_fk_col} IS NULL"
+        null_count_label = str(varchar_col)
+
     null_count_row = conn.execute(
         sa.text(
             f"SELECT COUNT(*) AS c FROM {table} "  # noqa: S608
-            f"WHERE {varchar_col} IS NOT NULL AND {new_fk_col} IS NULL"
+            f"{null_count_filter}"
         )
     ).fetchone()
     null_count = int(null_count_row[0]) if null_count_row else 0
     if null_count > 0:
         # Surface the unmatched distinct values so ops has actionable info.
+        sample_col = "game_id" if lookup_kind == "join_via_game" else str(varchar_col)
         sample = conn.execute(
             sa.text(
-                f"SELECT DISTINCT {varchar_col} FROM {table} "  # noqa: S608
-                f"WHERE {varchar_col} IS NOT NULL AND {new_fk_col} IS NULL "
+                f"SELECT DISTINCT {sample_col} FROM {table} "  # noqa: S608
+                f"{null_count_filter} "
                 f"LIMIT 20"
             )
         ).fetchall()
         sample_vals = [row[0] for row in sample]
         raise RuntimeError(
             f"[0060] Backfill failure on {table}.{new_fk_col}: "
-            f"{null_count} row(s) with non-NULL {varchar_col} did not resolve "
+            f"{null_count} row(s) with non-NULL {null_count_label} did not resolve "
             f"to a lookup id (lookup_kind={lookup_kind!r}). "
             f"Unmatched values: {sample_vals!r}. "
             f"Add missing rows to the sports/leagues seeds or UPDATE the "
