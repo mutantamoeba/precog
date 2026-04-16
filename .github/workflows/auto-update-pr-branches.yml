@@ -1,0 +1,72 @@
+name: Auto-Update PR Branches
+
+# Purpose
+# Closes the "auto-merge enabled but branch stays BEHIND main" failure mode.
+# When a PR has auto-merge queued and passes all CI checks but its branch is
+# BEHIND main, GitHub waits indefinitely for a human to click "Update branch".
+# This workflow runs after every push to main and auto-updates every such PR.
+#
+# Without this workflow, PRs sit queued-but-stuck for days (observed: #815
+# stalled 26 hours, #797 stalled 2 days). Merge Queue would solve this
+# natively but is not available in the current GitHub UI for this repo.
+#
+# The workflow is idempotent: re-running is safe, and a race with a manual
+# "Update branch" click just results in one extra no-op call.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  auto-update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Update BEHIND PRs with auto-merge enabled
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          echo "Listing open PRs with auto-merge enabled and BEHIND status..."
+
+          # Find open PRs where auto-merge is enabled AND the branch is BEHIND main.
+          # Exclude CONFLICTING (manual resolution needed) and DIRTY (conflicts).
+          candidates=$(gh pr list \
+            --state open \
+            --limit 50 \
+            --json number,mergeStateStatus,autoMergeRequest,mergeable \
+            --jq '.[]
+              | select(.autoMergeRequest != null)
+              | select(.mergeStateStatus == "BEHIND")
+              | select(.mergeable != "CONFLICTING")
+              | .number')
+
+          if [ -z "$candidates" ]; then
+            echo "No PRs to update."
+            exit 0
+          fi
+
+          echo "Candidate PRs: $candidates"
+
+          failures=0
+          for pr in $candidates; do
+            echo "--- Updating PR #$pr ---"
+            if gh pr update-branch "$pr"; then
+              echo "OK: #$pr branch updated"
+            else
+              echo "WARN: #$pr update failed (may need manual resolution)"
+              failures=$((failures + 1))
+            fi
+          done
+
+          echo "Done. $failures failure(s)."
+          # Never fail the workflow on a per-PR update failure — failures are
+          # informational, not critical. The PR stays BEHIND and a human can
+          # resolve it the old-fashioned way.
+          exit 0

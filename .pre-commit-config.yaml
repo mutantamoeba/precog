@@ -300,6 +300,14 @@ repos:
         types: [markdown]
         description: "Blocks versioned-doc renames (_V<N>.<M>.md) when stale references to the old filename exist elsewhere in the repo (G1)"
 
+      # G7: ADR drift — warn when staged code touches paths referenced by ADR file without ADR staged alongside
+      - id: adr-drift
+        name: ADR Drift (G7)
+        entry: python scripts/lint_adr_drift.py
+        language: system
+        pass_filenames: false
+        description: "Warns (does NOT block) when staged files match paths referenced by the ADR document and the ADR itself is not staged (G7, Option B criterion 7)"
+
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
