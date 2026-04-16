@@ -38,7 +38,7 @@ def _discover_subcommands() -> list[list[str]]:
     """
     import os
 
-    import click
+    from click import BaseCommand, Context, MultiCommand
 
     os.environ.setdefault("PRECOG_ENV", "test")
 
@@ -51,10 +51,10 @@ def _discover_subcommands() -> list[list[str]]:
 
     paths: list[list[str]] = []
 
-    def _walk(group: click.BaseCommand, prefix: tuple[str, ...] = ()) -> None:
+    def _walk(group: BaseCommand, prefix: tuple[str, ...] = ()) -> None:
         paths.append(list(prefix))
-        if isinstance(group, click.MultiCommand):
-            ctx = click.Context(group, info_name=" ".join(prefix) if prefix else "precog")
+        if isinstance(group, MultiCommand):
+            ctx = Context(group, info_name=" ".join(prefix) if prefix else "precog")
             for name in sorted(group.list_commands(ctx)):
                 cmd = group.get_command(ctx, name)
                 if cmd is not None:
