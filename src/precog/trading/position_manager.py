@@ -163,7 +163,7 @@ class PositionManager:
 
         # Open position
         position = manager.open_position(
-            market_internal_id=1,
+            market_id=1,
             strategy_id=42,
             model_id=7,
             side="YES",
@@ -219,7 +219,7 @@ class PositionManager:
 
     def open_position(
         self,
-        market_internal_id: int,
+        market_id: int,
         strategy_id: int,
         model_id: int,
         side: str,
@@ -235,7 +235,7 @@ class PositionManager:
         """Open new position with risk validation.
 
         Args:
-            market_internal_id: Integer FK to markets(id) surrogate PK
+            market_id: Integer FK to markets(id) surrogate PK
             strategy_id: Strategy that generated this signal (trade attribution)
             model_id: Model that calculated probability (trade attribution)
             side: Position side ('YES' or 'NO')
@@ -263,8 +263,8 @@ class PositionManager:
         Returns:
             Dictionary containing created position with all fields including:
                 - id: Surrogate primary key (int)
-                - position_id: Business key (str, format: 'POS-{id}')
-                - market_internal_id, strategy_id, model_id (trade attribution)
+                - position_key: Business key (str, format: 'POS-{id}')
+                - market_id, strategy_id, model_id (trade attribution)
                 - side, quantity, entry_price
                 - status: 'open'
                 - row_current_ind: TRUE (current version)
@@ -272,7 +272,7 @@ class PositionManager:
         Raises:
             InsufficientMarginError: If available_margin < required_margin
             ValueError: If entry_price not in valid range [0.01, 0.99]
-            psycopg2.IntegrityError: If market_internal_id/strategy_id/model_id invalid FK
+            psycopg2.IntegrityError: If market_id/strategy_id/model_id invalid FK
 
         Educational Note:
             **Kalshi Margin Calculation:**
@@ -334,7 +334,7 @@ class PositionManager:
                 extra={
                     "required_margin": str(required_margin),
                     "available_margin": str(available_margin),
-                    "market_internal_id": market_internal_id,
+                    "market_id": market_id,
                     "side": side,
                     "quantity": quantity,
                     "entry_price": str(entry_price),
@@ -361,7 +361,7 @@ class PositionManager:
         # paper-mode positions.
         try:
             position_id = crud_create_position(
-                market_internal_id=market_internal_id,
+                market_id=market_id,
                 strategy_id=strategy_id,
                 model_id=model_id,
                 side=side,
@@ -389,10 +389,10 @@ class PositionManager:
                     position = cur.fetchone()
 
                 logger.info(
-                    f"Opened position {position['position_id']}",
+                    f"Opened position {position['position_key']}",
                     extra={
                         "position_id": position_id,
-                        "market_internal_id": market_internal_id,
+                        "market_id": market_id,
                         "side": side,
                         "quantity": quantity,
                         "entry_price": str(entry_price),
@@ -409,7 +409,7 @@ class PositionManager:
             logger.error(
                 "Failed to create position - foreign key violation",
                 extra={
-                    "market_internal_id": market_internal_id,
+                    "market_id": market_id,
                     "strategy_id": strategy_id,
                     "model_id": model_id,
                     "error": str(e),
@@ -429,13 +429,13 @@ class PositionManager:
         new version gets row_current_ind = TRUE.
 
         Args:
-            position_id: Position surrogate key (int from positions.id, NOT position_id business key!)
+            position_id: Position surrogate key (int from positions.id, NOT position_key business key!)
             current_price: New market price (Decimal, NEVER float!)
 
         Returns:
             Dictionary containing updated position (new version) with:
                 - id: NEW surrogate key (different from input!)
-                - position_id: SAME business key (copied from old version)
+                - position_key: SAME business key (copied from old version)
                 - current_price: Updated price
                 - unrealized_pnl: Calculated P&L
                 - row_current_ind: TRUE (current version)
@@ -458,10 +458,10 @@ class PositionManager:
             3. Surrogate id changes, business key stays the same
 
             Example:
-                Before: id=123, position_id='POS-100', current_price=0.50, row_current_ind=TRUE
+                Before: id=123, position_key='POS-100', current_price=0.50, row_current_ind=TRUE
                 After update to 0.55:
-                    Old: id=123, position_id='POS-100', current_price=0.50, row_current_ind=FALSE
-                    New: id=456, position_id='POS-100', current_price=0.55, row_current_ind=TRUE
+                    Old: id=123, position_key='POS-100', current_price=0.50, row_current_ind=FALSE
+                    New: id=456, position_key='POS-100', current_price=0.55, row_current_ind=TRUE
 
             **IMPORTANT:** The returned id (456) is DIFFERENT from input (123)!
             Always use the NEW id for subsequent operations.
@@ -499,11 +499,11 @@ class PositionManager:
                     position = cur.fetchone()
 
                 logger.info(
-                    f"Updated position {position['position_id']} price",
+                    f"Updated position {position['position_key']} price",
                     extra={
                         "old_id": position_id,  # Old surrogate key
                         "new_id": new_position_id,  # New surrogate key
-                        "business_key": position["position_id"],
+                        "business_key": position["position_key"],
                         "current_price": str(current_price),
                         "unrealized_pnl": str(position["unrealized_pnl"]),
                     },
@@ -544,7 +544,7 @@ class PositionManager:
         Returns:
             Dictionary containing closed position (final version) with:
                 - id: NEW surrogate key
-                - position_id: SAME business key
+                - position_key: SAME business key
                 - status: 'closed'
                 - current_price: exit_price
                 - realized_pnl: Final P&L
@@ -639,11 +639,11 @@ class PositionManager:
                     position = cur.fetchone()
 
                 logger.info(
-                    f"Closed position {position['position_id']}",
+                    f"Closed position {position['position_key']}",
                     extra={
                         "old_id": position_id,
                         "final_id": final_position_id,
-                        "business_key": position["position_id"],
+                        "business_key": position["position_key"],
                         "exit_price": str(exit_price),
                         "exit_reason": exit_reason,
                         "realized_pnl": str(position["realized_pnl"]),
@@ -669,13 +669,13 @@ class PositionManager:
 
     def get_open_positions(
         self,
-        market_internal_id: int | None = None,
+        market_id: int | None = None,
         strategy_id: int | None = None,
     ) -> list[dict[str, Any]]:
         """Retrieve all open positions with optional filtering.
 
         Args:
-            market_internal_id: Optional market filter (integer FK to markets.id)
+            market_id: Optional market filter (integer FK to markets.id)
             strategy_id: Optional strategy filter (surrogate key int)
 
         Returns:
@@ -696,7 +696,7 @@ class PositionManager:
 
             **Note on filtering:**
             CRUD function get_current_positions() only supports filtering by
-            status and market_internal_id (int). For strategy_id filtering, we get all
+            status and market_id (int). For strategy_id filtering, we get all
             open positions and filter in Python (acceptable for now since we
             won't have thousands of positions).
 
@@ -705,8 +705,8 @@ class PositionManager:
             - Pattern 2 (CLAUDE.md): Dual Versioning System
         """
         # Get all open positions (status='open', row_current_ind=TRUE)
-        # Migration 0022: market_internal_id is now INTEGER, pass directly to CRUD
-        positions = get_current_positions(status="open", market_internal_id=market_internal_id)
+        # Migration 0022: market_id is now INTEGER, pass directly to CRUD
+        positions = get_current_positions(status="open", market_id=market_id)
 
         # Apply remaining filters manually
         filtered = positions
@@ -941,9 +941,9 @@ class PositionManager:
             )
 
         logger.info(
-            f"Initialized trailing stop for position {updated_position['position_id']}",
+            f"Initialized trailing stop for position {updated_position['position_key']}",
             extra={
-                "position_id": updated_position["position_id"],  # Business key
+                "position_id": updated_position["position_key"],  # Business key
                 "old_id": position_id,
                 "new_id": new_position_id,
                 "activation_threshold": str(config["activation_threshold"]),
@@ -1099,9 +1099,9 @@ class PositionManager:
                 )
 
                 logger.info(
-                    f"Trailing stop ACTIVATED for {current_position['position_id']}",
+                    f"Trailing stop ACTIVATED for {current_position['position_key']}",
                     extra={
-                        "position_id": current_position["position_id"],  # Business key
+                        "position_id": current_position["position_key"],  # Business key
                         "activation_price": str(current_price),
                         "activation_pnl": str(unrealized_pnl),
                         "threshold": str(config["activation_threshold"]),
@@ -1137,9 +1137,9 @@ class PositionManager:
             if new_stop > trailing_state["current_stop_price"]:
                 trailing_state["current_stop_price"] = new_stop
                 logger.debug(
-                    f"Trailing stop UPDATED for {current_position['position_id']}",
+                    f"Trailing stop UPDATED for {current_position['position_key']}",
                     extra={
-                        "position_id": current_position["position_id"],  # Business key
+                        "position_id": current_position["position_key"],  # Business key
                         "highest_price": str(trailing_state["highest_price"]),
                         "new_stop": str(new_stop),
                         "distance": str(distance),
@@ -1285,9 +1285,9 @@ class PositionManager:
 
                 if triggered:
                     logger.warning(
-                        f"Trailing stop TRIGGERED for {current_position['position_id']}",
+                        f"Trailing stop TRIGGERED for {current_position['position_key']}",
                         extra={
-                            "position_id": current_position["position_id"],  # Business key
+                            "position_id": current_position["position_key"],  # Business key
                             "current_price": str(current_price),
                             "stop_price": str(stop_price),
                             "side": current_position["side"],

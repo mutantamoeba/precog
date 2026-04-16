@@ -77,7 +77,7 @@ def cleanup_test_series():
     """Clean up test series after each test."""
     yield
     with get_cursor() as cur:
-        cur.execute("DELETE FROM series WHERE series_id LIKE 'PROP-TEST-%'")
+        cur.execute("DELETE FROM series WHERE series_key LIKE 'PROP-TEST-%'")
 
 
 # =============================================================================
@@ -122,7 +122,7 @@ class TestSeriesCreateReadRoundtrip:
 
         result = get_series(series_id)
         assert result is not None
-        assert result["series_id"] == series_id
+        assert result["series_key"] == series_id
         assert result["platform_id"] == platform
         assert result["category"] == category
         assert result["frequency"] == frequency

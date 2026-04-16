@@ -8,8 +8,8 @@ strict reverse FK order.
 The helpers in this file use **dynamic FK discovery** via
 ``information_schema`` rather than hardcoded child-table lists. This
 means new FKs added by future migrations are picked up automatically,
-and column-name drift (e.g., ``market_internal_id`` vs ``market_id`` vs
-a future rename to ``market_id`` everywhere) is handled without touching
+and column-name drift (e.g., the migration 0058 rename of
+``market_internal_id`` to ``market_id``) is handled without touching
 this file. The first hand-rolled version of these helpers broke twice in
 session 48 because it hardcoded column names that did not match reality
 in all child tables -- #757 is the refactor that made the DB the source

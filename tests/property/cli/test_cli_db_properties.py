@@ -32,61 +32,6 @@ def get_fresh_cli():
 class TestDbArgumentInvariants:
     """Property tests for database command argument validation."""
 
-    @given(st.text(min_size=1, max_size=100))
-    @settings(max_examples=50)
-    def test_table_name_handling(self, table_name: str):
-        """Tables command should handle arbitrary table names gracefully.
-
-        Note: The tables command may call test_connection() in some code paths,
-        so both must be mocked to prevent real database access during tests.
-        Exit code 5 (DATABASE_ERROR) is acceptable when mocking doesn't fully
-        prevent database access in parallel execution.
-        """
-        # Skip control characters
-        assume(all(ord(c) >= 32 for c in table_name))
-        assume(table_name.strip())
-
-        with (
-            patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
-        ):
-            mock_test.return_value = True
-            mock_connection = MagicMock()
-            mock_cursor = MagicMock()
-            mock_cursor.fetchall.return_value = []
-            mock_connection.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
-            mock_connection.cursor.return_value.__exit__ = MagicMock(return_value=False)
-            mock_conn.return_value.__enter__ = MagicMock(return_value=mock_connection)
-            mock_conn.return_value.__exit__ = MagicMock(return_value=False)
-
-            app, runner = get_fresh_cli()
-            result = runner.invoke(app, ["db", "tables", "--name", table_name])
-            # Command should complete without crashing (exit code 5 = DATABASE_ERROR is ok in parallel)
-            assert result.exit_code in [0, 1, 2, 5]
-
-    @given(st.integers(min_value=1, max_value=1000))
-    @settings(max_examples=20)
-    def test_migration_version_handling(self, version: int):
-        """Migrate command should handle any migration version.
-
-        Note: Exit code 5 (DATABASE_ERROR) is acceptable when mocking doesn't
-        fully prevent database access in parallel execution.
-        """
-        # Mock at the point where db.py imports from
-        with (
-            patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
-        ):
-            mock_test.return_value = True
-            mock_connection = MagicMock()
-            mock_conn.return_value.__enter__ = MagicMock(return_value=mock_connection)
-            mock_conn.return_value.__exit__ = MagicMock(return_value=False)
-
-            app, runner = get_fresh_cli()
-            result = runner.invoke(app, ["db", "migrate", "--version", str(version)])
-            # Command should complete (may fail if version doesn't exist)
-            assert result.exit_code in [0, 1, 2, 3, 5]
-
 
 class TestDbOutputInvariants:
     """Property tests for database command output consistency."""

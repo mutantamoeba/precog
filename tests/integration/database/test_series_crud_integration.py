@@ -2,7 +2,7 @@
 Integration tests for series CRUD operations.
 
 Tests the series-related database operations against the real database:
-- get_series: Retrieve a series by series_id
+- get_series: Retrieve a series by series_key
 - list_series: List series with filtering and pagination
 - create_series: Create a new series record
 - update_series: Update an existing series
@@ -53,7 +53,7 @@ def cleanup_stale_test_series() -> Generator[None, None, None]:
 
     # Clean up before tests
     with get_cursor() as cur:
-        cur.execute("DELETE FROM series WHERE series_id LIKE 'PROP-TEST-%'")
+        cur.execute("DELETE FROM series WHERE series_key LIKE 'PROP-TEST-%'")
         deleted = cur.rowcount
         if deleted > 0:
             # Note: This is expected during parallel test runs
@@ -63,7 +63,7 @@ def cleanup_stale_test_series() -> Generator[None, None, None]:
 
     # Clean up after tests as well (defensive)
     with get_cursor() as cur:
-        cur.execute("DELETE FROM series WHERE series_id LIKE 'PROP-TEST-%'")
+        cur.execute("DELETE FROM series WHERE series_key LIKE 'PROP-TEST-%'")
 
 
 # =============================================================================
@@ -109,7 +109,7 @@ def created_series(db_pool, db_cursor, clean_test_data, unique_series_id: str) -
 
     yield {
         "id": series_pk,
-        "series_id": unique_series_id,
+        "series_key": unique_series_id,
         "platform_id": "kalshi",
         "external_id": f"EXT-{unique_series_id}",
         "category": "sports",
@@ -122,7 +122,7 @@ def created_series(db_pool, db_cursor, clean_test_data, unique_series_id: str) -
     from precog.database.connection import get_cursor
 
     with get_cursor() as cur:
-        cur.execute("DELETE FROM series WHERE series_id = %s", (unique_series_id,))
+        cur.execute("DELETE FROM series WHERE series_key = %s", (unique_series_id,))
 
 
 # =============================================================================
@@ -135,10 +135,10 @@ class TestGetSeriesIntegration:
 
     def test_get_series_returns_dict_when_found(self, created_series: dict[str, Any]) -> None:
         """get_series should return a dictionary when series exists."""
-        result = get_series(created_series["series_id"])
+        result = get_series(created_series["series_key"])
 
         assert result is not None
-        assert result["series_id"] == created_series["series_id"]
+        assert result["series_key"] == created_series["series_key"]
         assert result["category"] == "sports"
         assert result["subcategory"] == "nfl"
         assert result["tags"] == ["Football", "TestTag"]
@@ -151,12 +151,12 @@ class TestGetSeriesIntegration:
 
     def test_get_series_returns_all_fields(self, created_series: dict[str, Any]) -> None:
         """get_series should return all series fields including surrogate PK."""
-        result = get_series(created_series["series_id"])
+        result = get_series(created_series["series_key"])
 
         assert result is not None
         expected_fields = [
             "id",
-            "series_id",
+            "series_key",
             "platform_id",
             "external_id",
             "category",
@@ -199,8 +199,8 @@ class TestListSeriesIntegration:
 
         assert isinstance(result, list)
         assert len(result) >= 1
-        series_ids = [s["series_id"] for s in result]
-        assert created_series["series_id"] in series_ids
+        series_ids = [s["series_key"] for s in result]
+        assert created_series["series_key"] in series_ids
 
     def test_list_series_with_platform_filter(self, created_series: dict[str, Any]) -> None:
         """list_series should filter by platform_id."""
@@ -249,9 +249,9 @@ class TestListSeriesIntegration:
             with_offset = list_series(limit=5, offset=1)
 
             # The first item with offset should be the second item without offset
-            # (assuming consistent ordering by series_id)
+            # (assuming consistent ordering by series_key)
             if with_offset:
-                assert first_page[1]["series_id"] == with_offset[0]["series_id"], (
+                assert first_page[1]["series_key"] == with_offset[0]["series_key"], (
                     "Offset should skip the first item"
                 )
 
@@ -300,7 +300,7 @@ class TestCreateSeriesIntegration:
         from precog.database.connection import get_cursor
 
         with get_cursor() as cur:
-            cur.execute("DELETE FROM series WHERE series_id = %s", (unique_series_id,))
+            cur.execute("DELETE FROM series WHERE series_key = %s", (unique_series_id,))
 
     def test_create_series_with_all_fields(self, unique_series_id: str) -> None:
         """create_series should store all provided fields."""
@@ -327,7 +327,7 @@ class TestCreateSeriesIntegration:
         from precog.database.connection import get_cursor
 
         with get_cursor() as cur:
-            cur.execute("DELETE FROM series WHERE series_id = %s", (unique_series_id,))
+            cur.execute("DELETE FROM series WHERE series_key = %s", (unique_series_id,))
 
 
 # =============================================================================
@@ -341,14 +341,14 @@ class TestUpdateSeriesIntegration:
     def test_update_series_modifies_fields(self, created_series: dict[str, Any]) -> None:
         """update_series should modify the specified fields."""
         updated = update_series(
-            series_id=created_series["series_id"],
+            series_id=created_series["series_key"],
             title="Updated Title",
             tags=["UpdatedTag"],
         )
 
         assert updated is True
 
-        result = get_series(created_series["series_id"])
+        result = get_series(created_series["series_key"])
         assert result is not None
         assert result["title"] == "Updated Title"
         assert result["tags"] == ["UpdatedTag"]
@@ -394,12 +394,12 @@ class TestGetOrCreateSeriesIntegration:
         from precog.database.connection import get_cursor
 
         with get_cursor() as cur:
-            cur.execute("DELETE FROM series WHERE series_id = %s", (unique_series_id,))
+            cur.execute("DELETE FROM series WHERE series_key = %s", (unique_series_id,))
 
     def test_get_or_create_returns_existing_series(self, created_series: dict[str, Any]) -> None:
         """get_or_create_series should return existing series PK without creating."""
         series_pk, created = get_or_create_series(
-            series_id=created_series["series_id"],
+            series_id=created_series["series_key"],
             platform_id="kalshi",
             external_id=created_series["external_id"],
             category="sports",
@@ -411,13 +411,13 @@ class TestGetOrCreateSeriesIntegration:
         assert created is False
 
         # Verify title was not changed
-        result = get_series(created_series["series_id"])
+        result = get_series(created_series["series_key"])
         assert result["title"] == "Test Series for Integration Tests"
 
     def test_get_or_create_updates_when_flag_set(self, created_series: dict[str, Any]) -> None:
         """get_or_create_series should update existing when update_if_exists=True."""
         series_pk, created = get_or_create_series(
-            series_id=created_series["series_id"],
+            series_id=created_series["series_key"],
             platform_id="kalshi",
             external_id=created_series["external_id"],
             category="sports",
@@ -429,5 +429,5 @@ class TestGetOrCreateSeriesIntegration:
         assert created is False
 
         # Verify title was updated
-        result = get_series(created_series["series_id"])
+        result = get_series(created_series["series_key"])
         assert result["title"] == "Updated via Upsert"

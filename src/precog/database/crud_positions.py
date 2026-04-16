@@ -75,7 +75,7 @@ def get_positions_with_pnl(
 
     Returns:
         List of position dictionaries with P&L fields:
-        - position_id, ticker, side, quantity, entry_price, current_price
+        - position_key, ticker, side, quantity, entry_price, current_price
         - status, unrealized_pnl, realized_pnl, pnl_percent
 
     Example:
@@ -97,10 +97,10 @@ def get_positions_with_pnl(
     """
     # Migration 0021: markets is now a dimension table (no SCD).
     # Pricing comes from market_snapshots (SCD Type 2 fact table).
-    # JOINs: positions → markets (via market_internal_id INTEGER) → market_snapshots (via id)
+    # JOINs: positions → markets (via market_id INTEGER) → market_snapshots (via id)
     query = """
         SELECT
-            p.position_id,
+            p.position_key,
             m.ticker,
             p.side,
             p.quantity,
@@ -130,7 +130,7 @@ def get_positions_with_pnl(
                 ELSE 0
             END as pnl_percent
         FROM positions p
-        LEFT JOIN markets m ON p.market_internal_id = m.id
+        LEFT JOIN markets m ON p.market_id = m.id
         LEFT JOIN market_snapshots ms ON ms.market_id = m.id AND ms.row_current_ind = TRUE
         WHERE p.row_current_ind = TRUE
     """
@@ -157,7 +157,7 @@ def get_positions_with_pnl(
 
 
 def create_position(
-    market_internal_id: int,
+    market_id: int,
     strategy_id: int,
     model_id: int,
     side: str,
@@ -171,12 +171,16 @@ def create_position(
     # ⭐ ATTRIBUTION ARCHITECTURE (Migration 020) - NEW parameters
     calculated_probability: Decimal | None = None,
     market_price_at_entry: Decimal | None = None,
+    # Provenance FK (migration 0059, #725): the edge row that produced
+    # this position. Optional — callers without edge provenance pass
+    # None and the column stays NULL (forward-only adoption).
+    edge_id: int | None = None,
 ) -> int:
     """
     Create new position with status = 'open' and immutable entry-time attribution.
 
     Args:
-        market_internal_id: Integer foreign key to markets(id)
+        market_id: Integer foreign key to markets(id)
         strategy_id: Foreign key to strategies (immutable version)
         model_id: Foreign key to probability_models (immutable version)
         side: 'YES' or 'NO'
@@ -213,12 +217,12 @@ def create_position(
 
         Dual-Key Structure (Migration 015):
         - id SERIAL (surrogate key) - returned by this function
-        - position_id VARCHAR (business key) - auto-generated as POS-{id}
+        - position_key VARCHAR (business key) - auto-generated as POS-{id}
         - Enables SCD Type 2 versioning (multiple versions of same position)
 
     Example:
         >>> pos_id = create_position(
-        ...     market_internal_id=42,
+        ...     market_id=42,
         ...     strategy_id=1,
         ...     model_id=2,
         ...     side='YES',
@@ -229,7 +233,7 @@ def create_position(
         ...     market_price_at_entry=Decimal("0.5200"),   # Kalshi price
         ...     execution_environment='paper'              # Demo API testing
         ... )
-        >>> # Returns surrogate id (e.g., 1), position_id auto-set to 'POS-1'
+        >>> # Returns surrogate id (e.g., 1), position_key auto-set to 'POS-1'
         >>> # edge_at_entry automatically set to 0.1050 (0.6250 - 0.5200)
 
     Validation:
@@ -267,18 +271,30 @@ def create_position(
     if calculated_probability is not None and market_price_at_entry is not None:
         edge_at_entry = calculated_probability - market_price_at_entry
 
-    # Step 1: INSERT with placeholder position_id (will be updated immediately)
+    # Step 1: INSERT with placeholder position_key (will be updated immediately)
+    #
+    # Migration 0059 (#725): ``edge_id`` carries provenance back to the
+    # ``edges`` row that produced this position. Nullable; callers
+    # without edge context pass None. Must also appear in every SCD
+    # supersede INSERT below so Pattern 49 copy-forward does not silently
+    # NULL it on version transitions. Design memo: #725 Holden S57 §6.
     insert_query = """
         INSERT INTO positions (
-            position_id, market_internal_id, strategy_id, model_id, side,
+            position_key, market_id, strategy_id, model_id, side,
             quantity, entry_price,
             target_price, stop_loss_price,
             trailing_stop_state, position_metadata,
             status, row_current_ind, entry_time,
             calculated_probability, edge_at_entry, market_price_at_entry,
-            execution_environment
+            execution_environment,
+            edge_id
         )
-        VALUES ('TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'open', TRUE, NOW(), %s, %s, %s, %s)
+        VALUES (
+            'TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            'open', TRUE, NOW(),
+            %s, %s, %s, %s,
+            %s
+        )
         RETURNING id
     """
 
@@ -296,7 +312,7 @@ def create_position(
     # ``WHERE trailing_stop_state IS NULL`` query. Mirrors the canonical
     # pattern in ``set_trailing_stop_state`` (#629 PR). Fixes #706.
     params = (
-        market_internal_id,
+        market_id,
         strategy_id,
         model_id,
         side,
@@ -310,6 +326,7 @@ def create_position(
         edge_at_entry,
         market_price_at_entry,
         execution_environment,
+        edge_id,
     )
 
     with get_cursor(commit=True) as cur:
@@ -318,10 +335,10 @@ def create_position(
         result = cur.fetchone()
         surrogate_id = cast("int", result["id"])
 
-        # Step 2: UPDATE to set correct position_id (POS-{id} format)
+        # Step 2: UPDATE to set correct position_key (POS-{id} format)
         update_query = """
             UPDATE positions
-            SET position_id = %s
+            SET position_key = %s
             WHERE id = %s
         """
         cur.execute(update_query, (f"POS-{surrogate_id}", surrogate_id))
@@ -331,7 +348,7 @@ def create_position(
 
 def get_current_positions(
     status: str | None = None,
-    market_internal_id: int | None = None,
+    market_id: int | None = None,
     execution_environment: ExecutionEnvironment | None = None,
     limit: int = 100,
     offset: int = 0,
@@ -341,7 +358,7 @@ def get_current_positions(
 
     Args:
         status: Filter by status ('open', 'closed', etc.)
-        market_internal_id: Filter by market_internal_id (integer FK to markets.id)
+        market_id: Filter by market_id (integer FK to markets.id)
         execution_environment: Filter by environment ('live', 'paper', 'backtest').
             If None, returns positions from all environments.
         limit: Maximum number of positions to return (default: 100)
@@ -361,7 +378,7 @@ def get_current_positions(
     query = """
         SELECT p.*, m.ticker, ms.yes_ask_price as current_market_price
         FROM positions p
-        JOIN markets m ON p.market_internal_id = m.id
+        JOIN markets m ON p.market_id = m.id
         LEFT JOIN market_snapshots ms ON ms.market_id = m.id AND ms.row_current_ind = TRUE
         WHERE p.row_current_ind = TRUE
     """
@@ -371,9 +388,9 @@ def get_current_positions(
         query += " AND p.status = %s"
         params.append(status)
 
-    if market_internal_id:
-        query += " AND p.market_internal_id = %s"
-        params.append(market_internal_id)
+    if market_id:
+        query += " AND p.market_id = %s"
+        params.append(market_id)
 
     if execution_environment is not None:
         query += " AND p.execution_environment = %s"
@@ -404,13 +421,13 @@ def update_position_price(
     Educational Note:
         SCD Type 2 versioning creates NEW rows instead of updating:
         - Mark current version as historical (row_current_ind = FALSE)
-        - INSERT new version with same position_id (business key)
-        - New version gets new surrogate id but keeps same position_id
+        - INSERT new version with same position_key (business key)
+        - New version gets new surrogate id but keeps same position_key
 
         Example: Position POS-1 price update
-        Before: id=1, position_id='POS-1', price=0.52, row_current_ind=TRUE
-        After:  id=1, position_id='POS-1', price=0.52, row_current_ind=FALSE (historical)
-                id=2, position_id='POS-1', price=0.58, row_current_ind=TRUE (current)
+        Before: id=1, position_key='POS-1', price=0.52, row_current_ind=TRUE
+        After:  id=1, position_key='POS-1', price=0.52, row_current_ind=FALSE (historical)
+                id=2, position_key='POS-1', price=0.58, row_current_ind=TRUE (current)
 
     Example:
         >>> new_id = update_position_price(
@@ -423,7 +440,7 @@ def update_position_price(
     # Get current version using surrogate id. We fetch OUTSIDE the retry
     # closure to (a) satisfy the "raise ValueError if missing" contract
     # immediately (no retry on missing positions) and (b) capture the
-    # business key (position_id column) so retries can re-fetch by business
+    # business key (position_key column) so retries can re-fetch by business
     # key even after the sibling caller creates a new surrogate id.
     initial_current = fetch_one(
         "SELECT * FROM positions WHERE id = %s AND row_current_ind = TRUE", (position_id,)
@@ -432,7 +449,7 @@ def update_position_price(
         msg = f"Position not found: {position_id}"
         raise ValueError(msg)
 
-    position_bk = initial_current["position_id"]  # Business key (stable across retries)
+    position_bk = initial_current["position_key"]  # Business key (stable across retries)
 
     new_trailing_stop = (
         trailing_stop_state
@@ -463,7 +480,7 @@ def update_position_price(
         update_position_price calls for the same surrogate id can both
         proceed past their independent close (the second as a no-op) and
         both INSERT, colliding on idx_positions_unique_current. On retry,
-        we look up the fresh current row by BUSINESS KEY (position_id
+        we look up the fresh current row by BUSINESS KEY (position_key
         column) — the surrogate id from the outer fetch is stale after the
         sibling caller created a new version.
         """
@@ -478,7 +495,7 @@ def update_position_price(
             cur.execute(
                 """
                 SELECT id FROM positions
-                WHERE position_id = %s
+                WHERE position_key = %s
                   AND row_current_ind = TRUE
                 FOR UPDATE
                 """,
@@ -491,7 +508,7 @@ def update_position_price(
             cur.execute(
                 """
                 SELECT * FROM positions
-                WHERE position_id = %s
+                WHERE position_key = %s
                   AND row_current_ind = TRUE
                 """,
                 (position_bk,),
@@ -563,13 +580,13 @@ def update_position_price(
                 UPDATE positions
                 SET row_current_ind = FALSE,
                     row_end_ts = %s
-                WHERE position_id = %s
+                WHERE position_key = %s
                   AND row_current_ind = TRUE
                 """,
                 (now, position_bk),
             )
 
-            # Step 4: Insert new version with same position_id (business
+            # Step 4: Insert new version with same position_key (business
             # key) but new id (surrogate). row_start_ts matches row_end_ts
             # on the historical row for Pattern 49 temporal continuity.
             # execution_environment is preserved from the original position
@@ -585,23 +602,38 @@ def update_position_price(
             # as the JSONB string ``"null"`` instead of a SQL NULL, silently
             # breaking ``WHERE trailing_stop_state IS NULL`` queries. Fixes
             # #666 (latent dict-adapter bug on the update path).
+            # Migration 0059 (#725) Pattern 49 copy-forward checklist:
+            #   edge_id must appear in this INSERT's column list AND its
+            #   params tuple, sourced from current["edge_id"]. Omitting
+            #   either silently NULLs the provenance FK on the new SCD
+            #   version — the exact SET NULL behavior 0057 was built to
+            #   prevent. See migration 0059 docstring and Holden memo §6.
             cur.execute(
                 """
                 INSERT INTO positions (
-                    position_id, market_internal_id, strategy_id, model_id, side,
+                    position_key, market_id, strategy_id, model_id, side,
                     quantity, entry_price,
                     current_price, unrealized_pnl,
                     target_price, stop_loss_price,
                     trailing_stop_state, position_metadata,
                     status, entry_time, last_check_time, execution_environment,
+                    edge_id,
                     row_start_ts
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s,
+                    %s, %s,
+                    %s, %s,
+                    %s, %s, %s, %s,
+                    %s,
+                    %s
+                )
                 RETURNING id
                 """,
                 (
-                    current["position_id"],  # Copy business key from current version
-                    current["market_internal_id"],
+                    current["position_key"],  # Copy business key from current version
+                    current["market_id"],
                     current["strategy_id"],
                     current["model_id"],
                     current["side"],
@@ -620,6 +652,7 @@ def update_position_price(
                     current["entry_time"],
                     now,  # last_check_time
                     current["execution_environment"],  # Preserve execution environment
+                    current["edge_id"],  # Pattern 49 copy-forward (#725, migration 0059)
                     now,  # row_start_ts
                 ),
             )
@@ -635,7 +668,7 @@ def update_position_price(
     return retry_on_scd_unique_conflict(
         _attempt_close_and_insert,
         "idx_positions_unique_current",
-        business_key={"position_id": position_bk},
+        business_key={"position_key": position_bk},
         logger_override=logger,
     )
 
@@ -673,7 +706,7 @@ def close_position(
         msg = f"Position not found: {position_id}"
         raise ValueError(msg)
 
-    position_bk = initial_current["position_id"]  # Business key (stable across retries)
+    position_bk = initial_current["position_key"]  # Business key (stable across retries)
 
     def _attempt_close_and_insert() -> int:
         """One attempt at the SCD close+insert sequence for close_position.
@@ -687,7 +720,7 @@ def close_position(
         stop_loss firing in the same monitor tick) can both proceed past
         the close (the second as a no-op) and both INSERT, colliding on
         idx_positions_unique_current. On retry, we look up the fresh
-        current row by BUSINESS KEY (position_id column) — the surrogate
+        current row by BUSINESS KEY (position_key column) — the surrogate
         id from the outer fetch is stale after the sibling caller created
         a new version.
         """
@@ -701,7 +734,7 @@ def close_position(
             cur.execute(
                 """
                 SELECT id FROM positions
-                WHERE position_id = %s
+                WHERE position_key = %s
                   AND row_current_ind = TRUE
                 FOR UPDATE
                 """,
@@ -714,7 +747,7 @@ def close_position(
             cur.execute(
                 """
                 SELECT * FROM positions
-                WHERE position_id = %s
+                WHERE position_key = %s
                   AND row_current_ind = TRUE
                 """,
                 (position_bk,),
@@ -770,13 +803,13 @@ def close_position(
                 UPDATE positions
                 SET row_current_ind = FALSE,
                     row_end_ts = %s
-                WHERE position_id = %s
+                WHERE position_key = %s
                   AND row_current_ind = TRUE
                 """,
                 (now, position_bk),
             )
 
-            # Step 4: Insert closed version with same position_id (business
+            # Step 4: Insert closed version with same position_key (business
             # key). row_start_ts matches row_end_ts on the historical row
             # for Pattern 49 temporal continuity. execution_environment is
             # preserved from the original position.
@@ -792,23 +825,38 @@ def close_position(
             # ``current["trailing_stop_state"]`` was already decoded from
             # JSONB to a plain ``dict`` by psycopg2's JSONB adapter when the
             # row was re-fetched on line 693 above, so it is safe to rewrap.
+            # Migration 0059 (#725) Pattern 49 copy-forward checklist:
+            #   edge_id must appear in this INSERT's column list AND its
+            #   params tuple, sourced from current["edge_id"]. Omitting
+            #   either silently NULLs the provenance FK on the new SCD
+            #   version — the exact SET NULL behavior 0057 was built to
+            #   prevent. See migration 0059 docstring and Holden memo §6.
             cur.execute(
                 """
                 INSERT INTO positions (
-                    position_id, market_internal_id, strategy_id, model_id, side,
+                    position_key, market_id, strategy_id, model_id, side,
                     quantity, entry_price, exit_price, current_price,
                     realized_pnl,
                     target_price, stop_loss_price,
                     trailing_stop_state, position_metadata,
                     status, entry_time, exit_time, execution_environment,
+                    edge_id,
                     row_start_ts
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'closed', %s, %s, %s, %s)
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s,
+                    %s, %s,
+                    %s, %s,
+                    'closed', %s, %s, %s,
+                    %s,
+                    %s
+                )
                 RETURNING id
                 """,
                 (
-                    current["position_id"],  # Copy business key from current version
-                    current["market_internal_id"],
+                    current["position_key"],  # Copy business key from current version
+                    current["market_id"],
                     current["strategy_id"],
                     current["model_id"],
                     current["side"],
@@ -826,6 +874,7 @@ def close_position(
                     current["entry_time"],
                     now,  # exit_time
                     current["execution_environment"],  # Preserve execution environment
+                    current["edge_id"],  # Pattern 49 copy-forward (#725, migration 0059)
                     now,  # row_start_ts
                 ),
             )
@@ -842,7 +891,7 @@ def close_position(
     return retry_on_scd_unique_conflict(
         _attempt_close_and_insert,
         "idx_positions_unique_current",
-        business_key={"position_id": position_bk},
+        business_key={"position_key": position_bk},
         logger_override=logger,
     )
 
@@ -965,7 +1014,7 @@ def set_trailing_stop_state(
     """
     # Fetch OUTSIDE the retry closure to satisfy the "raise ValueError if
     # missing" contract immediately (no retry on missing positions) and
-    # capture the business key (position_id column) so retries can re-fetch
+    # capture the business key (position_key column) so retries can re-fetch
     # by business key even after a sibling caller creates a new surrogate id.
     initial_current = fetch_one(
         "SELECT * FROM positions WHERE id = %s AND row_current_ind = TRUE", (position_id,)
@@ -974,7 +1023,7 @@ def set_trailing_stop_state(
         msg = f"Position not found: {position_id}"
         raise ValueError(msg)
 
-    position_bk = initial_current["position_id"]  # Business key (stable across retries)
+    position_bk = initial_current["position_key"]  # Business key (stable across retries)
 
     def _attempt_close_and_insert() -> int:
         """One attempt at the SCD close+insert sequence for set_trailing_stop_state.
@@ -988,7 +1037,7 @@ def set_trailing_stop_state(
         with ``update_trailing_stop``) for the same surrogate id can both
         proceed past their independent close (the second as a no-op) and
         both INSERT, colliding on ``idx_positions_unique_current``. On retry,
-        we look up the fresh current row by BUSINESS KEY (``position_id``
+        we look up the fresh current row by BUSINESS KEY (``position_key``
         column) -- the surrogate id from the outer fetch is stale after the
         sibling caller created a new version.
         """
@@ -1003,7 +1052,7 @@ def set_trailing_stop_state(
             cur.execute(
                 """
                 SELECT id FROM positions
-                WHERE position_id = %s
+                WHERE position_key = %s
                   AND row_current_ind = TRUE
                 FOR UPDATE
                 """,
@@ -1017,7 +1066,7 @@ def set_trailing_stop_state(
             cur.execute(
                 """
                 SELECT * FROM positions
-                WHERE position_id = %s
+                WHERE position_key = %s
                   AND row_current_ind = TRUE
                 """,
                 (position_bk,),
@@ -1075,13 +1124,13 @@ def set_trailing_stop_state(
                 UPDATE positions
                 SET row_current_ind = FALSE,
                     row_end_ts = %s
-                WHERE position_id = %s
+                WHERE position_key = %s
                   AND row_current_ind = TRUE
                 """,
                 (now, position_bk),
             )
 
-            # Step 4: Insert new version with same position_id (business
+            # Step 4: Insert new version with same position_key (business
             # key) but new id (surrogate). All columns copied explicitly
             # from the re-fetched ``current`` row (NOT via SELECT FROM
             # positions, which would re-introduce the #629 bug).
@@ -1096,10 +1145,16 @@ def set_trailing_stop_state(
             # a JSONB column. The sibling ``update_position_price``,
             # ``close_position``, and ``create_position`` functions were
             # updated to adopt the same pattern (#666, #706).
+            # Migration 0059 (#725) Pattern 49 copy-forward checklist:
+            #   edge_id must appear in this INSERT's column list AND its
+            #   params tuple, sourced from current["edge_id"]. Omitting
+            #   either silently NULLs the provenance FK on the new SCD
+            #   version — the exact SET NULL behavior 0057 was built to
+            #   prevent. See migration 0059 docstring and Holden memo §6.
             cur.execute(
                 """
                 INSERT INTO positions (
-                    position_id, market_internal_id, strategy_id, model_id, side,
+                    position_key, market_id, strategy_id, model_id, side,
                     quantity, entry_price,
                     current_price, unrealized_pnl, realized_pnl,
                     target_price, stop_loss_price,
@@ -1108,6 +1163,7 @@ def set_trailing_stop_state(
                     exit_price, exit_reason, exit_time,
                     calculated_probability, edge_at_entry, market_price_at_entry,
                     execution_environment,
+                    edge_id,
                     row_start_ts, row_current_ind
                 )
                 VALUES (
@@ -1120,13 +1176,14 @@ def set_trailing_stop_state(
                     %s, %s, %s,
                     %s, %s, %s,
                     %s,
+                    %s,
                     %s, TRUE
                 )
                 RETURNING id
                 """,
                 (
-                    current["position_id"],  # Copy business key from current version
-                    current["market_internal_id"],
+                    current["position_key"],  # Copy business key from current version
+                    current["market_id"],
                     current["strategy_id"],
                     current["model_id"],
                     current["side"],
@@ -1157,6 +1214,7 @@ def set_trailing_stop_state(
                     current["edge_at_entry"],
                     current["market_price_at_entry"],
                     current["execution_environment"],  # Preserve execution environment
+                    current["edge_id"],  # Pattern 49 copy-forward (#725, migration 0059)
                     now,  # row_start_ts
                 ),
             )
@@ -1172,7 +1230,7 @@ def set_trailing_stop_state(
     return retry_on_scd_unique_conflict(
         _attempt_close_and_insert,
         "idx_positions_unique_current",
-        business_key={"position_id": position_bk},
+        business_key={"position_key": position_bk},
         logger_override=logger,
     )
 
@@ -1188,7 +1246,7 @@ def set_trailing_stop_state(
 
 
 def create_trade(
-    market_internal_id: int,
+    market_id: int,
     side: str,
     quantity: int,
     price: Decimal,
@@ -1208,7 +1266,7 @@ def create_trade(
     order, not on the trade. Query attribution via JOIN to orders table.
 
     Args:
-        market_internal_id: Integer foreign key to markets(id)
+        market_id: Integer foreign key to markets(id)
         side: Trade direction - 'buy' or 'sell'
         quantity: Number of contracts filled
         price: Execution price as DECIMAL(10,4) in [0, 1]
@@ -1229,14 +1287,14 @@ def create_trade(
 
     Educational Note:
         Migration 0025 Redesign:
-        - Attribution (strategy_id, model_id, edge_id, position_id) moved to orders
+        - Attribution (strategy_id, model_id, edge_id, position_id FK) moved to orders
         - Trades are pure execution records (what actually happened at the exchange)
         - edge_value auto-calculated: calculated_probability - market_price
         - Query attribution: SELECT o.strategy_id FROM orders o JOIN trades t ON t.order_id = o.id
 
     Example:
         >>> trade_id = create_trade(
-        ...     market_internal_id=42,
+        ...     market_id=42,
         ...     side='buy',
         ...     quantity=10,
         ...     price=Decimal("0.5200"),
@@ -1270,7 +1328,7 @@ def create_trade(
 
     query = """
         INSERT INTO trades (
-            market_internal_id, side, quantity, price,
+            market_id, side, quantity, price,
             order_id, is_taker, fees,
             trade_metadata, execution_time,
             calculated_probability, market_price, edge_value,
@@ -1281,7 +1339,7 @@ def create_trade(
     """
 
     params = (
-        market_internal_id,
+        market_id,
         side,
         quantity,
         price,
@@ -1302,7 +1360,7 @@ def create_trade(
 
 
 def get_trades_by_market(
-    market_internal_id: int,
+    market_id: int,
     limit: int = 100,
     execution_environment: ExecutionEnvironment | None = None,
 ) -> list[dict[str, Any]]:
@@ -1310,7 +1368,7 @@ def get_trades_by_market(
     Get all trades for a specific market.
 
     Args:
-        market_internal_id: Integer FK to markets(id)
+        market_id: Integer FK to markets(id)
         limit: Maximum number of trades (default: 100)
         execution_environment: Filter by environment ('live', 'paper', 'backtest').
             If None, returns trades from all environments.
@@ -1320,18 +1378,18 @@ def get_trades_by_market(
 
     Example:
         >>> # All trades for market
-        >>> trades = get_trades_by_market(market_internal_id=42, limit=20)
+        >>> trades = get_trades_by_market(market_id=42, limit=20)
         >>> # Only paper trades (demo API testing)
-        >>> paper_trades = get_trades_by_market(market_internal_id=42, execution_environment='paper')
+        >>> paper_trades = get_trades_by_market(market_id=42, execution_environment='paper')
     """
     # Migration 0021: markets is dimension (no SCD, no row_current_ind filter needed).
     query = """
         SELECT t.*, m.ticker
         FROM trades t
-        JOIN markets m ON t.market_internal_id = m.id
-        WHERE t.market_internal_id = %s
+        JOIN markets m ON t.market_id = m.id
+        WHERE t.market_id = %s
     """
-    params: list[str | int] = [market_internal_id]
+    params: list[str | int] = [market_id]
 
     if execution_environment is not None:
         query += " AND t.execution_environment = %s"
@@ -1374,7 +1432,7 @@ def get_recent_trades(
                o.strategy_id, o.model_id,
                s.strategy_name, pm.model_name
         FROM trades t
-        JOIN markets m ON t.market_internal_id = m.id
+        JOIN markets m ON t.market_id = m.id
         LEFT JOIN orders o ON t.order_id = o.id
         LEFT JOIN strategies s ON o.strategy_id = s.strategy_id
         LEFT JOIN probability_models pm ON o.model_id = pm.model_id
@@ -1425,7 +1483,7 @@ def get_position_by_id(position_id: int) -> dict[str, Any] | None:
     Example:
         >>> position = get_position_by_id(position_id=42)
         >>> if position:
-        ...     print(f"Position {position['position_id']}: {position['status']}")
+        ...     print(f"Position {position['position_key']}: {position['status']}")
 
     References:
         - ADR-018: Position Immutable Versioning
@@ -1435,7 +1493,7 @@ def get_position_by_id(position_id: int) -> dict[str, Any] | None:
     query = """
         SELECT p.*, m.ticker, s.strategy_name, pm.model_name
         FROM positions p
-        JOIN markets m ON p.market_internal_id = m.id
+        JOIN markets m ON p.market_id = m.id
         JOIN strategies s ON p.strategy_id = s.strategy_id
         LEFT JOIN probability_models pm ON p.model_id = pm.model_id
         WHERE p.id = %s
@@ -1475,7 +1533,7 @@ def get_trade_by_id(trade_id: int) -> dict[str, Any] | None:
                o.strategy_id, o.model_id,
                s.strategy_name, pm.model_name
         FROM trades t
-        JOIN markets m ON t.market_internal_id = m.id
+        JOIN markets m ON t.market_id = m.id
         LEFT JOIN orders o ON t.order_id = o.id
         LEFT JOIN strategies s ON o.strategy_id = s.strategy_id
         LEFT JOIN probability_models pm ON o.model_id = pm.model_id

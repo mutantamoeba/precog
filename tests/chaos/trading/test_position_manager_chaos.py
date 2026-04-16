@@ -39,8 +39,8 @@ def mock_position() -> dict[str, Any]:
     """Create a mock position dict."""
     return {
         "id": 123,
-        "position_id": "POS-2025-001",
-        "market_internal_id": 1,
+        "position_key": "POS-2025-001",
+        "market_id": 1,
         "strategy_id": 1,
         "model_id": 1,
         "side": "YES",
@@ -176,7 +176,7 @@ class TestInvalidSideHandling:
         """Test rejection of lowercase side."""
         with pytest.raises(ValueError, match="Invalid side"):
             manager.open_position(
-                market_internal_id=1,
+                market_id=1,
                 strategy_id=1,
                 model_id=1,
                 side="yes",  # lowercase
@@ -197,7 +197,7 @@ class TestInvalidSideHandling:
         """Test rejection of mixed case side."""
         with pytest.raises(ValueError, match="Invalid side"):
             manager.open_position(
-                market_internal_id=1,
+                market_id=1,
                 strategy_id=1,
                 model_id=1,
                 side="Yes",  # mixed case
@@ -218,7 +218,7 @@ class TestInvalidSideHandling:
         """Test rejection of unknown side."""
         with pytest.raises(ValueError, match="Invalid side"):
             manager.open_position(
-                market_internal_id=1,
+                market_id=1,
                 strategy_id=1,
                 model_id=1,
                 side="BUY",  # wrong terminology
