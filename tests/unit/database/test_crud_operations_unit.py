@@ -2411,7 +2411,11 @@ class TestCreateTeamUnit:
         params = call_args[1]
         assert "INSERT INTO teams" in sql
         assert "RETURNING team_id" in sql
-        # Verify all 9 params are passed in correct order
+        # Verify all 11 params are passed in correct order.
+        # The trailing sport_id/league_id pair lands from the #738 A1
+        # dual-write path; the cache falls back to None when the
+        # lookup tables aren't populated in the unit-test DB, so both
+        # FK values resolve to None here.
         assert params == (
             "ALA",
             "Alabama Crimson Tide",
@@ -2422,6 +2426,8 @@ class TestCreateTeamUnit:
             None,
             "SEC",
             "West",
+            None,
+            None,
         )
 
     @patch("precog.database.crud_teams.get_cursor")
