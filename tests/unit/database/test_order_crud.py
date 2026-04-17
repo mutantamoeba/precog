@@ -215,9 +215,18 @@ class TestCreateOrder:
             execution_environment="paper",
             trade_source="manual",
             order_metadata={"source": "test"},
+            orderbook_snapshot_id=7,
         )
 
         assert result == 99
+        # orderbook_snapshot_id is appended last in the params tuple (see
+        # migration 0063 + crud_orders.create_order params ordering). Index
+        # 18 = 19th element (0-indexed), the final slot.
+        insert_params = mock_cursor.execute.call_args_list[0][0][1]
+        assert insert_params[18] == 7, (
+            "create_order must pass orderbook_snapshot_id as the final positional "
+            f"param; got params[18]={insert_params[18]!r}"
+        )
 
 
 # =============================================================================
