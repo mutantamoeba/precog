@@ -273,25 +273,37 @@ def clean_test_data(db_cursor):
     _series_row = db_cursor.fetchone()
     _test_series_pk = _series_row["id"] if _series_row else None
 
-    # Create test event (uses series_id integer FK to series.id)
-    # external_id is the canonical business key (migration 0047 dropped the old event_id column)
-    db_cursor.execute(
-        """
-        INSERT INTO events (platform_id, series_id, external_id, category, title, status)
-        VALUES ('test_platform', %s, 'TEST-EVT-NFL-KC-BUF', 'sports', 'Test Event: KC vs BUF', 'scheduled')
-        ON CONFLICT (platform_id, external_id) DO NOTHING
-    """,
-        (_test_series_pk,),
+    # Create test events via CRUD helper (migration 0062 #791 — #C2c):
+    # ``get_or_create_event`` runs the two-step ``TEMP → EVT-{id}`` key
+    # assignment inside the canonical code path, keeping this fixture in
+    # sync with production semantics and avoiding hand-rolled sentinels.
+    # The db_cursor we hold is uncommitted here; flush the series INSERT
+    # so the CRUD helper (which opens its own cursor) can see the parent
+    # series row via its own MVCC snapshot.
+    db_cursor.connection.commit()
+
+    from precog.database.crud_events import get_or_create_event
+
+    # external_id is the canonical business key (migration 0047 dropped event_id column)
+    get_or_create_event(
+        event_id="TEST-EVT-NFL-KC-BUF",
+        platform_id="test_platform",
+        external_id="TEST-EVT-NFL-KC-BUF",
+        category="sports",
+        title="Test Event: KC vs BUF",
+        series_id=_test_series_pk,
+        status="scheduled",
     )
 
-    # Create additional test event for test_execute_query
-    db_cursor.execute(
-        """
-        INSERT INTO events (platform_id, series_id, external_id, category, title, status)
-        VALUES ('test_platform', %s, 'TEST-EVT-2', 'sports', 'Test Event 2', 'scheduled')
-        ON CONFLICT (platform_id, external_id) DO NOTHING
-    """,
-        (_test_series_pk,),
+    # Additional test event for test_execute_query
+    get_or_create_event(
+        event_id="TEST-EVT-2",
+        platform_id="test_platform",
+        external_id="TEST-EVT-2",
+        category="sports",
+        title="Test Event 2",
+        series_id=_test_series_pk,
+        status="scheduled",
     )
 
     # Create test strategy and probability model (required parent records for positions/trades)

@@ -69,6 +69,7 @@ def create_edge(
     recommended_action: str | None = None,
     category: str | None = None,
     subcategory: str | None = None,
+    orderbook_snapshot_id: int | None = None,
 ) -> int:
     """
     Create a new edge record with SCD Type 2 row_current_ind = TRUE.
@@ -106,6 +107,10 @@ def create_edge(
             environment. The optional-default precedent removed in the
             #622+#686 synthesis PR was the literal cause of the
             #622/#662/#686 bug class. See findings_622_686_synthesis.md.
+        orderbook_snapshot_id: FK to orderbook_snapshots(id) visible at edge
+            detection time. Nullable -- None until orderbook pipeline is wired
+            (Phase 3). Added by migration 0063 for #725 item 11 (provenance
+            chain completion). See ``design_725_item11_orderbook.md``.
 
     Returns:
         Integer surrogate PK (edges.id) of the newly created edge.
@@ -172,6 +177,17 @@ def create_edge(
     if liquidity is not None:
         liquidity = validate_decimal(liquidity, "liquidity")
 
+    # NOTE: edges has NO SCD2 supersede path today -- the only writers are
+    # ``create_edge`` (this function) + direct lifecycle UPDATEs via
+    # ``update_edge_outcome`` / ``update_edge_status``. That means there
+    # is no Pattern 49 copy-forward requirement for ``orderbook_snapshot_id``
+    # YET. When a supersede path is added for edges (e.g. on price drift),
+    # the new INSERT in that path MUST carry ``orderbook_snapshot_id``
+    # forward from the current row -- see design memo
+    # ``design_725_item11_orderbook.md`` section on SCD copy-forward.
+    # ``orderbook_snapshot_id`` is appended at the end of the column list
+    # and params tuple so existing positional indexes into unit-test
+    # mocks remain stable.
     insert_query = """
         INSERT INTO edges (
             edge_key, market_id, model_id,
@@ -182,7 +198,8 @@ def create_edge(
             strategy_id, confidence_level, confidence_metrics,
             recommended_action, category, subcategory,
             execution_environment, edge_status,
-            row_current_ind, row_start_ts
+            row_current_ind, row_start_ts,
+            orderbook_snapshot_id
         )
         VALUES (
             'TEMP', %s, %s,
@@ -192,7 +209,8 @@ def create_edge(
             %s, %s, %s,
             %s, %s, %s,
             %s, 'detected',
-            TRUE, NOW()
+            TRUE, NOW(),
+            %s
         )
         RETURNING id
     """
@@ -218,6 +236,7 @@ def create_edge(
         category,
         subcategory,
         execution_environment,
+        orderbook_snapshot_id,
     )
 
     with get_cursor(commit=True) as cur:

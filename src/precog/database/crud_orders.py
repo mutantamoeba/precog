@@ -88,6 +88,7 @@ def create_order(
     client_order_id: str | None = None,
     trade_source: str = "automated",
     order_metadata: dict | None = None,
+    orderbook_snapshot_id: int | None = None,
 ) -> int:
     """
     Create a new order record.
@@ -121,6 +122,10 @@ def create_order(
             application boundary or pass an explicit literal.
         trade_source: 'automated' or 'manual'
         order_metadata: Additional data stored as JSONB
+        orderbook_snapshot_id: FK to orderbook_snapshots(id) visible at order
+            decision time. Nullable -- None until orderbook pipeline is wired
+            (Phase 3). Added by migration 0063 for #725 item 11 (provenance
+            chain completion). See ``design_725_item11_orderbook.md``.
 
     Returns:
         Integer surrogate PK (orders.id) of the newly created order.
@@ -195,7 +200,8 @@ def create_order(
             requested_price, requested_quantity,
             remaining_quantity, status,
             execution_environment, trade_source,
-            order_metadata
+            order_metadata,
+            orderbook_snapshot_id
         )
         VALUES (
             %s, %s, %s,
@@ -205,11 +211,16 @@ def create_order(
             %s, %s,
             %s, 'submitted',
             %s, %s,
+            %s,
             %s
         )
         RETURNING id
     """
 
+    # NOTE: orderbook_snapshot_id is appended at the end of the params tuple
+    # (matching the column list order) so existing positional indexes into
+    # ``call_args_list[0][0][1]`` used by unit tests remain stable. See
+    # migration 0063 for schema context.
     params = (
         platform_id,
         external_order_id,
@@ -229,6 +240,7 @@ def create_order(
         execution_environment,
         trade_source,
         json.dumps(order_metadata) if order_metadata is not None else None,
+        orderbook_snapshot_id,
     )
 
     with get_cursor(commit=True) as cur:

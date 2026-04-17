@@ -380,6 +380,7 @@ class TestGameStateNullHandling:
         # closure, so no placeholder is needed for it.
         mock_cursor.fetchone.side_effect = [
             {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            None,  # FOR UPDATE lock query — first-insert path (0062 added game_state_key SELECT)
             {"id": 1},  # INSERT RETURNING id
         ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
@@ -413,6 +414,7 @@ class TestGameStateNullHandling:
         # closure, so no placeholder is needed for it.
         mock_cursor.fetchone.side_effect = [
             {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            None,  # FOR UPDATE lock query — first-insert path (0062 added game_state_key SELECT)
             {"id": 1},  # INSERT RETURNING id
         ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
@@ -458,6 +460,7 @@ class TestGameStateBoundaryValues:
         # closure, so no placeholder is needed for it.
         mock_cursor.fetchone.side_effect = [
             {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            None,  # FOR UPDATE lock query — first-insert path (0062 added game_state_key SELECT)
             {"id": 1},  # INSERT RETURNING id
         ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
@@ -492,6 +495,7 @@ class TestGameStateBoundaryValues:
         # closure, so no placeholder is needed for it.
         mock_cursor.fetchone.side_effect = [
             {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            None,  # FOR UPDATE lock query — first-insert path (0062 added game_state_key SELECT)
             {"id": 1},  # INSERT RETURNING id
         ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
@@ -526,6 +530,7 @@ class TestGameStateBoundaryValues:
         # closure, so no placeholder is needed for it.
         mock_cursor.fetchone.side_effect = [
             {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            None,  # FOR UPDATE lock query — first-insert path (0062 added game_state_key SELECT)
             {"id": 1},  # INSERT RETURNING id
         ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
@@ -572,6 +577,7 @@ class TestGameStateEdgeCases:
         # closure, so no placeholder is needed for it.
         mock_cursor.fetchone.side_effect = [
             {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            None,  # FOR UPDATE lock query — first-insert path (0062 added game_state_key SELECT)
             {"id": 1},  # INSERT RETURNING id
         ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
@@ -605,6 +611,7 @@ class TestGameStateEdgeCases:
         # closure, so no placeholder is needed for it.
         mock_cursor.fetchone.side_effect = [
             {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            None,  # FOR UPDATE lock query — first-insert path (0062 added game_state_key SELECT)
             {"id": 1},  # INSERT RETURNING id
         ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
@@ -660,6 +667,7 @@ class TestGameStateEdgeCases:
         # closure, so no placeholder is needed for it.
         mock_cursor.fetchone.side_effect = [
             {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            None,  # FOR UPDATE lock query — first-insert path (0062 added game_state_key SELECT)
             {"id": 1},  # INSERT RETURNING id
         ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
@@ -781,6 +789,7 @@ class TestDecimalPrecisionChaos:
         # closure, so no placeholder is needed for it.
         mock_cursor.fetchone.side_effect = [
             {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            None,  # FOR UPDATE lock query — first-insert path (0062 added game_state_key SELECT)
             {"id": 1},  # INSERT RETURNING id
         ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
@@ -814,6 +823,7 @@ class TestDecimalPrecisionChaos:
         # closure, so no placeholder is needed for it.
         mock_cursor.fetchone.side_effect = [
             {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            None,  # FOR UPDATE lock query — first-insert path (0062 added game_state_key SELECT)
             {"id": 1},  # INSERT RETURNING id
         ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
@@ -847,6 +857,7 @@ class TestDecimalPrecisionChaos:
         # closure, so no placeholder is needed for it.
         mock_cursor.fetchone.side_effect = [
             {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            None,  # FOR UPDATE lock query — first-insert path (0062 added game_state_key SELECT)
             {"id": 1},  # INSERT RETURNING id
         ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)

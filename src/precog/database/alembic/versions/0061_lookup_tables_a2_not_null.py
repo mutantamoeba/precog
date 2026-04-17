@@ -12,7 +12,7 @@ Steps:
        via a different path (e.g., game_odds.league_id via game lookup)
        are verified but not backfilled — they should already be clean.
     2. Verify zero NULLs on ALL FK columns (hard fail if any remain).
-    3. SET NOT NULL on all 11 FK columns.
+    3. SET NOT NULL on all 12 FK columns.
     4. DROP 9 redundant VARCHAR CHECK constraints.
 
 The VARCHAR sport/league columns are NOT dropped here — that's arc B.
@@ -117,8 +117,10 @@ def upgrade() -> None:
         op.alter_column(table, col, nullable=False)
 
     # ── Step 4: DROP redundant CHECK constraints ────────────────────────
+    # Use raw SQL with IF EXISTS for idempotency — the downgrade does NOT
+    # recreate CHECKs, so a downgrade+upgrade cycle would fail without this.
     for table, constraint_name in _CHECKS_TO_DROP:
-        op.drop_constraint(constraint_name, table, type_="check")
+        op.execute(sa.text(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {constraint_name}"))
 
 
 def downgrade() -> None:
