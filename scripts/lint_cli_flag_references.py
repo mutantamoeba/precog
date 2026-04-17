@@ -38,7 +38,10 @@ def _discover_subcommands() -> list[list[str]]:
     """
     import os
 
-    from click import BaseCommand, Context, MultiCommand
+    # Click 8.1+ deprecated BaseCommand/MultiCommand as module-level variable
+    # aliases (= Command / = Group). Mypy rejects aliased variables as type
+    # annotations [valid-type], so use the canonical classes directly.
+    from click import Command, Context, Group
 
     os.environ.setdefault("PRECOG_ENV", "test")
 
@@ -51,9 +54,9 @@ def _discover_subcommands() -> list[list[str]]:
 
     paths: list[list[str]] = []
 
-    def _walk(group: BaseCommand, prefix: tuple[str, ...] = ()) -> None:
+    def _walk(group: Command, prefix: tuple[str, ...] = ()) -> None:
         paths.append(list(prefix))
-        if isinstance(group, MultiCommand):
+        if isinstance(group, Group):
             ctx = Context(group, info_name=" ".join(prefix) if prefix else "precog")
             for name in sorted(group.list_commands(ctx)):
                 cmd = group.get_command(ctx, name)
