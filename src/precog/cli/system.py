@@ -9,7 +9,7 @@ Commands:
     info    - Show system diagnostics (Python, dependencies, paths)
 
 Usage:
-    precog system health [--verbose]
+    precog system health [--verbose] [--component NAME]
     precog system version
     precog system info
 
@@ -42,6 +42,9 @@ app = typer.Typer(
 )
 
 
+_HEALTH_COMPONENTS = ("database", "kalshi", "config", "espn", "persistent")
+
+
 @app.command()
 def health(
     verbose: bool = typer.Option(
@@ -49,6 +52,12 @@ def health(
         "--verbose",
         "-V",
         help="Show detailed health information",
+    ),
+    component: str | None = typer.Option(
+        None,
+        "--component",
+        "-c",
+        help=f"Check a specific component only ({', '.join(_HEALTH_COMPONENTS)})",
     ),
 ) -> None:
     """Comprehensive health check.
@@ -58,11 +67,23 @@ def health(
         - API credentials configuration
         - Service status
         - Configuration validity
+        - Persistent component health
 
     Examples:
         precog system health
         precog system health --verbose
+        precog system health --component database
     """
+    if component and component not in _HEALTH_COMPONENTS:
+        console.print(
+            f"[bold red]Unknown component: {component}[/bold red]\n"
+            f"Valid components: {', '.join(_HEALTH_COMPONENTS)}"
+        )
+        raise typer.Exit(code=1)
+
+    def _should_check(name: str) -> bool:
+        return component is None or component == name
+
     console.print("[bold]Precog Health Check[/bold]\n")
 
     checks_passed = 0
@@ -70,156 +91,161 @@ def health(
     checks_total = 0
 
     # Check 1: Database connectivity
-    checks_total += 1
-    console.print("Checking database connectivity...", end=" ")
-    try:
-        from precog.database.connection import get_cursor
+    if _should_check("database"):
+        checks_total += 1
+        console.print("Checking database connectivity...", end=" ")
+        try:
+            from precog.database.connection import get_cursor
 
-        with get_cursor() as cur:
-            cur.execute("SELECT 1 AS test")
-            cur.fetchone()
-        echo_success("OK")
-        checks_passed += 1
-        if verbose:
-            from precog.config.config_loader import ConfigLoader
+            with get_cursor() as cur:
+                cur.execute("SELECT 1 AS test")
+                cur.fetchone()
+            echo_success("OK")
+            checks_passed += 1
+            if verbose:
+                from precog.config.config_loader import ConfigLoader
 
-            config = ConfigLoader()
-            db_config = config.get_db_config()
-            console.print(f"  [dim]Database: {db_config.get('database', 'unknown')}[/dim]")
-    except Exception as e:
-        echo_error(f"FAILED: {e}")
-        checks_failed += 1
+                config = ConfigLoader()
+                db_config = config.get_db_config()
+                console.print(f"  [dim]Database: {db_config.get('database', 'unknown')}[/dim]")
+        except Exception as e:
+            echo_error(f"FAILED: {e}")
+            checks_failed += 1
 
     # Check 2: Kalshi API credentials
-    checks_total += 1
-    console.print("Checking Kalshi API credentials...", end=" ")
-    try:
-        import os
+    if _should_check("kalshi"):
+        checks_total += 1
+        console.print("Checking Kalshi API credentials...", end=" ")
+        try:
+            import os
 
-        api_key = os.getenv("KALSHI_API_KEY_ID")
-        private_key_path = os.getenv("KALSHI_PRIVATE_KEY_PATH")
+            api_key = os.getenv("KALSHI_API_KEY_ID")
+            private_key_path = os.getenv("KALSHI_PRIVATE_KEY_PATH")
 
-        if api_key and private_key_path:
-            key_path = Path(private_key_path)
-            if key_path.exists():
-                echo_success("OK")
-                checks_passed += 1
-                if verbose:
-                    console.print(f"  [dim]API Key ID: {api_key[:8]}...[/dim]")
-                    console.print(f"  [dim]Key Path: {private_key_path}[/dim]")
+            if api_key and private_key_path:
+                key_path = Path(private_key_path)
+                if key_path.exists():
+                    echo_success("OK")
+                    checks_passed += 1
+                    if verbose:
+                        console.print(f"  [dim]API Key ID: {api_key[:8]}...[/dim]")
+                        console.print(f"  [dim]Key Path: {private_key_path}[/dim]")
+                else:
+                    echo_error(f"FAILED: Private key not found at {private_key_path}")
+                    checks_failed += 1
             else:
-                echo_error(f"FAILED: Private key not found at {private_key_path}")
+                echo_error("FAILED: Credentials not configured")
                 checks_failed += 1
-        else:
-            echo_error("FAILED: Credentials not configured")
+                if verbose:
+                    console.print(
+                        "  [dim]Set KALSHI_API_KEY_ID and KALSHI_PRIVATE_KEY_PATH in .env[/dim]"
+                    )
+        except Exception as e:
+            echo_error(f"FAILED: {e}")
             checks_failed += 1
-            if verbose:
-                console.print(
-                    "  [dim]Set KALSHI_API_KEY_ID and KALSHI_PRIVATE_KEY_PATH in .env[/dim]"
-                )
-    except Exception as e:
-        echo_error(f"FAILED: {e}")
-        checks_failed += 1
 
     # Check 3: Configuration validity
-    checks_total += 1
-    console.print("Checking configuration...", end=" ")
-    try:
-        from precog.config.config_loader import ConfigLoader, get_trading_config
+    if _should_check("config"):
+        checks_total += 1
+        console.print("Checking configuration...", end=" ")
+        try:
+            from precog.config.config_loader import ConfigLoader, get_trading_config
 
-        config = ConfigLoader()
-        # Try to load main config sections
-        _ = get_trading_config()
-        _ = config.get("system")
-        echo_success("OK")
-        checks_passed += 1
-        if verbose:
-            console.print(f"  [dim]Environment: {get_env_mode()}[/dim]")
-            console.print(f"  [dim]Kalshi Mode: {get_kalshi_mode()}[/dim]")
-    except Exception as e:
-        echo_error(f"FAILED: {e}")
-        checks_failed += 1
+            config = ConfigLoader()
+            # Try to load main config sections
+            _ = get_trading_config()
+            _ = config.get("system")
+            echo_success("OK")
+            checks_passed += 1
+            if verbose:
+                console.print(f"  [dim]Environment: {get_env_mode()}[/dim]")
+                console.print(f"  [dim]Kalshi Mode: {get_kalshi_mode()}[/dim]")
+        except Exception as e:
+            echo_error(f"FAILED: {e}")
+            checks_failed += 1
 
     # Check 4: ESPN API (no auth required)
-    checks_total += 1
-    console.print("Checking ESPN API...", end=" ")
-    try:
-        from precog.api_connectors.espn_client import ESPNClient
+    if _should_check("espn"):
+        checks_total += 1
+        console.print("Checking ESPN API...", end=" ")
+        try:
+            from precog.api_connectors.espn_client import ESPNClient
 
-        ESPNClient()
-        # Just verify client can be instantiated
-        echo_success("OK")
-        checks_passed += 1
-    except Exception as e:
-        echo_error(f"FAILED: {e}")
-        checks_failed += 1
+            ESPNClient()
+            # Just verify client can be instantiated
+            echo_success("OK")
+            checks_passed += 1
+        except Exception as e:
+            echo_error(f"FAILED: {e}")
+            checks_failed += 1
 
     # Check 5: Persistent Component Health (from system_health table)
-    checks_total += 1
-    console.print("Checking persistent component health...", end=" ")
-    try:
-        from precog.database.crud_system import get_system_health
+    if _should_check("persistent"):
+        checks_total += 1
+        console.print("Checking persistent component health...", end=" ")
+        try:
+            from precog.database.crud_system import get_system_health
 
-        health_records = get_system_health()
-        if health_records:
-            # Count statuses
-            status_counts: dict[str, int] = {}
-            for record in health_records:
-                s = record.get("status", "unknown")
-                status_counts[s] = status_counts.get(s, 0) + 1
-
-            all_healthy = all(r.get("status") == "healthy" for r in health_records)
-            any_down = any(r.get("status") == "down" for r in health_records)
-
-            if all_healthy:
-                echo_success(f"OK ({len(health_records)} components)")
-                checks_passed += 1
-            elif any_down:
-                echo_error(
-                    f"UNHEALTHY ({status_counts.get('down', 0)} down, "
-                    f"{status_counts.get('degraded', 0)} degraded, "
-                    f"{status_counts.get('healthy', 0)} healthy)"
-                )
-                checks_failed += 1
-            else:
-                echo_error(
-                    f"DEGRADED ({status_counts.get('degraded', 0)} degraded, "
-                    f"{status_counts.get('healthy', 0)} healthy)"
-                )
-                checks_failed += 1
-
-            if verbose:
-                # Show per-component detail table
-                health_rows = []
+            health_records = get_system_health()
+            if health_records:
+                # Count statuses
+                status_counts: dict[str, int] = {}
                 for record in health_records:
-                    component = record.get("component", "unknown")
-                    status_val = record.get("status", "unknown")
-                    last_check = record.get("last_check")
-                    last_check_str = (
-                        last_check.strftime("%Y-%m-%d %H:%M:%S UTC") if last_check else "never"
+                    s = record.get("status", "unknown")
+                    status_counts[s] = status_counts.get(s, 0) + 1
+
+                all_healthy = all(r.get("status") == "healthy" for r in health_records)
+                any_down = any(r.get("status") == "down" for r in health_records)
+
+                if all_healthy:
+                    echo_success(f"OK ({len(health_records)} components)")
+                    checks_passed += 1
+                elif any_down:
+                    echo_error(
+                        f"UNHEALTHY ({status_counts.get('down', 0)} down, "
+                        f"{status_counts.get('degraded', 0)} degraded, "
+                        f"{status_counts.get('healthy', 0)} healthy)"
                     )
-
-                    # Extract key details from JSONB
-                    details = record.get("details") or {}
-                    error_rate = details.get("error_rate", "-")
-                    reason = details.get("reason", "-")
-
-                    health_rows.append(
-                        [component, status_val, last_check_str, str(error_rate), reason]
+                    checks_failed += 1
+                else:
+                    echo_error(
+                        f"DEGRADED ({status_counts.get('degraded', 0)} degraded, "
+                        f"{status_counts.get('healthy', 0)} healthy)"
                     )
+                    checks_failed += 1
 
-                table = format_table(
-                    "",
-                    ["Component", "Status", "Last Check", "Error Rate", "Reason"],
-                    health_rows,
-                )
-                console.print(table)
-        else:
-            echo_success("OK (no health data yet - services may not have run)")
-            checks_passed += 1
-    except Exception as e:
-        echo_error(f"FAILED: {e}")
-        checks_failed += 1
+                if verbose:
+                    # Show per-component detail table
+                    health_rows = []
+                    for record in health_records:
+                        component_name = record.get("component", "unknown")
+                        status_val = record.get("status", "unknown")
+                        last_check = record.get("last_check")
+                        last_check_str = (
+                            last_check.strftime("%Y-%m-%d %H:%M:%S UTC") if last_check else "never"
+                        )
+
+                        # Extract key details from JSONB
+                        details = record.get("details") or {}
+                        error_rate = details.get("error_rate", "-")
+                        reason = details.get("reason", "-")
+
+                        health_rows.append(
+                            [component_name, status_val, last_check_str, str(error_rate), reason]
+                        )
+
+                    table = format_table(
+                        "",
+                        ["Component", "Status", "Last Check", "Error Rate", "Reason"],
+                        health_rows,
+                    )
+                    console.print(table)
+            else:
+                echo_success("OK (no health data yet - services may not have run)")
+                checks_passed += 1
+        except Exception as e:
+            echo_error(f"FAILED: {e}")
+            checks_failed += 1
 
     # Summary
     console.print()

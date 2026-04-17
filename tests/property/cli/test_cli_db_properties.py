@@ -9,7 +9,7 @@ Reference: TESTING_STRATEGY V3.2 - Property Tests (2/8)
 from unittest.mock import MagicMock, patch
 
 import typer
-from hypothesis import assume, given, settings
+from hypothesis import given, settings
 from hypothesis import strategies as st
 from typer.testing import CliRunner
 
@@ -36,7 +36,7 @@ class TestDbArgumentInvariants:
 class TestDbOutputInvariants:
     """Property tests for database command output consistency."""
 
-    @given(st.sampled_from(["init", "status", "migrate", "tables"]))
+    @given(st.sampled_from(["init", "status", "tables"]))
     @settings(max_examples=4)
     def test_subcommand_help_available(self, subcommand: str):
         """Each subcommand should have help available."""
@@ -119,34 +119,5 @@ class TestDbTableListInvariants:
             result = runner.invoke(app, ["db", "tables"])
             assert result.exit_code in [0, 1, 2, 5]
 
-
-class TestDbMigrationInvariants:
-    """Property tests for migration command invariants."""
-
-    @given(st.integers(min_value=-100, max_value=0))
-    @settings(max_examples=20)
-    def test_invalid_migration_version_handling(self, version: int):
-        """Migrate should handle invalid (negative/zero) versions gracefully.
-
-        Note: Exit code 5 (DATABASE_ERROR) is acceptable when mocking doesn't
-        fully prevent database access in parallel execution.
-        """
-        app, runner = get_fresh_cli()
-        result = runner.invoke(app, ["db", "migrate", "--version", str(version)])
-        # Should fail gracefully, not crash
-        assert result.exit_code in [0, 1, 2, 3, 5]
-
-    @given(st.text(min_size=1, max_size=20))
-    @settings(max_examples=20)
-    def test_non_numeric_version_handling(self, version_str: str):
-        """Migrate should handle non-numeric version strings.
-
-        Note: Exit code 5 (DATABASE_ERROR) is acceptable when mocking doesn't
-        fully prevent database access in parallel execution.
-        """
-        assume(not version_str.strip().isdigit())  # Ensure not a valid number
-
-        app, runner = get_fresh_cli()
-        result = runner.invoke(app, ["db", "migrate", "--version", version_str])
-        # Typer should reject non-integer, exit code 2
-        assert result.exit_code in [0, 1, 2, 5]
+    # TestDbMigrationInvariants removed — `db migrate` command deleted (G5 S58).
+    # Use `alembic upgrade head` directly for migrations.

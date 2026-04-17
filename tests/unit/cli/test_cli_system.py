@@ -92,9 +92,9 @@ class TestSystemHealth:
 
         result = cli_runner.invoke(app, ["health"])
 
-        # Should attempt health check
-        assert result.exit_code in (0, 1), (
-            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        # Check 2 (Kalshi creds) always fails in test env → exit 1
+        assert result.exit_code == 1, (
+            f"Expected 1 (Check 2 fails without Kalshi creds), got {result.exit_code}: {result.output}"
         )
         output_lower = strip_ansi(result.stdout).lower()
         assert "database" in output_lower or "health" in output_lower or "check" in output_lower
@@ -106,8 +106,9 @@ class TestSystemHealth:
 
         result = cli_runner.invoke(app, ["health", "--verbose"])
 
-        assert result.exit_code in (0, 1), (
-            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        # Check 2 (Kalshi creds) always fails in test env → exit 1
+        assert result.exit_code == 1, (
+            f"Expected 1 (Check 2 fails without Kalshi creds), got {result.exit_code}: {result.output}"
         )
 
     @patch("precog.database.connection.get_cursor")
@@ -117,9 +118,9 @@ class TestSystemHealth:
 
         result = cli_runner.invoke(app, ["health"])
 
-        # Should report failure gracefully
-        assert result.exit_code in (0, 1), (
-            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        # Check 1 (DB) fails explicitly + Check 2 (Kalshi) fails → exit 1
+        assert result.exit_code == 1, (
+            f"Expected 1 (DB down + no Kalshi creds), got {result.exit_code}: {result.output}"
         )
         output_lower = strip_ansi(result.stdout).lower()
         assert "failed" in output_lower or "error" in output_lower or "health" in output_lower
@@ -132,9 +133,9 @@ class TestSystemHealth:
 
         result = cli_runner.invoke(app, ["health"])
 
-        # Should note missing credentials
-        assert result.exit_code in (0, 1), (
-            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        # Check 2 (Kalshi creds) explicitly fails → exit 1
+        assert result.exit_code == 1, (
+            f"Expected 1 (no Kalshi creds), got {result.exit_code}: {result.output}"
         )
 
 
@@ -201,6 +202,8 @@ class TestSystemHealthCheck5:
 
         result = cli_runner.invoke(app, ["health"])
 
+        # Check 2 (Kalshi creds) fails in test env → exit 1 overall
+        assert result.exit_code == 1
         output = strip_ansi(result.stdout).lower()
         assert "2 components" in output
 
@@ -216,6 +219,7 @@ class TestSystemHealthCheck5:
 
         result = cli_runner.invoke(app, ["health"])
 
+        assert result.exit_code == 1
         output = strip_ansi(result.stdout).lower()
         assert "unhealthy" in output
         assert "1 down" in output
@@ -231,6 +235,7 @@ class TestSystemHealthCheck5:
 
         result = cli_runner.invoke(app, ["health"])
 
+        assert result.exit_code == 1
         output = strip_ansi(result.stdout).lower()
         assert "degraded" in output
 
@@ -243,6 +248,7 @@ class TestSystemHealthCheck5:
 
         result = cli_runner.invoke(app, ["health"])
 
+        assert result.exit_code == 1  # Check 2 (Kalshi creds) still fails
         output = strip_ansi(result.stdout).lower()
         assert "no health data yet" in output
 
@@ -255,6 +261,7 @@ class TestSystemHealthCheck5:
 
         result = cli_runner.invoke(app, ["health"])
 
+        assert result.exit_code == 1
         output = strip_ansi(result.stdout).lower()
         assert "failed" in output
 
@@ -275,6 +282,7 @@ class TestSystemHealthCheck5:
 
         result = cli_runner.invoke(app, ["health", "--verbose"])
 
+        assert result.exit_code == 1
         output = strip_ansi(result.stdout).lower()
         assert "kalshi_api" in output
         assert "0.1200" in output
@@ -290,18 +298,28 @@ class TestSystemEdgeCases:
         assert result.exit_code != 0
 
     @patch("precog.database.connection.get_cursor")
-    def test_health_all_checks_pass(self, mock_get_cursor, cli_runner):
-        """Test health when all checks pass."""
+    def test_health_all_checks_pass(self, mock_get_cursor, cli_runner, tmp_path):
+        """Test health when all checks pass — mocks strengthened per Pattern 66."""
         mock_get_cursor.side_effect = _make_mock_cursor()
 
-        with patch.dict(
-            "os.environ",
-            {"KALSHI_API_KEY_ID": "test-key", "KALSHI_PRIVATE_KEY_PATH": "/path/to/key.pem"},
+        # Create a real key file so Check 2 (Kalshi creds) passes
+        key_file = tmp_path / "test_key.pem"
+        key_file.write_text("fake-key-for-test")
+
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "KALSHI_API_KEY_ID": "test-key",
+                    "KALSHI_PRIVATE_KEY_PATH": str(key_file),
+                },
+            ),
+            patch("precog.database.crud_system.get_system_health", return_value=[]),
         ):
             result = cli_runner.invoke(app, ["health"])
 
-        assert result.exit_code in (0, 1), (
-            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        assert result.exit_code == 0, (
+            f"Expected 0 (all checks pass), got {result.exit_code}: {result.output}"
         )
 
     @patch("precog.database.connection.get_cursor")
@@ -312,7 +330,7 @@ class TestSystemEdgeCases:
         with patch.dict("os.environ", {"KALSHI_API_KEY_ID": "", "KALSHI_PRIVATE_KEY_PATH": ""}):
             result = cli_runner.invoke(app, ["health"])
 
-        # Should complete and report partial status
-        assert result.exit_code in (0, 1), (
-            f"Expected 0 or 1, got {result.exit_code}: {result.output}"
+        # Check 2 (Kalshi creds) explicitly empty → exit 1
+        assert result.exit_code == 1, (
+            f"Expected 1 (empty Kalshi creds), got {result.exit_code}: {result.output}"
         )

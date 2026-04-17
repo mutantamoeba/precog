@@ -140,23 +140,6 @@ class TestDbStatusIntegration:
             assert result.exit_code in [0, 1, 2]
 
 
-class TestDbMigrateIntegration:
-    """Integration tests for db migrate command."""
-
-    def test_migrate_to_latest(self, cli_runner) -> None:
-        """Test migration to latest version.
-
-        Integration: Tests migration runner.
-        """
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
-
-            result = cli_runner.invoke(app, ["db", "migrate"])
-
-            assert result.exit_code in [0, 1, 2, 3]
-
-
 class TestDbTablesIntegration:
     """Integration tests for db tables command."""
 
