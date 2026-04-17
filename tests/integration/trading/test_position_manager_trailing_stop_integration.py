@@ -97,28 +97,28 @@ def trailing_stop_open_position(db_pool: Any) -> Any:
 
         delete_market_with_children(cur, "ticker = %s", (_TEST_TICKER,))
 
-        # Create the underlying market (positions FK to markets.id).
-        cur.execute(
-            """
-            INSERT INTO markets (
-                platform_id, event_id, external_id, ticker, title,
-                market_type, status
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """,
-            (
-                "kalshi",
-                None,
-                f"{_TEST_TICKER}-EXT",
-                _TEST_TICKER,
-                "Issue 669 Integration Market",
-                "binary",
-                "open",
-            ),
-        )
-        market_pk = cur.fetchone()["id"]
+    # Create the underlying market (positions FK to markets.id) via the
+    # CRUD helper.  Migration 0062 (#791): markets.market_key is NOT NULL +
+    # UNIQUE; ``create_market`` handles the canonical ``TEMP → MKT-{id}``
+    # two-step internally, keeping this fixture in sync with production
+    # semantics.
+    from decimal import Decimal as _Decimal
 
+    from precog.database.crud_markets import create_market
+
+    market_pk = create_market(
+        platform_id="kalshi",
+        event_id=None,
+        external_id=f"{_TEST_TICKER}-EXT",
+        ticker=_TEST_TICKER,
+        title="Issue 669 Integration Market",
+        yes_ask_price=_Decimal("0.5000"),
+        no_ask_price=_Decimal("0.5000"),
+        market_type="binary",
+        status="open",
+    )
+
+    with get_cursor(commit=True) as cur:
         # Create the initial open position (current row, no trailing stop yet).
         # We bypass PositionManager.open_position() here because it requires
         # a strategy_id + model_id + market_snapshot, and the bug under test

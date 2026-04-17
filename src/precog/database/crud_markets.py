@@ -9,6 +9,7 @@ Tables covered:
 
 import json
 import logging
+import uuid
 from decimal import Decimal
 from typing import Any, cast
 
@@ -181,12 +182,23 @@ def create_market(
     if previous_price is not None:
         previous_price = validate_decimal(previous_price, "previous_price")
 
+    # Migration 0062 (#791): markets.market_key is NOT NULL + UNIQUE.  We
+    # can only know the surrogate ``id`` after INSERT, so we use a
+    # two-step pattern: insert with a uniquely-generated TEMP sentinel,
+    # then UPDATE to ``MKT-{id}`` in the same transaction.  The TEMP
+    # sentinel uses ``uuid.uuid4`` so concurrent INSERTs never collide
+    # on the UNIQUE index during the ~microseconds between INSERT and
+    # UPDATE.  Because both steps share ``get_cursor(commit=True)``,
+    # readers outside the transaction never see the TEMP value.
+    temp_market_key = f"TEMP-{uuid.uuid4()}"
+
     with get_cursor(commit=True) as cur:
-        # Step 1: Insert dimension row
+        # Step 1: Insert dimension row with TEMP market_key placeholder.
         # Migration 0022: market_id VARCHAR dropped — no longer inserted.
         # Migration 0033: enrichment columns added (subtitle, timestamps, etc.)
         # Migration 0037: league renamed to subcategory
         # Migration 0046: expiration_value, notional_value added
+        # Migration 0062: market_key added (two-step: TEMP → MKT-{id})
         cur.execute(
             """
             INSERT INTO markets (
@@ -195,9 +207,9 @@ def create_market(
                 subtitle, open_time, close_time, expiration_time,
                 outcome_label, subcategory, bracket_count, source_url,
                 expiration_value, notional_value,
-                metadata, updated_at
+                metadata, market_key, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             RETURNING id
             """,
             (
@@ -220,10 +232,19 @@ def create_market(
                 expiration_value,
                 notional_value,
                 json.dumps(metadata) if metadata else None,
+                temp_market_key,
             ),
         )
         dim_row = cur.fetchone()
         market_pk = cast("int", dim_row["id"])
+
+        # Step 1b: Replace TEMP market_key with the canonical ``MKT-{id}``.
+        # Must happen before transaction commit so the TEMP value is never
+        # observable externally.
+        cur.execute(
+            "UPDATE markets SET market_key = %s WHERE id = %s",
+            (f"MKT-{market_pk}", market_pk),
+        )
 
         # Step 2: Insert initial snapshot (fact row)
         # Migration 0021: yes_bid_price, no_bid_price, last_price, liquidity

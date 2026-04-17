@@ -51,6 +51,7 @@ Markers:
 
 from __future__ import annotations
 
+import uuid
 from decimal import Decimal
 from typing import Any
 
@@ -104,13 +105,17 @@ def position_with_edge(db_pool: Any) -> Any:
         delete_market_with_children(cur, "ticker = %s", (_TEST_TICKER,))
 
         # Underlying market (positions and edges both FK to markets.id).
+        # Migration 0062 (#791): markets.market_key is NOT NULL + UNIQUE.
+        # SCD-mechanics test — keep raw INSERT (the surrounding test is
+        # verifying SCD supersede semantics on positions/edges, not market
+        # creation) and inline the TEMP→MKT-{id} two-step.
         cur.execute(
             """
             INSERT INTO markets (
                 platform_id, event_id, external_id, ticker, title,
-                market_type, status
+                market_type, status, market_key
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -121,9 +126,14 @@ def position_with_edge(db_pool: Any) -> Any:
                 "Issue 725 SCD Copy-Forward Market",
                 "binary",
                 "open",
+                f"TEMP-{uuid.uuid4()}",
             ),
         )
         market_pk = cur.fetchone()["id"]
+        cur.execute(
+            "UPDATE markets SET market_key = %s WHERE id = %s",
+            (f"MKT-{market_pk}", market_pk),
+        )
 
         # Seed a minimal edge row. All non-NULL columns on edges are either
         # business-identity (edge_key), FK (market_id), or metric fields

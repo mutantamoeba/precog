@@ -26,6 +26,7 @@ Markers:
 
 from __future__ import annotations
 
+import uuid
 from decimal import Decimal
 from typing import Any
 
@@ -675,33 +676,45 @@ class TestRestrictBlocksDeletion:
             )
             strategy_id = cur.fetchone()["strategy_id"]
 
-            # Create event for market
+            # Create event for market.  Migration 0062 (#791): events.event_key
+            # is NOT NULL + UNIQUE.  This test is migration-layer — we keep
+            # raw INSERT and inline the canonical two-step key assignment
+            # (TEMP sentinel → ``EVT-{id}``) so the test stays at the raw
+            # SQL layer where it belongs.
             cur.execute(
                 """
                 INSERT INTO events (
                     platform_id, external_id,
-                    category, title
+                    category, title, event_key
                 )
-                VALUES (%s, %s, 'sports', 'Test Event')
+                VALUES (%s, %s, 'sports', 'Test Event', %s)
                 RETURNING id
                 """,
-                (platform_id, "MIG57-EVT-EXT"),
+                (platform_id, "MIG57-EVT-EXT", f"TEMP-{uuid.uuid4()}"),
             )
             event_id = cur.fetchone()["id"]
+            cur.execute(
+                "UPDATE events SET event_key = %s WHERE id = %s",
+                (f"EVT-{event_id}", event_id),
+            )
 
-            # Create market
+            # Create market (same TEMP→MKT-{id} pattern for market_key).
             cur.execute(
                 """
                 INSERT INTO markets (
                     platform_id, event_id, external_id,
-                    ticker, title, market_type, status
+                    ticker, title, market_type, status, market_key
                 )
-                VALUES (%s, %s, %s, %s, 'Test Market', 'binary', 'open')
+                VALUES (%s, %s, %s, %s, 'Test Market', 'binary', 'open', %s)
                 RETURNING id
                 """,
-                (platform_id, event_id, "MIG57-MKT-EXT", "MIG57-TICK"),
+                (platform_id, event_id, "MIG57-MKT-EXT", "MIG57-TICK", f"TEMP-{uuid.uuid4()}"),
             )
             market_id = cur.fetchone()["id"]
+            cur.execute(
+                "UPDATE markets SET market_key = %s WHERE id = %s",
+                (f"MKT-{market_id}", market_id),
+            )
 
             # Create order referencing strategy
             cur.execute(
@@ -760,19 +773,27 @@ class TestRestrictBlocksDeletion:
         platform_id = fk_test_platform
 
         with get_cursor(commit=True) as cur:
-            # Create market
+            # Create market.  Migration 0062 (#791): markets.market_key is
+            # NOT NULL + UNIQUE.  Raw-SQL migration test — inline the
+            # canonical TEMP→MKT-{id} two-step rather than routing through
+            # the CRUD helper (which would also insert a market_snapshots
+            # row, masking the FK behavior this test exercises).
             cur.execute(
                 """
                 INSERT INTO markets (
                     platform_id, external_id, ticker, title,
-                    market_type, status
+                    market_type, status, market_key
                 )
-                VALUES (%s, %s, %s, 'Snapshot Test Market', 'binary', 'open')
+                VALUES (%s, %s, %s, 'Snapshot Test Market', 'binary', 'open', %s)
                 RETURNING id
                 """,
-                (platform_id, "MIG57-SNAP-MKT-EXT", "MIG57-SNAP-TICK"),
+                (platform_id, "MIG57-SNAP-MKT-EXT", "MIG57-SNAP-TICK", f"TEMP-{uuid.uuid4()}"),
             )
             market_id = cur.fetchone()["id"]
+            cur.execute(
+                "UPDATE markets SET market_key = %s WHERE id = %s",
+                (f"MKT-{market_id}", market_id),
+            )
 
             # Create snapshot referencing market
             cur.execute(
@@ -811,19 +832,24 @@ class TestRestrictBlocksDeletion:
         platform_id = fk_test_platform
 
         with get_cursor(commit=True) as cur:
-            # Create market for position
+            # Create market for position.  Migration 0062 (#791): markets.market_key
+            # is NOT NULL + UNIQUE.  Raw-SQL migration test — inline TEMP→MKT-{id}.
             cur.execute(
                 """
                 INSERT INTO markets (
                     platform_id, external_id, ticker, title,
-                    market_type, status
+                    market_type, status, market_key
                 )
-                VALUES (%s, %s, %s, 'Position Test Market', 'binary', 'open')
+                VALUES (%s, %s, %s, 'Position Test Market', 'binary', 'open', %s)
                 RETURNING id
                 """,
-                (platform_id, "MIG57-POS-MKT-EXT", "MIG57-POS-TICK"),
+                (platform_id, "MIG57-POS-MKT-EXT", "MIG57-POS-TICK", f"TEMP-{uuid.uuid4()}"),
             )
             market_id = cur.fetchone()["id"]
+            cur.execute(
+                "UPDATE markets SET market_key = %s WHERE id = %s",
+                (f"MKT-{market_id}", market_id),
+            )
 
             # Create position
             cur.execute(
