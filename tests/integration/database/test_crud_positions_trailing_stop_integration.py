@@ -101,28 +101,25 @@ def trailing_stop_position(db_pool: Any) -> Any:
         # RESTRICT-safe cleanup: delete all children before parents.
         delete_market_with_children(cur, "ticker = %s", (_TEST_TICKER,))
 
-        # Create the underlying market (positions FK to markets.id).
-        cur.execute(
-            """
-            INSERT INTO markets (
-                platform_id, event_id, external_id, ticker, title,
-                market_type, status
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """,
-            (
-                "kalshi",
-                None,
-                f"{_TEST_TICKER}-EXT",
-                _TEST_TICKER,
-                "Issue 629 Integration Market",
-                "binary",
-                "open",
-            ),
-        )
-        market_pk = cur.fetchone()["id"]
+    # Create the underlying market (positions FK to markets.id) via the
+    # CRUD helper.  Migration 0062 (#791): markets.market_key is NOT NULL +
+    # UNIQUE; ``create_market`` handles the ``TEMP → MKT-{id}`` two-step
+    # internally.
+    from precog.database.crud_markets import create_market
 
+    market_pk = create_market(
+        platform_id="kalshi",
+        event_id=None,
+        external_id=f"{_TEST_TICKER}-EXT",
+        ticker=_TEST_TICKER,
+        title="Issue 629 Integration Market",
+        yes_ask_price=Decimal("0.5000"),
+        no_ask_price=Decimal("0.5000"),
+        market_type="binary",
+        status="open",
+    )
+
+    with get_cursor(commit=True) as cur:
         # Create the initial open position (current row, no trailing stop yet).
         # execution_environment defaults to 'live' per migration 0008.
         cur.execute(
@@ -828,27 +825,22 @@ def create_position_market(db_pool: Any) -> Any:
             ),
         )
 
-        # Seed the market (positions FK to markets.id).
-        cur.execute(
-            """
-            INSERT INTO markets (
-                platform_id, event_id, external_id, ticker, title,
-                market_type, status
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """,
-            (
-                "kalshi",
-                None,
-                f"{_CREATE_POS_TEST_TICKER}-EXT",
-                _CREATE_POS_TEST_TICKER,
-                "Issue 706 Integration Market",
-                "binary",
-                "open",
-            ),
-        )
-        market_pk = cur.fetchone()["id"]
+    # Seed the market (positions FK to markets.id) via the CRUD helper so
+    # migration 0062 (#791) ``market_key`` TEMP→MKT-{id} canonicalization
+    # runs inside the production code path.
+    from precog.database.crud_markets import create_market
+
+    market_pk = create_market(
+        platform_id="kalshi",
+        event_id=None,
+        external_id=f"{_CREATE_POS_TEST_TICKER}-EXT",
+        ticker=_CREATE_POS_TEST_TICKER,
+        title="Issue 706 Integration Market",
+        yes_ask_price=Decimal("0.5000"),
+        no_ask_price=Decimal("0.5000"),
+        market_type="binary",
+        status="open",
+    )
 
     yield market_pk
 

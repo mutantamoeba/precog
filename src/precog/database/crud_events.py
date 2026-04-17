@@ -9,6 +9,7 @@ Tables covered:
 
 import json
 import logging
+import uuid
 from typing import Any, cast
 
 from .connection import fetch_one, get_cursor
@@ -575,15 +576,26 @@ def create_event(
         - Migration 0038: events.game_id FK to games(id)
         - Migration 0047: Dropped redundant event_id column
     """
+    # Migration 0062 (#791): events.event_key is NOT NULL + UNIQUE.  We
+    # only know ``id`` after INSERT, so we use a two-step pattern: insert
+    # with a uniquely-generated TEMP sentinel, then UPDATE to
+    # ``EVT-{id}`` in the same transaction.  The TEMP sentinel uses
+    # ``uuid.uuid4`` so concurrent INSERTs cannot collide on the UNIQUE
+    # index during the window between INSERT and UPDATE.  The ``commit=True``
+    # cursor ensures both steps land atomically; external readers never
+    # observe the TEMP value.
+    temp_event_key = f"TEMP-{uuid.uuid4()}"
+
+    # Migration 0062: event_key added to INSERT (two-step: TEMP → EVT-{id}).
     query = """
         INSERT INTO events (
             platform_id, series_id, external_id,
             category, subcategory, title, description,
             start_time, end_time, status, metadata,
-            game_id,
+            game_id, event_key,
             created_at, updated_at
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
         RETURNING id
     """
 
@@ -600,12 +612,21 @@ def create_event(
         status,
         json.dumps(metadata) if metadata else None,
         game_id,
+        temp_event_key,
     )
 
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         result = cur.fetchone()
-        return cast("int", result["id"])
+        event_pk = cast("int", result["id"])
+
+        # Step 1b: Replace TEMP event_key with canonical ``EVT-{id}``.
+        cur.execute(
+            "UPDATE events SET event_key = %s WHERE id = %s",
+            (f"EVT-{event_pk}", event_pk),
+        )
+
+        return event_pk
 
 
 def _fill_event_null_fields(

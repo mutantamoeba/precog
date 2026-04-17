@@ -41,6 +41,7 @@ import csv
 import json
 import logging
 import time
+import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
@@ -547,6 +548,15 @@ def bulk_insert_historical_games(
             # games.league_id.  sport_name may be a sport ('football') or
             # a league code fallback (if the map misses); use the direct
             # sport lookup — misses are OK during A1 (nullable).
+            #
+            # Migration 0062 (#791): games.game_key is NOT NULL + UNIQUE.
+            # Batch inserts don't know the surrogate ``id`` at INSERT time,
+            # so each row gets a uniquely-generated TEMP sentinel.  Rows
+            # that hit ON CONFLICT preserve the existing game_key (via the
+            # COALESCE in _flush_games_batch).  Rows that actually INSERT
+            # are rewritten to ``GAM-{id}`` by the post-insert UPDATE in
+            # _flush_games_batch.  ``uuid.uuid4`` guarantees uniqueness
+            # across rows in the same batch and across concurrent batches.
             batch.append(
                 (
                     sport_name,
@@ -569,6 +579,7 @@ def bulk_insert_historical_games(
                     game_status,
                     get_sport_id_or_none(sport_name),
                     get_league_id_or_none(league_code),
+                    f"TEMP-{uuid.uuid4()}",  # game_key sentinel; rewritten after INSERT
                 )
             )
 
@@ -606,14 +617,31 @@ def _flush_games_batch(batch: list[tuple[Any, ...]]) -> int:
     with get_cursor(commit=True) as cursor:
         from psycopg2.extras import execute_values
 
-        # Dual-write (#738 A1): batch tuples now include sport_id + league_id at tail.
+        # Dual-write (#738 A1): batch tuples include sport_id + league_id.
+        # Migration 0062 (#791): batch tuples also include a TEMP game_key
+        # sentinel per row (uniquely generated in the caller).  On the
+        # INSERT path the TEMP value lands in the row (satisfies NOT NULL +
+        # UNIQUE); on the ON CONFLICT path the existing row's game_key is
+        # preserved by assigning ``game_key = games.game_key`` (no-op update
+        # that makes preservation explicit).  The follow-up UPDATE below
+        # rewrites only the just-inserted rows' TEMP sentinels to the
+        # canonical ``GAM-{id}``.
+        #
+        # RETURNING id + WHERE id = ANY(...) (Glokta S60 review W3) narrows
+        # the post-insert UPDATE to only the rows this call actually
+        # inserted.  This (a) avoids a table scan / index sweep looking
+        # for stray ``LIKE 'TEMP-%'`` rows, and (b) makes the semantics
+        # fully local — the UPDATE cannot accidentally touch rows left
+        # behind by any crashed prior transaction (defensive; should never
+        # happen inside a single transaction, but keeps the write surface
+        # minimal and auditable).
         query = """
             INSERT INTO games (
                 sport, season, game_date, home_team_code, away_team_code,
                 home_team_id, away_team_id, home_score, away_score,
                 neutral_site, is_playoff, game_type, venue_name,
                 data_source, source_file, external_game_id,
-                league, game_status, sport_id, league_id
+                league, game_status, sport_id, league_id, game_key
             ) VALUES %s
             ON CONFLICT (sport, game_date, home_team_code, away_team_code) DO UPDATE SET
                 home_team_id = COALESCE(EXCLUDED.home_team_id, games.home_team_id),
@@ -629,9 +657,24 @@ def _flush_games_batch(batch: list[tuple[Any, ...]]) -> int:
                 external_game_id = COALESCE(EXCLUDED.external_game_id, games.external_game_id),
                 updated_at = NOW(),
                 sport_id = COALESCE(EXCLUDED.sport_id, games.sport_id),
-                league_id = COALESCE(EXCLUDED.league_id, games.league_id)
+                league_id = COALESCE(EXCLUDED.league_id, games.league_id),
+                game_key = games.game_key
+            RETURNING id, game_key
         """
-        execute_values(cursor, query, batch)
+        # execute_values with fetch=True returns all RETURNING rows as a
+        # single list.  Rows where game_key starts with 'TEMP-' hit the
+        # INSERT branch; rows with an existing key hit ON CONFLICT.
+        returned = execute_values(cursor, query, batch, fetch=True)
+        inserted_ids = [row["id"] for row in returned if str(row["game_key"]).startswith("TEMP-")]
+
+        # Post-insert canonicalization: rewrite ONLY the just-inserted rows'
+        # TEMP sentinels to the canonical ``GAM-{id}``.  Same transaction as
+        # the INSERT so external readers never observe a TEMP value.
+        if inserted_ids:
+            cursor.execute(
+                "UPDATE games SET game_key = 'GAM-' || id WHERE id = ANY(%s)",
+                (inserted_ids,),
+            )
         return len(batch)
 
 

@@ -40,6 +40,7 @@ Markers:
 
 from __future__ import annotations
 
+import uuid
 from decimal import Decimal
 from typing import Any
 
@@ -111,19 +112,26 @@ def migration_test_platform(db_pool: Any) -> Any:
             (platform_id,),
         )
 
-        # Market (FK target for settlements via market_id)
+        # Market (FK target for settlements via market_id).  Migration 0062
+        # (#791): markets.market_key is NOT NULL + UNIQUE.  Raw-SQL migration
+        # test — inline the TEMP→MKT-{id} two-step.
         cur.execute(
             """
             INSERT INTO markets (
-                platform_id, external_id, ticker, title, market_type, status
+                platform_id, external_id, ticker, title, market_type, status,
+                market_key
             )
             VALUES (%s, 'MIG-52-55-TEST', 'MIG-52-55-TEST',
-                    'Migration 0052-0055 test market', 'binary', 'open')
+                    'Migration 0052-0055 test market', 'binary', 'open', %s)
             RETURNING id
             """,
-            (platform_id,),
+            (platform_id, f"TEMP-{uuid.uuid4()}"),
         )
         market_id = cur.fetchone()["id"]
+        cur.execute(
+            "UPDATE markets SET market_key = %s WHERE id = %s",
+            (f"MKT-{market_id}", market_id),
+        )
 
         # Position (FK target for position_exits / exit_attempts via
         # position_internal_id). Uses a unique business key so concurrent

@@ -187,25 +187,51 @@ def db_transaction_with_setup(
     _series_pk = _sr["id"] if _sr else None
 
     # Create test event (uses series_id integer FK to series.id)
-    # external_id is the canonical business key (migration 0047 dropped event_id column)
+    # external_id is the canonical business key (migration 0047 dropped event_id column).
+    #
+    # Migration 0062 (#791): events.event_key is NOT NULL + UNIQUE.  This
+    # fixture's whole reason for existing (Issue #171) is transaction
+    # rollback isolation — the cursor has autocommit=False and the parent
+    # ``db_transaction`` fixture rolls back at teardown.  Routing through
+    # the ``create_event`` CRUD helper here would open a separate connection
+    # with its own ``commit=True`` and defeat the rollback guarantee.
+    # Instead, we insert with a uniquely-generated TEMP event_key sentinel
+    # inline and immediately rewrite it to the canonical ``EVT-{id}`` in
+    # the same cursor — same transaction, fully rolled back at teardown.
+    import uuid as _uuid
+
     cursor.execute(
         """
-        INSERT INTO events (platform_id, series_id, external_id, category, title, status)
-        VALUES ('test_platform', %s, 'TEST-EVT-NFL-KC-BUF', 'sports', 'Test Event: KC vs BUF', 'scheduled')
+        INSERT INTO events (platform_id, series_id, external_id, category, title, status, event_key)
+        VALUES ('test_platform', %s, 'TEST-EVT-NFL-KC-BUF', 'sports', 'Test Event: KC vs BUF', 'scheduled', %s)
         ON CONFLICT (platform_id, external_id) DO NOTHING
+        RETURNING id
     """,
-        (_series_pk,),
+        (_series_pk, f"TEMP-{_uuid.uuid4()}"),
     )
+    _evt_row = cursor.fetchone()
+    if _evt_row is not None:
+        cursor.execute(
+            "UPDATE events SET event_key = %s WHERE id = %s",
+            (f"EVT-{_evt_row['id']}", _evt_row["id"]),
+        )
 
     # Create additional test event for compatibility
     cursor.execute(
         """
-        INSERT INTO events (platform_id, series_id, external_id, category, title, status)
-        VALUES ('test_platform', %s, 'TEST-EVT-2', 'sports', 'Test Event 2', 'scheduled')
+        INSERT INTO events (platform_id, series_id, external_id, category, title, status, event_key)
+        VALUES ('test_platform', %s, 'TEST-EVT-2', 'sports', 'Test Event 2', 'scheduled', %s)
         ON CONFLICT (platform_id, external_id) DO NOTHING
+        RETURNING id
     """,
-        (_series_pk,),
+        (_series_pk, f"TEMP-{_uuid.uuid4()}"),
     )
+    _evt_row = cursor.fetchone()
+    if _evt_row is not None:
+        cursor.execute(
+            "UPDATE events SET event_key = %s WHERE id = %s",
+            (f"EVT-{_evt_row['id']}", _evt_row["id"]),
+        )
 
     # Create test strategy (high ID to avoid SERIAL collision)
     cursor.execute("""
