@@ -152,6 +152,7 @@ class TestCreateEdge:
             category="sports",
             subcategory="nfl",
             execution_environment="paper",
+            orderbook_snapshot_id=7,
         )
 
         assert result == 99
@@ -160,6 +161,13 @@ class TestCreateEdge:
         insert_params = insert_call[0][1]
         # confidence_metrics should be JSON-serialized (16th param, 0-indexed 15)
         assert json.loads(insert_params[15]) == {"model_agreement": 0.95}
+        # orderbook_snapshot_id is appended last in the params tuple (see
+        # migration 0063 + crud_analytics.create_edge params ordering).
+        # Index 20 = 21st element (0-indexed), the final slot.
+        assert insert_params[20] == 7, (
+            "create_edge must pass orderbook_snapshot_id as the final positional "
+            f"param; got params[20]={insert_params[20]!r}"
+        )
 
     @patch("precog.database.crud_analytics.get_cursor")
     def test_create_edge_sets_edge_status_detected(self, mock_get_cursor):

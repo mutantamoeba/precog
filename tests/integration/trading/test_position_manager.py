@@ -34,61 +34,46 @@ def test_market_pks(db_cursor, clean_test_data):
         Dictionary mapping ticker strings to integer surrogate PKs.
         e.g. {"NFL-TEST-001": 42, "NFL-001": 43, "NFL-002": 44, "NFL-003": 45}
     """
-    conn = get_connection()
-    try:
-        with conn.cursor() as cur:
-            # Look up event surrogate PK (migration 0020: markets use integer FK)
-            # Note: get_connection() returns raw psycopg2 (tuple rows), not dict cursor
-            cur.execute("SELECT id FROM events WHERE external_id = 'TEST-EVT-NFL-KC-BUF'")
-            _evt = cur.fetchone()
-            event_pk = _evt[0] if _evt else None
+    # Migration 0062 (#791): markets.market_key is NOT NULL + UNIQUE.
+    # Route through the ``create_market`` CRUD helper so the two-step
+    # ``TEMP → MKT-{id}`` key assignment + initial ``market_snapshots``
+    # fact row both happen inside the canonical code path.  This keeps the
+    # fixture in sync with production semantics (a raw INSERT here would
+    # drift from the CRUD-inserted rows that production / other tests
+    # observe).
+    from precog.database.connection import fetch_one
+    from precog.database.crud_markets import create_market
 
-            # Create test markets (required for get_current_positions() JOIN)
-            # Multiple markets needed for filtering tests
-            # Migration 0022: market_id VARCHAR dropped, use ticker as identifier
-            markets_to_create = [
-                ("MKT-TEST-001", "Test Market: KC to beat BUF", "NFL-TEST-001"),
-                ("MKT-001", "Test Market 1", "NFL-001"),
-                ("MKT-002", "Test Market 2", "NFL-002"),
-                ("MKT-003", "Test Market 3", "NFL-003"),
-            ]
+    # Look up event surrogate PK (migration 0020: markets use integer FK)
+    _evt_row = fetch_one("SELECT id FROM events WHERE external_id = %s", ("TEST-EVT-NFL-KC-BUF",))
+    event_pk = _evt_row["id"] if _evt_row else None
 
-            market_pks = {}  # ticker -> integer PK mapping
-            for external_id, title, ticker in markets_to_create:
-                cur.execute(
-                    """
-                    INSERT INTO markets (
-                        platform_id, event_id, external_id, ticker, title,
-                        market_type, status
-                    )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id
-                    """,
-                    (
-                        "test_platform",
-                        event_pk,
-                        external_id,
-                        ticker,
-                        title,
-                        "binary",
-                        "open",
-                    ),
-                )
-                market_pk = cur.fetchone()[0]  # raw cursor returns tuples
-                market_pks[ticker] = market_pk
-                cur.execute(
-                    """
-                    INSERT INTO market_snapshots (
-                        market_id, yes_ask_price, no_ask_price,
-                        volume, open_interest, row_current_ind
-                    )
-                    VALUES (%s, %s, %s, %s, %s, TRUE)
-                    """,
-                    (market_pk, Decimal("0.5200"), Decimal("0.4800"), 1000, 500),
-                )
-            conn.commit()
-    finally:
-        release_connection(conn)
+    # Create test markets (required for get_current_positions() JOIN)
+    # Multiple markets needed for filtering tests
+    # Migration 0022: market_id VARCHAR dropped, use ticker as identifier
+    markets_to_create = [
+        ("MKT-TEST-001", "Test Market: KC to beat BUF", "NFL-TEST-001"),
+        ("MKT-001", "Test Market 1", "NFL-001"),
+        ("MKT-002", "Test Market 2", "NFL-002"),
+        ("MKT-003", "Test Market 3", "NFL-003"),
+    ]
+
+    market_pks: dict[str, int] = {}  # ticker -> integer PK mapping
+    for external_id, title, ticker in markets_to_create:
+        market_pk = create_market(
+            platform_id="test_platform",
+            event_id=event_pk,
+            external_id=external_id,
+            ticker=ticker,
+            title=title,
+            yes_ask_price=Decimal("0.5200"),
+            no_ask_price=Decimal("0.4800"),
+            market_type="binary",
+            status="open",
+            volume=1000,
+            open_interest=500,
+        )
+        market_pks[ticker] = market_pk
 
     yield market_pks
 

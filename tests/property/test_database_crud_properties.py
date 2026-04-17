@@ -121,19 +121,39 @@ def setup_kalshi_platform(db_pool, clean_test_data):
         series_row = cur.fetchone()
         series_pk = series_row["id"] if series_row else None
 
-        # Create events for test markets (idempotent)
-        # Uses series_id (integer FK) instead of old series_key VARCHAR
-        # Migration 0047: event_id column dropped, external_id is canonical business key
-        cur.execute(
-            """
-            INSERT INTO events (platform_id, series_id, external_id, category, title, status)
-            VALUES
-                ('kalshi', %s, 'KXNFLGAME-25DEC15CLEKC', 'sports', 'NFL Games Dec 15', 'scheduled'),
-                ('kalshi', %s, 'KXNFLGAME-25DEC08LACKC', 'sports', 'NFL Games Dec 08', 'scheduled')
-            ON CONFLICT (platform_id, external_id) DO NOTHING
-        """,
-            (series_pk, series_pk),
-        )
+        # Create events for test markets (idempotent).  Uses series_id
+        # (integer FK) instead of old series_key VARCHAR.  Migration 0047:
+        # event_id column dropped, external_id is canonical business key.
+        #
+        # Migration 0062 (#791): events.event_key is NOT NULL + UNIQUE.
+        # Raw-SQL property-test setup — inline TEMP→EVT-{id} per row.
+        # The RETURNING id clause gives us the surrogate PK only for rows
+        # actually inserted (not for ON CONFLICT skips), so we UPDATE only
+        # those and leave any pre-existing rows' canonical event_key alone.
+        import uuid as _uuid
+
+        for ext_id, title in [
+            ("KXNFLGAME-25DEC15CLEKC", "NFL Games Dec 15"),
+            ("KXNFLGAME-25DEC08LACKC", "NFL Games Dec 08"),
+        ]:
+            cur.execute(
+                """
+                INSERT INTO events (
+                    platform_id, series_id, external_id, category, title, status,
+                    event_key
+                )
+                VALUES ('kalshi', %s, %s, 'sports', %s, 'scheduled', %s)
+                ON CONFLICT (platform_id, external_id) DO NOTHING
+                RETURNING id
+                """,
+                (series_pk, ext_id, title, f"TEMP-{_uuid.uuid4()}"),
+            )
+            _evt_row = cur.fetchone()
+            if _evt_row is not None:
+                cur.execute(
+                    "UPDATE events SET event_key = %s WHERE id = %s",
+                    (f"EVT-{_evt_row['id']}", _evt_row["id"]),
+                )
 
     # NO TEARDOWN - Setup cleanup handles it, Issue #171 DB reset for final cleanup
 
@@ -1075,21 +1095,33 @@ def test_restrict_prevents_platform_delete_with_markets(db_pool, clean_test_data
         )
         series_pk = cur.fetchone()["id"]
 
-        # Create test event (uses series_id integer FK to series.id)
-        # Migration 0047: event_id column dropped, external_id is canonical
+        # Create test event (uses series_id integer FK to series.id).
+        # Migration 0047: event_id column dropped, external_id is canonical.
+        # Migration 0062 (#791): events.event_key is NOT NULL + UNIQUE.
+        # Raw-SQL property-test setup — inline TEMP→EVT-{id}.
+        import uuid as _uuid
+
         cur.execute(
             """
-            INSERT INTO events (platform_id, series_id, external_id, category, title, status)
-            VALUES (%s, %s, %s, 'sports', 'Test Event', 'scheduled')
+            INSERT INTO events (
+                platform_id, series_id, external_id, category, title, status,
+                event_key
+            )
+            VALUES (%s, %s, %s, 'sports', 'Test Event', 'scheduled', %s)
             RETURNING id
         """,
             (
                 test_platform_id,
                 series_pk,
                 test_event_id,
+                f"TEMP-{_uuid.uuid4()}",
             ),
         )
         event_pk = cur.fetchone()["id"]
+        cur.execute(
+            "UPDATE events SET event_key = %s WHERE id = %s",
+            (f"EVT-{event_pk}", event_pk),
+        )
 
     # Create market for this test platform
     market_pk = create_market(

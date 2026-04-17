@@ -513,12 +513,15 @@ class TestUpsertGameStateUnit:
         from datetime import datetime as _dt
 
         mock_cursor = MagicMock()
-        # Mock fetchone to return: NOW() ts row, then INSERT RETURNING id.
-        # (The FOR UPDATE lock query's fetchone result is not consumed by
-        # the closure, so no placeholder is needed for it.)
+        # Mock fetchone to return: NOW() ts row, FOR UPDATE lock row (supersede
+        # path — current row exists), then INSERT RETURNING id for the new
+        # superseding row. Migration 0062 expanded the lock query SELECT list to
+        # include game_state_key, and _attempt_close_and_insert reads that value
+        # to carry forward verbatim (Pattern 18 / SCD2 rule).
         mock_cursor.fetchone.side_effect = [
-            {"ts": _dt(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},
-            {"id": 100},  # INSERT RETURNING id
+            {"ts": _dt(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            {"id": 99, "game_state_key": "GST-99"},  # FOR UPDATE lock — current row (supersede)
+            {"id": 100},  # INSERT RETURNING id — new superseding row
         ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
@@ -620,7 +623,10 @@ class TestGetOrCreateGameUnit:
     def test_get_or_create_game_returns_id(self, mock_get_cursor):
         """Test get_or_create_game returns the game id."""
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 42}
+        # Migration 0062: RETURNING clause now includes game_key. Returning a
+        # canonical (non-TEMP) key simulates the ON CONFLICT branch and avoids
+        # the follow-up UPDATE firing (keeping execute.call_count at 1).
+        mock_cursor.fetchone.return_value = {"id": 42, "game_key": "GAM-42"}
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -640,7 +646,7 @@ class TestGetOrCreateGameUnit:
     def test_get_or_create_game_derives_season_from_date(self, mock_get_cursor):
         """Test season is derived from game_date.year when not provided."""
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 1}
+        mock_cursor.fetchone.return_value = {"id": 1, "game_key": "GAM-1"}  # 0062
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -675,7 +681,7 @@ class TestGetOrCreateGameUnit:
         back to an earlier status when the same game is upserted again.
         """
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 1}
+        mock_cursor.fetchone.return_value = {"id": 1, "game_key": "GAM-1"}  # 0062
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -699,7 +705,7 @@ class TestGetOrCreateGameUnit:
     def test_get_or_create_game_passes_all_fields(self, mock_get_cursor):
         """Test all optional fields are passed through to SQL."""
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 99}
+        mock_cursor.fetchone.return_value = {"id": 99, "game_key": "GAM-99"}  # 0062
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -3119,8 +3125,9 @@ class TestCreateMarketEnrichment:
 
         assert result == 99
 
-        # Two execute calls: dimension INSERT + snapshot INSERT
-        assert mock_cursor.execute.call_count == 2
+        # Three execute calls: dimension INSERT + dimension UPDATE (0062 two-step
+        # canonical market_key) + snapshot INSERT
+        assert mock_cursor.execute.call_count == 3
 
         # Verify dimension INSERT includes expiration_value and notional_value
         dim_call = mock_cursor.execute.call_args_list[0]
@@ -3132,8 +3139,9 @@ class TestCreateMarketEnrichment:
         assert "above 42.5" in dim_params
         assert Decimal("1.0000") in dim_params
 
-        # Verify snapshot INSERT includes all 6 new fields
-        snap_call = mock_cursor.execute.call_args_list[1]
+        # Verify snapshot INSERT includes all 6 new fields (now at index 2 after
+        # the 0062 canonical market_key UPDATE at index 1)
+        snap_call = mock_cursor.execute.call_args_list[2]
         snap_sql = snap_call[0][0]
         snap_params = snap_call[0][1]
         assert "volume_24h" in snap_sql
@@ -3183,8 +3191,9 @@ class TestCreateMarketEnrichment:
         assert "expiration_value" in dim_sql
         assert "notional_value" in dim_sql
 
-        # Verify snapshot INSERT: all 6 new fields are None
-        snap_params = mock_cursor.execute.call_args_list[1][0][1]
+        # Verify snapshot INSERT: all 6 new fields are None (index shifted to 2
+        # by the 0062 two-step market_key UPDATE at index 1)
+        snap_params = mock_cursor.execute.call_args_list[2][0][1]
         # The last 6 params before row_current_ind/updated_at should be None
         # Snapshot params: market_pk, yes_ask, no_ask, yes_bid, no_bid, last_price,
         #                  spread, volume, open_interest, liquidity,
@@ -3228,8 +3237,9 @@ class TestCreateMarketEnrichment:
             previous_price=Decimal("0.6000"),
         )
 
-        # Verify the function completed (2 SQL calls = dim + snap)
-        assert mock_cursor.execute.call_count == 2
+        # Verify the function completed (3 SQL calls: dim INSERT + 0062
+        # canonical market_key UPDATE + snap INSERT)
+        assert mock_cursor.execute.call_count == 3
 
 
 @pytest.mark.unit

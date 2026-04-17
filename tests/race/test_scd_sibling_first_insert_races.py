@@ -60,6 +60,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -298,16 +299,21 @@ def game_odds_race_setup(db_pool: Any) -> Any:
 
         # Create a fresh game row. Natural key is
         # (sport, game_date, home_team_code, away_team_code).
+        #
+        # Migration 0062 (#791): games.game_key is NOT NULL + UNIQUE.  Race
+        # test — need precise control over the INSERT (race timing is
+        # triggered by the CRUD layer under test, not the seed setup).
+        # Inline the TEMP→GAM-{id} two-step.
         cur.execute(
             """
             INSERT INTO games (
                 sport, game_date, home_team_code, away_team_code,
                 season, league, game_status, data_source,
-                sport_id, league_id
+                sport_id, league_id, game_key
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
                     (SELECT id FROM sports WHERE sport_key = 'football'),
-                    (SELECT id FROM leagues WHERE league_key = 'nfl'))
+                    (SELECT id FROM leagues WHERE league_key = 'nfl'), %s)
             RETURNING id
             """,
             (
@@ -319,10 +325,15 @@ def game_odds_race_setup(db_pool: Any) -> Any:
                 "nfl",
                 "scheduled",
                 "espn",
+                f"TEMP-{uuid.uuid4()}",
             ),
         )
         row = cur.fetchone()
         game_id = row["id"]
+        cur.execute(
+            "UPDATE games SET game_key = %s WHERE id = %s",
+            (f"GAM-{game_id}", game_id),
+        )
 
     yield game_id, test_sportsbook, test_home_code, test_away_code, test_game_date
 
@@ -445,14 +456,17 @@ def market_race_setup(db_pool: Any) -> Any:
         )
         cur.execute("DELETE FROM markets WHERE ticker = %s", (_TEST_MARKET_TICKER,))
 
-        # Insert the dimension row.
+        # Insert the dimension row.  Migration 0062 (#791): markets.market_key
+        # is NOT NULL + UNIQUE.  Race test — inline TEMP→MKT-{id} (the
+        # surrounding test exercises a market_snapshots race, so we keep
+        # precise raw-SQL control over the market dimension row).
         cur.execute(
             """
             INSERT INTO markets (
                 platform_id, event_id, external_id, ticker, title,
-                market_type, status
+                market_type, status, market_key
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -463,9 +477,14 @@ def market_race_setup(db_pool: Any) -> Any:
                 "Race Test Market 625",
                 "binary",
                 "open",
+                f"TEMP-{uuid.uuid4()}",
             ),
         )
         market_pk = cur.fetchone()["id"]
+        cur.execute(
+            "UPDATE markets SET market_key = %s WHERE id = %s",
+            (f"MKT-{market_pk}", market_pk),
+        )
 
         # Insert the initial current snapshot. The concurrent-update race
         # needs an existing current row so both callers pass get_current_market.
@@ -605,13 +624,16 @@ def position_race_setup(db_pool: Any) -> Any:
         cur.execute("DELETE FROM markets WHERE ticker = %s", (test_ticker,))
 
         # Create the underlying market (positions FK to markets.id).
+        # Migration 0062 (#791): markets.market_key is NOT NULL + UNIQUE.
+        # Race test — inline TEMP→MKT-{id} (the surrounding test exercises
+        # a positions race, so we keep raw-SQL control over the market seed).
         cur.execute(
             """
             INSERT INTO markets (
                 platform_id, event_id, external_id, ticker, title,
-                market_type, status
+                market_type, status, market_key
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -622,9 +644,14 @@ def position_race_setup(db_pool: Any) -> Any:
                 "Race Test Market Positions",
                 "binary",
                 "open",
+                f"TEMP-{uuid.uuid4()}",
             ),
         )
         market_pk = cur.fetchone()["id"]
+        cur.execute(
+            "UPDATE markets SET market_key = %s WHERE id = %s",
+            (f"MKT-{market_pk}", market_pk),
+        )
 
         # Create the initial current position row.
         # execution_environment is explicit (not relying on the DB default)

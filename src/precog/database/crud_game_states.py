@@ -10,6 +10,7 @@ Tables covered:
 
 import json
 import logging
+import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, cast
@@ -154,17 +155,29 @@ def create_game_state(
     """
     # Dual-write (#738 A1): populate league_id FK alongside the VARCHAR.
     league_id_value = get_league_id_or_none(league)
+
+    # Migration 0062 (#791): game_states.game_state_key is NOT NULL + partial
+    # UNIQUE (WHERE row_current_ind = true).  Two-step INSERT: insert with a
+    # uniquely-generated TEMP sentinel, then UPDATE to ``GST-{id}``.  Using
+    # ``uuid.uuid4`` for the TEMP value guarantees concurrent first-inserts
+    # cannot collide on the partial UNIQUE during the narrow window between
+    # steps.  Both steps run inside the same ``get_cursor(commit=True)``
+    # transaction so the TEMP value is never externally visible.
+    temp_game_state_key = f"TEMP-{uuid.uuid4()}"
+
+    # Migration 0062: game_state_key added (two-step: TEMP → GST-{id}).
     insert_query = """
         INSERT INTO game_states (
             espn_event_id, home_team_id, away_team_id, venue_id,
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
-            data_source, game_id, league_id, row_current_ind, row_start_ts
+            data_source, game_id, league_id, game_state_key,
+            row_current_ind, row_start_ts
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, TRUE, NOW()
+            %s, %s, %s, %s, TRUE, NOW()
         )
         RETURNING id
     """
@@ -193,10 +206,19 @@ def create_game_state(
                 data_source,
                 game_id,
                 league_id_value,
+                temp_game_state_key,
             ),
         )
         result = cur.fetchone()
-        return cast("int", result["id"])
+        game_state_pk = cast("int", result["id"])
+
+        # Step 1b: Replace TEMP key with canonical ``GST-{id}``.
+        cur.execute(
+            "UPDATE game_states SET game_state_key = %s WHERE id = %s",
+            (f"GST-{game_state_pk}", game_state_pk),
+        )
+
+        return game_state_pk
 
 
 def get_current_game_state(espn_event_id: str) -> dict[str, Any] | None:
@@ -434,8 +456,14 @@ def upsert_game_state(
     # where the sibling caller's row is now visible and the close+insert
     # proceeds normally.
 
+    # Migration 0062 (#791): game_state_key added.  Lock query SELECT list
+    # is expanded to also fetch ``game_state_key`` (zero extra round-trips —
+    # same row, same index entry).  This is the critical SCD2 copy-forward
+    # contract: on the supersede path, the existing key is carried forward
+    # to the new version verbatim; on the first-insert path it will be NULL
+    # and we fall through to the two-step TEMP sentinel pattern.
     lock_query = """
-        SELECT id FROM game_states
+        SELECT id, game_state_key FROM game_states
         WHERE espn_event_id = %s
           AND row_current_ind = TRUE
         FOR UPDATE
@@ -451,17 +479,23 @@ def upsert_game_state(
 
     # Dual-write (#738 A1): populate league_id FK alongside the VARCHAR.
     league_id_value = get_league_id_or_none(league)
+
+    # Migration 0062: game_state_key added to INSERT.  On the supersede
+    # path the caller provides the existing key (carried forward from the
+    # locked row); on first-insert path we send a uniquely-generated TEMP
+    # sentinel and replace it with ``GST-{id}`` after RETURNING id.
     insert_query = """
         INSERT INTO game_states (
             espn_event_id, home_team_id, away_team_id, venue_id,
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
-            data_source, game_id, league_id, row_current_ind, row_start_ts
+            data_source, game_id, league_id, game_state_key,
+            row_current_ind, row_start_ts
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, TRUE, %s
+            %s, %s, %s, %s, TRUE, %s
         )
         RETURNING id
     """
@@ -475,21 +509,57 @@ def upsert_game_state(
         each attempt so the close and insert use a single timestamp per
         attempt -- never carrying a timestamp across the retry boundary,
         which would create backward temporal intervals.
+
+        Migration 0062 (#791): game_state_key handling —
+          * Supersede path (current row exists): the locked row yields
+            ``game_state_key``; that value is carried forward verbatim to
+            the new row (SCD Type 2 rule — the logical entity's business
+            key is stable across versions, never regenerated).
+          * First-insert path (no current row): insert with a TEMP sentinel
+            and UPDATE to ``GST-{id}`` in the same transaction.  The TEMP
+            uses ``uuid.uuid4`` so concurrent first-inserts cannot collide
+            on the partial UNIQUE index during the INSERT → UPDATE window.
         """
         with get_cursor(commit=True) as cur:
             # Capture timestamp once for temporal continuity within THIS attempt.
             cur.execute("SELECT NOW() AS ts")
             now = cur.fetchone()["ts"]
 
-            # Step 1: Lock current row (if any). On the first-insert path
-            # this returns zero rows; on retry the sibling caller's row is
-            # now visible and gets locked.
+            # Step 1: Lock current row (if any) and fetch its game_state_key.
+            # On the first-insert path this returns zero rows; on retry the
+            # sibling caller's row is now visible and gets locked.
             cur.execute(lock_query, (espn_event_id,))
+            locked = cur.fetchone()
+
+            # Determine the game_state_key for the new row.
+            #   * supersede path: carry forward the locked row's key
+            #     (Pattern 18 / design memo §"game_states key carry-forward").
+            #   * first-insert path: use a TEMP sentinel, we'll rewrite it
+            #     to ``GST-{id}`` after RETURNING id.
+            if locked is not None:
+                # Defensive guard (Glokta S60 review W2): surface a broken
+                # 0062 backfill as a clear Python RuntimeError instead of a
+                # NOT NULL constraint violation at INSERT time.  game_state_key
+                # is NOT NULL post-0062 on every current row, so a None here
+                # means the migration backfill or a CRUD path wrote a NULL —
+                # a data-integrity bug that needs Python-level attention.
+                if locked["game_state_key"] is None:
+                    raise RuntimeError(
+                        f"game_state_key is NULL on current row id="
+                        f"{locked['id']} for espn_event_id={espn_event_id} "
+                        f"-- migration 0062 backfill broken?"
+                    )
+                new_game_state_key = locked["game_state_key"]
+                is_first_insert = False
+            else:
+                new_game_state_key = f"TEMP-{uuid.uuid4()}"
+                is_first_insert = True
 
             # Step 2: Close current row (no-op if no current row exists).
             cur.execute(close_query, (now, espn_event_id))
 
-            # Step 3: Insert new row with matching row_start_ts.
+            # Step 3: Insert new row with matching row_start_ts and the
+            # carried-forward (or TEMP) game_state_key.
             cur.execute(
                 insert_query,
                 (
@@ -514,6 +584,7 @@ def upsert_game_state(
                     data_source,
                     game_id,
                     league_id_value,
+                    new_game_state_key,
                     now,
                 ),
             )
@@ -524,7 +595,19 @@ def upsert_game_state(
                     "this should be impossible after a successful INSERT and "
                     "indicates a DB trigger or constraint suppressed the return."
                 )
-            return cast("int", result["id"])
+            new_id = cast("int", result["id"])
+
+            # Step 4 (first-insert path only): rewrite the TEMP sentinel to
+            # the canonical ``GST-{id}``.  On the supersede path the key is
+            # already correct (copied from the locked row), so no follow-up
+            # UPDATE is needed — preserving the hot-path performance.
+            if is_first_insert:
+                cur.execute(
+                    "UPDATE game_states SET game_state_key = %s WHERE id = %s",
+                    (f"GST-{new_id}", new_id),
+                )
+
+            return new_id
 
     # Wrap the attempt in the SCD race-prevention retry helper. See issue #623
     # and crud_shared.retry_on_scd_unique_conflict for the full design.
@@ -775,6 +858,26 @@ def get_or_create_game(
     # `league` column uses league codes ('nfl').
     sport_id_value = get_sport_id_or_none(sport)
     league_id_value = get_league_id_or_none(league)
+
+    # Migration 0062 (#791): games.game_key is NOT NULL + UNIQUE.  This is
+    # an upsert (ON CONFLICT), which complicates the two-step pattern:
+    #   * CREATE path: insert with a uniquely-generated TEMP sentinel,
+    #     then UPDATE to ``GAM-{id}`` after RETURNING id.
+    #   * CONFLICT path: the existing row already has a valid game_key
+    #     (guaranteed NOT NULL post-0062); we preserve it verbatim by
+    #     assigning ``game_key = games.game_key`` in the SET clause.
+    #     This is a no-op update but keeps the column in the RETURNING
+    #     clause's row image and makes the preservation semantics explicit.
+    #     (Glokta S60 review W5: dead ``COALESCE(games.game_key, EXCLUDED.game_key)``
+    #     simplified — EXCLUDED fallback was unreachable with NOT NULL.)
+    #
+    # The INSERT sends a TEMP sentinel so that IF the insert branch wins
+    # (new row), the row has a unique non-NULL value satisfying the NOT
+    # NULL + UNIQUE constraints; we then immediately rewrite it to the
+    # canonical ``GAM-{id}``.  IF the conflict branch wins, the TEMP
+    # sentinel never reaches the row (``games.game_key`` is preserved).
+    temp_game_key = f"TEMP-{uuid.uuid4()}"
+
     query = """
         INSERT INTO games (
             sport, game_date, home_team_code, away_team_code,
@@ -784,13 +887,13 @@ def get_or_create_game(
             game_time, espn_event_id, external_game_id,
             game_status, data_source,
             home_score, away_score, source_file, attendance,
-            sport_id, league_id
+            sport_id, league_id, game_key
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s
+            %s, %s, %s
         )
         ON CONFLICT (sport, game_date, home_team_code, away_team_code) DO UPDATE SET
             updated_at = NOW(),
@@ -815,8 +918,9 @@ def get_or_create_game(
             source_file = COALESCE(EXCLUDED.source_file, games.source_file),
             attendance = COALESCE(EXCLUDED.attendance, games.attendance),
             sport_id = COALESCE(EXCLUDED.sport_id, games.sport_id),
-            league_id = COALESCE(EXCLUDED.league_id, games.league_id)
-        RETURNING id
+            league_id = COALESCE(EXCLUDED.league_id, games.league_id),
+            game_key = games.game_key
+        RETURNING id, game_key
     """
     params = (
         sport,
@@ -845,11 +949,25 @@ def get_or_create_game(
         attendance,
         sport_id_value,
         league_id_value,
+        temp_game_key,
     )
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         result = cur.fetchone()
-        return cast("int", result["id"])
+        game_pk = cast("int", result["id"])
+        returned_key = cast("str", result["game_key"])
+
+        # Step 1b: If the INSERT branch fired (returned_key equals our
+        # TEMP sentinel), rewrite it to the canonical ``GAM-{id}``.  If the
+        # CONFLICT branch fired (returned_key is the existing row's stable
+        # key), skip the UPDATE — the key is already canonical.
+        if returned_key == temp_game_key:
+            cur.execute(
+                "UPDATE games SET game_key = %s WHERE id = %s",
+                (f"GAM-{game_pk}", game_pk),
+            )
+
+        return game_pk
 
 
 def update_game_result(

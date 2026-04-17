@@ -17,6 +17,7 @@ Markers:
 from __future__ import annotations
 
 import json
+import uuid
 from decimal import Decimal
 from typing import Any
 
@@ -116,19 +117,26 @@ def trigger_test_scaffold(db_pool: Any) -> Any:
         )
         model_id = cur.fetchone()["model_id"]
 
-        # Market (FK target for trades, settlements)
+        # Market (FK target for trades, settlements).  Migration 0062
+        # (#791): markets.market_key is NOT NULL + UNIQUE.  Raw-SQL migration
+        # test — inline the TEMP→MKT-{id} two-step.
         cur.execute(
             """
             INSERT INTO markets (
-                platform_id, external_id, ticker, title, market_type, status
+                platform_id, external_id, ticker, title, market_type, status,
+                market_key
             )
             VALUES (%s, 'MIG-0056-TEST', 'MIG-0056-TEST',
-                    'Migration 0056 trigger test market', 'binary', 'open')
+                    'Migration 0056 trigger test market', 'binary', 'open', %s)
             RETURNING id
             """,
-            (TEST_PLATFORM_ID,),
+            (TEST_PLATFORM_ID, f"TEMP-{uuid.uuid4()}"),
         )
         market_id = cur.fetchone()["id"]
+        cur.execute(
+            "UPDATE markets SET market_key = %s WHERE id = %s",
+            (f"MKT-{market_id}", market_id),
+        )
 
         # Position (FK target for trades, position_exits, exit_attempts)
         cur.execute(

@@ -96,12 +96,21 @@ def test_execute_query(db_pool, clean_test_data):
     # Note: We can't easily test with temp tables since execute_query uses its own connection
     # Instead, test with a real table (markets) using TEST- prefix for cleanup
 
-    # Create test market using execute_query (markets is a dimension table post-0021)
+    # Create test market using execute_query (markets is a dimension table post-0021).
+    # Migration 0062 (#791): markets.market_key is NOT NULL + UNIQUE.  Since
+    # this test exercises the raw ``execute_query`` helper (not the CRUD
+    # wrapper), we provide a uniquely-generated TEMP key inline.  The follow-up
+    # DELETE below prevents any cross-test leakage; there is no SCD supersede
+    # or readback — the test only asserts rowcount == 1.
+    import uuid as _uuid
+
+    temp_key = f"TEMP-{_uuid.uuid4()}"
     rowcount = execute_query(
         """INSERT INTO markets (
             platform_id, external_id,
-            ticker, title, market_type, status
-        ) VALUES (%s, %s, %s, %s, %s, %s)""",
+            ticker, title, market_type, status,
+            market_key
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s)""",
         (
             "test_platform",
             "TEST-EXT",
@@ -109,6 +118,7 @@ def test_execute_query(db_pool, clean_test_data):
             "Test Market",
             "binary",
             "open",
+            temp_key,
         ),
         commit=True,
     )
