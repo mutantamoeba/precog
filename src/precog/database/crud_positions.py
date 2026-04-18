@@ -437,19 +437,43 @@ def update_position_price(
         ... )
         >>> # Returns new surrogate id (e.g., 2)
     """
-    # Get current version using surrogate id. We fetch OUTSIDE the retry
-    # closure to (a) satisfy the "raise ValueError if missing" contract
-    # immediately (no retry on missing positions) and (b) capture the
-    # business key (position_key column) so retries can re-fetch by business
-    # key even after the sibling caller creates a new surrogate id.
-    initial_current = fetch_one(
-        "SELECT * FROM positions WHERE id = %s AND row_current_ind = TRUE", (position_id,)
-    )
-    if not initial_current:
+    # Race-resilient two-step outside fetch.
+    #
+    # Step 1: Find business key from (possibly now-historical) id. If the id
+    # has NEVER existed, raise — preserves the "raise on missing" contract.
+    # If the id exists but is historical (a sibling caller superseded it in
+    # our race window), this still finds the position_key for the Step 2
+    # business-key lookup.
+    #
+    # Step 2: Fetch current row by business key (race-resilient). A sibling
+    # supersede between our caller acquiring ``position_id`` and this fetch
+    # is handled transparently — we pick up the sibling's new current row
+    # and enter the retry closure keyed by that same business key.
+    #
+    # Why two steps (not the old one-query outside fetch): the previous
+    # ``SELECT * ... WHERE id = %s AND row_current_ind = TRUE`` raised
+    # ``ValueError("Position not found")`` whenever a sibling thread
+    # superseded the row in the race window, never reaching the retry
+    # closure that the FOR UPDATE + business-key lookup was designed to
+    # handle. See the race test
+    # ``test_concurrent_price_update_resolved_by_retry``.
+    row_for_bk = fetch_one("SELECT position_key FROM positions WHERE id = %s", (position_id,))
+    if not row_for_bk:
         msg = f"Position not found: {position_id}"
         raise ValueError(msg)
+    position_bk = row_for_bk["position_key"]  # Business key (stable across retries)
 
-    position_bk = initial_current["position_key"]  # Business key (stable across retries)
+    initial_current = fetch_one(
+        "SELECT * FROM positions WHERE position_key = %s AND row_current_ind = TRUE",
+        (position_bk,),
+    )
+    if not initial_current:
+        msg = (
+            f"Position not found: {position_id} "
+            f"(id known but no current row for business key {position_bk!r} — "
+            f"a concurrent close may have left this position with no current version)"
+        )
+        raise ValueError(msg)
 
     new_trailing_stop = (
         trailing_stop_state
@@ -463,11 +487,28 @@ def update_position_price(
     # The check runs against the initial fetch; if a sibling caller has
     # since changed state we fall through and let the closure re-derive
     # the new version from fresh values.
-    price_unchanged = initial_current["current_price"] == current_price
-    trailing_stop_unchanged = initial_current["trailing_stop_state"] == new_trailing_stop
-    if price_unchanged and trailing_stop_unchanged:
-        # No state change - return existing id without creating new version
-        return cast("int", initial_current["id"])
+    #
+    # When the caller's `position_id` differs from the current row's id, a
+    # sibling caller superseded the row. Log the repair for observability,
+    # then skip the early-return — force the retry closure to run so its
+    # `status != "open"` guard executes and produces an audit trail keyed by
+    # the sibling's current version.
+    id_repaired = initial_current["id"] != position_id
+    if id_repaired:
+        logger.info(
+            "update_position_price: historical position_id %s repaired to current id %s "
+            "(business key %r). A sibling caller superseded the row; skipping early-return "
+            "so the retry closure's status guard runs.",
+            position_id,
+            initial_current["id"],
+            position_bk,
+        )
+    else:
+        price_unchanged = initial_current["current_price"] == current_price
+        trailing_stop_unchanged = initial_current["trailing_stop_state"] == new_trailing_stop
+        if price_unchanged and trailing_stop_unchanged:
+            # No state change - return existing id without creating new version
+            return cast("int", initial_current["id"])
 
     def _attempt_close_and_insert() -> int:
         """One attempt at the SCD close+insert sequence for update_position_price.
@@ -696,17 +737,37 @@ def close_position(
         ...     realized_pnl=Decimal("8.00")
         ... )
     """
-    # Get current version using surrogate id. Fetch OUTSIDE the retry
-    # closure to satisfy the "raise ValueError if missing" contract
-    # immediately and capture the business key for retry correctness.
-    initial_current = fetch_one(
-        "SELECT * FROM positions WHERE id = %s AND row_current_ind = TRUE", (position_id,)
-    )
-    if not initial_current:
+    # Race-resilient two-step outside fetch.
+    #
+    # Step 1: Find business key from (possibly now-historical) id. If the id
+    # has NEVER existed, raise — preserves the "raise on missing" contract.
+    # If the id exists but is historical (a sibling caller superseded it in
+    # our race window), this still finds the position_key for the Step 2
+    # business-key lookup.
+    #
+    # Step 2: Fetch current row by business key (race-resilient). A sibling
+    # supersede between our caller acquiring ``position_id`` and this fetch
+    # is handled transparently — we pick up the sibling's new current row
+    # and enter the retry closure keyed by that same business key. The
+    # closure's own ``status != "open"`` guard still protects against
+    # double-close races (see #627 rationale below).
+    row_for_bk = fetch_one("SELECT position_key FROM positions WHERE id = %s", (position_id,))
+    if not row_for_bk:
         msg = f"Position not found: {position_id}"
         raise ValueError(msg)
+    position_bk = row_for_bk["position_key"]  # Business key (stable across retries)
 
-    position_bk = initial_current["position_key"]  # Business key (stable across retries)
+    initial_current = fetch_one(
+        "SELECT * FROM positions WHERE position_key = %s AND row_current_ind = TRUE",
+        (position_bk,),
+    )
+    if not initial_current:
+        msg = (
+            f"Position not found: {position_id} "
+            f"(id known but no current row for business key {position_bk!r} — "
+            f"a concurrent close may have left this position with no current version)"
+        )
+        raise ValueError(msg)
 
     def _attempt_close_and_insert() -> int:
         """One attempt at the SCD close+insert sequence for close_position.
@@ -1012,18 +1073,35 @@ def set_trailing_stop_state(
           (``update_position_price`` and ``close_position``).
         - Pattern 49 (DEVELOPMENT_PATTERNS_V1.30.md): SCD Race Prevention.
     """
-    # Fetch OUTSIDE the retry closure to satisfy the "raise ValueError if
-    # missing" contract immediately (no retry on missing positions) and
-    # capture the business key (position_key column) so retries can re-fetch
-    # by business key even after a sibling caller creates a new surrogate id.
-    initial_current = fetch_one(
-        "SELECT * FROM positions WHERE id = %s AND row_current_ind = TRUE", (position_id,)
-    )
-    if not initial_current:
+    # Race-resilient two-step outside fetch.
+    #
+    # Step 1: Find business key from (possibly now-historical) id. If the id
+    # has NEVER existed, raise — preserves the "raise on missing" contract.
+    # If the id exists but is historical (a sibling caller superseded it in
+    # our race window), this still finds the position_key for the Step 2
+    # business-key lookup.
+    #
+    # Step 2: Fetch current row by business key (race-resilient). A sibling
+    # supersede between our caller acquiring ``position_id`` and this fetch
+    # is handled transparently — we pick up the sibling's new current row
+    # and enter the retry closure keyed by that same business key.
+    row_for_bk = fetch_one("SELECT position_key FROM positions WHERE id = %s", (position_id,))
+    if not row_for_bk:
         msg = f"Position not found: {position_id}"
         raise ValueError(msg)
+    position_bk = row_for_bk["position_key"]  # Business key (stable across retries)
 
-    position_bk = initial_current["position_key"]  # Business key (stable across retries)
+    initial_current = fetch_one(
+        "SELECT * FROM positions WHERE position_key = %s AND row_current_ind = TRUE",
+        (position_bk,),
+    )
+    if not initial_current:
+        msg = (
+            f"Position not found: {position_id} "
+            f"(id known but no current row for business key {position_bk!r} — "
+            f"a concurrent close may have left this position with no current version)"
+        )
+        raise ValueError(msg)
 
     def _attempt_close_and_insert() -> int:
         """One attempt at the SCD close+insert sequence for set_trailing_stop_state.

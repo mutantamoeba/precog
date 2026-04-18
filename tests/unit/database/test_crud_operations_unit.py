@@ -2388,11 +2388,20 @@ class TestCreateTeamUnit:
         assert result == 77
         mock_cursor.execute.assert_called_once()
 
+    @patch("precog.database.crud_teams.get_league_id_or_none")
+    @patch("precog.database.crud_teams.get_sport_id_or_none")
     @patch("precog.database.crud_teams.get_cursor")
     @patch("precog.database.crud_teams.fetch_one")
-    def test_insert_includes_all_fields(self, mock_fetch_one, mock_get_cursor):
-        """Verify INSERT passes all 9 columns including espn_team_id."""
+    def test_insert_includes_all_fields(
+        self, mock_fetch_one, mock_get_cursor, mock_sport_id, mock_league_id
+    ):
+        """Verify INSERT passes all 11 columns including espn_team_id and the FK pair."""
         mock_fetch_one.return_value = None  # Step 1: no match
+        # Unit-test isolation: pin the #738 A1 lookup helpers so the test is
+        # independent of whether the unit-test DB happens to have the lookup
+        # tables populated (which changes when migration 0060 is applied).
+        mock_sport_id.return_value = None
+        mock_league_id.return_value = None
 
         mock_cursor = MagicMock()
         mock_cursor.fetchone.return_value = {"team_id": 101}
@@ -2419,9 +2428,9 @@ class TestCreateTeamUnit:
         assert "RETURNING team_id" in sql
         # Verify all 11 params are passed in correct order.
         # The trailing sport_id/league_id pair lands from the #738 A1
-        # dual-write path; the cache falls back to None when the
-        # lookup tables aren't populated in the unit-test DB, so both
-        # FK values resolve to None here.
+        # dual-write path; the patches above pin both lookup helpers to
+        # None so the test verifies the NO-FK-backfill code path
+        # deterministically.
         assert params == (
             "ALA",
             "Alabama Crimson Tide",

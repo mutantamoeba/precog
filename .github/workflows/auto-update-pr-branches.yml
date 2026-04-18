@@ -38,6 +38,7 @@ jobs:
           # Find open PRs where auto-merge is enabled AND the branch is BEHIND main.
           # Exclude CONFLICTING (manual resolution needed) and DIRTY (conflicts).
           candidates=$(gh pr list \
+            --repo "${{ github.repository }}" \
             --state open \
             --limit 50 \
             --json number,mergeStateStatus,autoMergeRequest,mergeable \
@@ -57,7 +58,7 @@ jobs:
           failures=0
           for pr in $candidates; do
             echo "--- Updating PR #$pr ---"
-            if gh pr update-branch "$pr"; then
+            if gh pr update-branch "$pr" --repo "${{ github.repository }}"; then
               echo "OK: #$pr branch updated"
             else
               echo "WARN: #$pr update failed (may need manual resolution)"
