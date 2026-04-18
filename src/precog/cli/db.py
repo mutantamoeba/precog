@@ -1,19 +1,21 @@
 """
 Database Operations CLI Commands.
 
-Provides commands for database initialization, migrations, and status.
+Provides commands for database initialization, status, and inspection.
 
 Commands:
     init    - Initialize database schema and apply migrations
     status  - Show database connection and table status
-    migrate - Apply pending database migrations
     tables  - List all database tables
 
 Usage:
     precog db init
     precog db status
-    precog db migrate
     precog db tables
+
+Note:
+    `db migrate` was removed in S58 (G5 CLI alignment). Use `alembic upgrade head`
+    directly for applying migrations — it is the authoritative migration tool.
 
 Related:
     - Issue #204: CLI Refactor
@@ -301,66 +303,6 @@ def status(
     except Exception as e:
         cli_error(
             f"Failed to get database status: {e}",
-            ExitCode.DATABASE_ERROR,
-        )
-
-
-@app.command()
-def migrate(
-    verbose: bool = typer.Option(
-        False,
-        "--verbose",
-        "-V",
-        help="Show detailed migration output",
-    ),
-) -> None:
-    """Apply pending database migrations.
-
-    Checks for and applies any pending migrations in order.
-    Migrations are idempotent - running multiple times is safe.
-
-    Examples:
-        precog db migrate
-        precog db migrate --verbose
-    """
-    console.print("\n[bold cyan]Applying Database Migrations[/bold cyan]\n")
-
-    try:
-        from precog.database.initialization import apply_migrations, get_database_url
-
-        db_url = get_database_url()
-        if not db_url:
-            cli_error(
-                "DATABASE_URL environment variable not set",
-                ExitCode.CONFIG_ERROR,
-                hint="Set DATABASE_URL in .env file",
-            )
-
-        console.print("Checking for pending migrations...")
-        applied, failed = apply_migrations(db_url, "database/migrations")
-
-        if applied > 0:
-            echo_success(f"{applied} migration(s) applied")
-        else:
-            console.print("[dim]No pending migrations[/dim]")
-
-        if failed:
-            console.print(f"\n[yellow]{len(failed)} migration(s) failed:[/yellow]")
-            for migration_file in failed:
-                console.print(f"  - {migration_file}")
-
-            if verbose:
-                console.print("\n[dim]Check logs for detailed error messages[/dim]")
-
-            raise typer.Exit(code=1)
-
-        console.print()
-
-    except typer.Exit:
-        raise
-    except Exception as e:
-        cli_error(
-            f"Migration failed: {e}",
             ExitCode.DATABASE_ERROR,
         )
 

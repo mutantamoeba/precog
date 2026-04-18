@@ -29,57 +29,43 @@ import ast
 import sys
 from pathlib import Path
 
-# Subcommand groups in the CLI — each gets its own --help call.
-# Top-level flags inherit down to subcommands via Typer, so the linter
-# treats subcommand flag sets as: own flags plus all ancestor flags.
-_SUBCOMMANDS: list[list[str]] = [
-    [],  # top-level
-    ["kalshi"],
-    ["kalshi", "balance"],
-    ["kalshi", "markets"],
-    ["kalshi", "positions"],
-    ["kalshi", "fills"],
-    ["kalshi", "settlements"],
-    ["espn"],
-    ["espn", "scores"],
-    ["espn", "schedule"],
-    ["espn", "games"],
-    ["espn", "teams"],
-    ["data"],
-    ["data", "seed"],
-    ["data", "verify"],
-    ["db"],
-    ["db", "init"],
-    ["db", "status"],
-    ["db", "migrate"],
-    ["db", "tables"],
-    ["scheduler"],
-    ["scheduler", "start"],
-    ["scheduler", "stop"],
-    ["scheduler", "status"],
-    ["scheduler", "poll-once"],
-    ["config"],
-    ["config", "show"],
-    ["config", "validate"],
-    ["config", "env"],
-    ["system"],
-    ["system", "health"],
-    ["system", "version"],
-    ["system", "info"],
-    ["circuit-breaker"],
-    ["circuit-breaker", "list"],
-    ["circuit-breaker", "trip"],
-    ["circuit-breaker", "resolve"],
-    ["backup"],
-    ["backup", "create"],
-    ["backup", "list"],
-    ["backup", "restore"],
-    ["trade"],
-    ["trade", "execute"],
-    ["trade", "cancel"],
-    ["trade", "history"],
-    ["trade", "edges"],
-]
+
+def _discover_subcommands() -> list[list[str]]:
+    """Auto-discover all subcommand paths from the registered Typer app.
+
+    Replaces the hand-maintained _SUBCOMMANDS list (#825) — new subcommands
+    are automatically picked up without script changes.
+    """
+    import os
+
+    # Click 8.1+ deprecated BaseCommand/MultiCommand as module-level variable
+    # aliases (= Command / = Group). Mypy rejects aliased variables as type
+    # annotations [valid-type], so use the canonical classes directly.
+    from click import Command, Context, Group
+
+    os.environ.setdefault("PRECOG_ENV", "test")
+
+    import typer.main
+
+    from precog.cli import app, register_commands
+
+    register_commands()
+    click_app = typer.main.get_command(app)
+
+    paths: list[list[str]] = []
+
+    def _walk(group: Command, prefix: tuple[str, ...] = ()) -> None:
+        paths.append(list(prefix))
+        if isinstance(group, Group):
+            ctx = Context(group, info_name=" ".join(prefix) if prefix else "precog")
+            for name in sorted(group.list_commands(ctx)):
+                cmd = group.get_command(ctx, name)
+                if cmd is not None:
+                    _walk(cmd, (*prefix, name))
+
+    _walk(click_app)
+    return paths
+
 
 # Flags that are valid but don't appear in --help (e.g., pytest flags,
 # or commands with allow_extra_args). Add entries as needed.
@@ -121,9 +107,11 @@ def collect_known_flags() -> dict[tuple[str, ...], set[str]]:
     register_commands()
     runner = CliRunner()
 
+    subcommands = _discover_subcommands()
+
     # First pass: collect own flags per subcommand (without inheritance)
     own_flags: dict[tuple[str, ...], set[str]] = {}
-    for subcmd in _SUBCOMMANDS:
+    for subcmd in subcommands:
         try:
             result = runner.invoke(app, subcmd + ["--help"])
             own_flags[tuple(subcmd)] = _extract_flags_from_help(result.output)
