@@ -615,7 +615,7 @@ class TestRestrictBlocksDeletion:
                 ("MIG57-SERIES", platform_id, "MIG57-SERIES-EXT"),
             )
 
-        with pytest.raises(psycopg2.errors.ForeignKeyViolation):
+        with pytest.raises(psycopg2.errors.RestrictViolation):
             with get_cursor(commit=True) as cur:
                 cur.execute(
                     "DELETE FROM platforms WHERE platform_id = %s",
@@ -642,7 +642,7 @@ class TestRestrictBlocksDeletion:
                 (fk_test_team,),
             )
 
-        with pytest.raises(psycopg2.errors.ForeignKeyViolation):
+        with pytest.raises(psycopg2.errors.RestrictViolation):
             with get_cursor(commit=True) as cur:
                 cur.execute(
                     "DELETE FROM teams WHERE team_id = %s",
@@ -740,7 +740,7 @@ class TestRestrictBlocksDeletion:
                 ),
             )
 
-        with pytest.raises(psycopg2.errors.ForeignKeyViolation):
+        with pytest.raises(psycopg2.errors.RestrictViolation):
             with get_cursor(commit=True) as cur:
                 cur.execute(
                     "DELETE FROM strategies WHERE strategy_id = %s",
@@ -807,7 +807,7 @@ class TestRestrictBlocksDeletion:
                 (market_id, Decimal("0.5500"), Decimal("0.4600")),
             )
 
-        with pytest.raises(psycopg2.errors.ForeignKeyViolation):
+        with pytest.raises(psycopg2.errors.RestrictViolation):
             with get_cursor(commit=True) as cur:
                 cur.execute(
                     "DELETE FROM markets WHERE id = %s",
@@ -894,7 +894,7 @@ class TestRestrictBlocksDeletion:
                 ),
             )
 
-        with pytest.raises(psycopg2.errors.ForeignKeyViolation):
+        with pytest.raises(psycopg2.errors.RestrictViolation):
             with get_cursor(commit=True) as cur:
                 cur.execute(
                     "DELETE FROM positions WHERE id = %s",

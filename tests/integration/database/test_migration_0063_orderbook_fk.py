@@ -401,7 +401,7 @@ def test_delete_orderbook_snapshot_blocked_when_order_references_it(
         orderbook_snapshot_id=snapshot_id,
     )
 
-    with pytest.raises(psycopg2.errors.ForeignKeyViolation):
+    with pytest.raises(psycopg2.errors.RestrictViolation):
         with get_cursor(commit=True) as cur:
             cur.execute(
                 "DELETE FROM orderbook_snapshots WHERE id = %s",
@@ -438,7 +438,7 @@ def test_delete_orderbook_snapshot_blocked_when_edge_references_it(
         orderbook_snapshot_id=snapshot_id,
     )
 
-    with pytest.raises(psycopg2.errors.ForeignKeyViolation):
+    with pytest.raises(psycopg2.errors.RestrictViolation):
         with get_cursor(commit=True) as cur:
             cur.execute(
                 "DELETE FROM orderbook_snapshots WHERE id = %s",
