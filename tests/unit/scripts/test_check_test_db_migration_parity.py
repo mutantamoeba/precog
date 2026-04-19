@@ -100,16 +100,41 @@ class TestMainExitCodes:
         assert "connection refused" in out
 
     @patch("precog.database.migration_check.check_migration_parity")
-    def test_unexpected_exception_is_swallowed_as_skip(self, mock_check, capsys):
-        """Defense-in-depth: if check_migration_parity itself raises, skip."""
+    def test_unexpected_exception_exits_two_loudly(self, mock_check, capsys):
+        """An unexpected exception in check_migration_parity is a bug in the
+        helper, not a skippable condition. Exit 2 = loud failure so the
+        developer sees the real error. Glokta S62 review: swallowing this
+        reintroduces the silent-CI pattern #867 exists to prevent.
+        """
         mock_check.side_effect = RuntimeError("unexpected failure")
 
         rc = hook_mod.main()
 
-        assert rc == 0
+        assert rc == 2
+        err = capsys.readouterr().err  # FATAL messages go to stderr
+        assert "FATAL" in err
+        assert "unexpected failure" in err
+
+    @patch("precog.database.migration_check.check_migration_parity")
+    def test_multi_head_alembic_chain_blocks_not_skips(self, mock_check, capsys):
+        """Multi-head alembic chain is a schema-hygiene problem, not a skip.
+        Glokta S62: silent skip reintroduces #867's target failure mode.
+        """
+        mock_check.return_value = MigrationStatus(
+            is_current=False,
+            db_version=None,
+            head_version=None,
+            error="Multiple alembic heads detected: ['0063', '0064_sibling']. Run `alembic merge heads` before pushing.",
+            fatal=True,
+        )
+
+        rc = hook_mod.main()
+
+        assert rc == 1  # Block, not skip
         out = capsys.readouterr().out
-        assert "SKIP" in out
-        assert "unexpected failure" in out
+        assert "ERROR" in out
+        assert "Multiple alembic heads" in out
+        assert "alembic merge heads" in out
 
     @patch("precog.database.migration_check.check_migration_parity")
     def test_forces_precog_env_to_test(self, mock_check, monkeypatch):
@@ -155,6 +180,33 @@ class TestScriptInvocation:
         )
         # Must print something actionable on stdout
         assert result.stdout.strip(), "Script should always print a status line"
+
+
+class TestPrePushValidationWiring:
+    """Verify the hook is actually invoked by the real push path.
+
+    Glokta S62: without this test, the hook could be dead code — registered
+    in .pre-commit-config.yaml but never fired because scripts/pre-push-
+    validation.sh (the live push entry point) doesn't call the pre-commit
+    framework. This test is the anti-regression guard on the wiring itself.
+    """
+
+    def test_pre_push_validation_invokes_parity_check(self):
+        """scripts/pre-push-validation.sh must invoke the parity script."""
+        repo_root = Path(__file__).parent.parent.parent.parent
+        validation_script = repo_root / "scripts" / "pre-push-validation.sh"
+        assert validation_script.exists(), (
+            "pre-push-validation.sh is the live push entry point; missing means "
+            "the entire pre-push validation layer is gone."
+        )
+        content = validation_script.read_text(encoding="utf-8")
+        assert "check_test_db_migration_parity.py" in content, (
+            "pre-push-validation.sh does not invoke the #867 parity check. "
+            "Without this wiring, the hook is dead code and #867's silent-CI "
+            "failure class is reintroduced. Add a call to "
+            "`python scripts/check_test_db_migration_parity.py` near the top "
+            "of the script (see STEP 0.2)."
+        )
 
 
 if __name__ == "__main__":

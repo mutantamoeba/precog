@@ -43,13 +43,24 @@ def main() -> int:
     try:
         status = check_migration_parity()
     except Exception as e:
-        # Any unexpected exception escaping the helper — skip rather than block.
-        print(f"SKIP: test DB parity check raised unexpectedly ({e})")
-        return 0
+        # Unexpected exception from the helper itself = bug in migration_check,
+        # not a legitimate skip. Fail loudly (exit 2) — Glokta S62 review:
+        # swallowing this reintroduces the silent-CI pattern #867 exists to
+        # prevent. The developer sees the real error and fixes the helper.
+        print(f"FATAL: check_migration_parity raised unexpectedly ({e})", file=sys.stderr)
+        print(
+            "       This is a bug in migration_check.py, not a skippable condition.",
+            file=sys.stderr,
+        )
+        return 2
 
     if status.error:
-        # Typical cause: test DB unreachable, credentials unset, alembic dir
-        # missing. Warn-and-skip so contributors without a test DB can push.
+        if status.fatal:
+            # Multi-head alembic chain, etc. — block, do not skip.
+            print(f"ERROR: {status.error}")
+            return 1
+        # Skippable: test DB unreachable, credentials unset, alembic dir missing.
+        # Do not block contributors without a test DB.
         print(f"SKIP: test DB parity check not conclusive ({status.error})")
         return 0
 
