@@ -317,7 +317,7 @@ def tables(
         "-V",
         help="Show column details for each table",
     ),
-    filter: str | None = typer.Option(
+    table_filter: str | None = typer.Option(
         None,
         "--filter",
         "-f",
@@ -336,8 +336,11 @@ def tables(
         precog db tables --filter 'market*'
         precog db tables -f '*_snapshots'
     """
-    title_suffix = f" matching '{filter}'" if filter else ""
-    console.print(f"\n[bold cyan]Database Tables{title_suffix}[/bold cyan]\n")
+    title_suffix = f" matching '{table_filter}'" if table_filter else ""
+    console.print(
+        f"\n[bold cyan]Database Tables{title_suffix}[/bold cyan]\n",
+        highlight=False,
+    )
 
     try:
         from precog.database.connection import get_cursor
@@ -352,8 +355,8 @@ def tables(
             """)
             result = cur.fetchall()
 
-            if filter:
-                pattern_lower = filter.lower()
+            if table_filter:
+                pattern_lower = table_filter.lower()
                 result = [
                     row
                     for row in result
@@ -362,11 +365,11 @@ def tables(
 
             if not result:
                 msg = (
-                    f"[yellow]No tables match filter '{filter}'[/yellow]"
-                    if filter
+                    f"[yellow]No tables match filter '{table_filter}'[/yellow]"
+                    if table_filter
                     else "[yellow]No tables found[/yellow]"
                 )
-                console.print(msg)
+                console.print(msg, highlight=False)
                 return
 
             table = Table(title=f"Tables ({len(result)} total){title_suffix}")
