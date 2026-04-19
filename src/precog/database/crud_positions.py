@@ -436,27 +436,17 @@ def update_position_price(
         ...     trailing_stop_state={"peak": "0.5800", "stop": "0.5500"}
         ... )
         >>> # Returns new surrogate id (e.g., 2)
+
+    Historical-id contract (S61 race-resilient refactor):
+        If ``position_id`` refers to a superseded row (row_current_ind=FALSE),
+        transparently operates on the current row for the same business key.
+        An ``id_repaired`` log line fires. Returned id may differ from the one
+        passed (it's the current row's id). Raises ValueError only if the id
+        has NEVER existed.
     """
-    # Race-resilient two-step outside fetch.
-    #
-    # Step 1: Find business key from (possibly now-historical) id. If the id
-    # has NEVER existed, raise — preserves the "raise on missing" contract.
-    # If the id exists but is historical (a sibling caller superseded it in
-    # our race window), this still finds the position_key for the Step 2
-    # business-key lookup.
-    #
-    # Step 2: Fetch current row by business key (race-resilient). A sibling
-    # supersede between our caller acquiring ``position_id`` and this fetch
-    # is handled transparently — we pick up the sibling's new current row
-    # and enter the retry closure keyed by that same business key.
-    #
-    # Why two steps (not the old one-query outside fetch): the previous
-    # ``SELECT * ... WHERE id = %s AND row_current_ind = TRUE`` raised
-    # ``ValueError("Position not found")`` whenever a sibling thread
-    # superseded the row in the race window, never reaching the retry
-    # closure that the FOR UPDATE + business-key lookup was designed to
-    # handle. See the race test
-    # ``test_concurrent_price_update_resolved_by_retry``.
+    # Two-step race-resilient outside fetch: Step 1 finds business key from any
+    # version (historical or current); Step 2 fetches current row by business key.
+    # Solves the sibling-supersede race — see test_concurrent_price_update_resolved_by_retry.
     row_for_bk = fetch_one("SELECT position_key FROM positions WHERE id = %s", (position_id,))
     if not row_for_bk:
         msg = f"Position not found: {position_id}"
@@ -471,7 +461,7 @@ def update_position_price(
         msg = (
             f"Position not found: {position_id} "
             f"(id known but no current row for business key {position_bk!r} — "
-            f"a concurrent close may have left this position with no current version)"
+            f"schema invariant violation: every business key should have exactly one current row)"
         )
         raise ValueError(msg)
 
@@ -736,21 +726,17 @@ def close_position(
         ...     exit_reason='target_hit',
         ...     realized_pnl=Decimal("8.00")
         ... )
+
+    Historical-id contract (S61 race-resilient refactor):
+        If ``position_id`` refers to a superseded row (row_current_ind=FALSE),
+        transparently operates on the current row for the same business key.
+        Returned id may differ from the one passed. Raises ValueError only if
+        the id has NEVER existed. The closure's ``status != "open"`` guard
+        still protects against double-close races (see #627).
     """
-    # Race-resilient two-step outside fetch.
-    #
-    # Step 1: Find business key from (possibly now-historical) id. If the id
-    # has NEVER existed, raise — preserves the "raise on missing" contract.
-    # If the id exists but is historical (a sibling caller superseded it in
-    # our race window), this still finds the position_key for the Step 2
-    # business-key lookup.
-    #
-    # Step 2: Fetch current row by business key (race-resilient). A sibling
-    # supersede between our caller acquiring ``position_id`` and this fetch
-    # is handled transparently — we pick up the sibling's new current row
-    # and enter the retry closure keyed by that same business key. The
-    # closure's own ``status != "open"`` guard still protects against
-    # double-close races (see #627 rationale below).
+    # Two-step race-resilient outside fetch: Step 1 finds business key from any
+    # version; Step 2 fetches current row by business key. Solves the sibling-
+    # supersede race — see #627 double-close rationale in the closure below.
     row_for_bk = fetch_one("SELECT position_key FROM positions WHERE id = %s", (position_id,))
     if not row_for_bk:
         msg = f"Position not found: {position_id}"
@@ -765,7 +751,7 @@ def close_position(
         msg = (
             f"Position not found: {position_id} "
             f"(id known but no current row for business key {position_bk!r} — "
-            f"a concurrent close may have left this position with no current version)"
+            f"schema invariant violation: every business key should have exactly one current row)"
         )
         raise ValueError(msg)
 
@@ -1072,19 +1058,16 @@ def set_trailing_stop_state(
         - PR #665: canonical Pattern 49 adoption for positions
           (``update_position_price`` and ``close_position``).
         - Pattern 49 (DEVELOPMENT_PATTERNS_V1.30.md): SCD Race Prevention.
+
+    Historical-id contract (S61 race-resilient refactor):
+        If ``position_id`` refers to a superseded row (row_current_ind=FALSE),
+        transparently operates on the current row for the same business key.
+        Returned id may differ from the one passed. Raises ValueError only if
+        the id has NEVER existed.
     """
-    # Race-resilient two-step outside fetch.
-    #
-    # Step 1: Find business key from (possibly now-historical) id. If the id
-    # has NEVER existed, raise — preserves the "raise on missing" contract.
-    # If the id exists but is historical (a sibling caller superseded it in
-    # our race window), this still finds the position_key for the Step 2
-    # business-key lookup.
-    #
-    # Step 2: Fetch current row by business key (race-resilient). A sibling
-    # supersede between our caller acquiring ``position_id`` and this fetch
-    # is handled transparently — we pick up the sibling's new current row
-    # and enter the retry closure keyed by that same business key.
+    # Two-step race-resilient outside fetch: Step 1 finds business key from any
+    # version; Step 2 fetches current row by business key. Solves the sibling-
+    # supersede race on the trailing-stop write paths — see #629.
     row_for_bk = fetch_one("SELECT position_key FROM positions WHERE id = %s", (position_id,))
     if not row_for_bk:
         msg = f"Position not found: {position_id}"
@@ -1099,7 +1082,7 @@ def set_trailing_stop_state(
         msg = (
             f"Position not found: {position_id} "
             f"(id known but no current row for business key {position_bk!r} — "
-            f"a concurrent close may have left this position with no current version)"
+            f"schema invariant violation: every business key should have exactly one current row)"
         )
         raise ValueError(msg)
 
