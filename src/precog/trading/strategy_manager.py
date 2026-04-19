@@ -202,9 +202,11 @@ class StrategyManager:
             insert_sql = """
                 INSERT INTO strategies (
                     strategy_name, strategy_version, strategy_type, domain,
-                    config, description, status, created_by, notes
+                    config, description, status, created_by, notes,
+                    row_current_ind, row_start_ts, row_end_ts
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        TRUE, NOW(), NULL)
                 RETURNING strategy_id, strategy_name, strategy_version, strategy_type,
                           domain, config, description, status, paper_roi, live_roi,
                           paper_trades_count, live_trades_count, created_at, created_by, notes
