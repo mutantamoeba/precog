@@ -313,32 +313,6 @@ def update_model_metrics(
     )
 
 
-def get_current_model(model_id: int) -> dict[str, Any] | None:
-    """Fetch the CURRENT SCD2 row for a model by the CURRENT id.
-
-    Helper used by ``ModelManager.update_status`` / ``update_metrics`` to
-    re-resolve the returned row after supersede (the supersede allocates
-    a NEW model_id; the caller needs to fetch the new row to return it).
-    Looks up by ``(model_name, model_version)`` + ``row_current_ind =
-    TRUE`` so callers holding a stale id can re-resolve after a
-    concurrent supersede.
-
-    Returns None if no current row matches — should never happen
-    post-supersede but guards against race windows.
-    """
-    query = """
-        SELECT model_id, model_name, model_version, model_class, domain,
-               config, description, status,
-               validation_calibration, validation_accuracy,
-               validation_sample_size, created_at, created_by, notes
-        FROM probability_models
-        WHERE model_id = %s AND row_current_ind = TRUE
-    """
-    with get_cursor() as cur:
-        cur.execute(query, (model_id,))
-        return cast("dict[str, Any] | None", cur.fetchone())
-
-
 def get_current_model_by_name_version(model_name: str, model_version: str) -> dict[str, Any] | None:
     """Fetch the CURRENT SCD2 row for a model by (name, version).
 
