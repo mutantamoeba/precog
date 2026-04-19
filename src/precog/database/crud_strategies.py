@@ -269,29 +269,49 @@ def update_strategy_status(
     deactivated_at: datetime | None = None,
 ) -> bool:
     """
-    Update strategy status (MUTABLE field - does NOT create new version).
+    Update strategy status via SCD Type 2 supersede.
+
+    Post-migration 0064, the ``strategies`` table is SCD Type 2.  Status
+    transitions are recorded as a close-and-insert supersede: the current
+    row (matching ``strategy_id``) has ``row_current_ind`` flipped to
+    FALSE and ``row_end_ts`` set to NOW(), then a new row is INSERTed
+    with the same ``(strategy_name, strategy_version)`` natural key and
+    the new status.  The partial UNIQUE index on
+    ``(strategy_name, strategy_version) WHERE row_current_ind = TRUE``
+    enforces at-most-one-current-version invariant.
 
     Args:
-        strategy_id: Strategy ID
+        strategy_id: Strategy row ID.  Must reference a CURRENT row
+            (``row_current_ind = TRUE``); superseding a historical row
+            is not supported.
         new_status: New status ("draft", "testing", "active", "deprecated")
         activated_at: Timestamp when activated (optional)
         deactivated_at: Timestamp when deactivated (optional)
 
     Returns:
-        bool: True if updated, False if strategy not found
+        bool: True if superseded, False if strategy not found or not
+            current.  The new SCD2 row gets a NEW ``strategy_id`` — use
+            ``get_strategy_by_name_and_version`` or similar to retrieve it.
 
     Educational Note:
-        Status is MUTABLE (can change in-place):
+        Status is MUTABLE across SCD2 versions (can change without
+        requiring a new ``strategy_version`` string):
         - draft -> testing -> active -> deprecated (normal lifecycle)
-        - active -> deprecated (when superseded by new version)
+        - active -> deprecated (when superseded by new ``strategy_version``)
 
-        Config is IMMUTABLE (cannot change in-place):
-        - To change config, create NEW version (v1.0 -> v1.1)
+        Config is still IMMUTABLE (cannot change between SCD2 versions
+        of the same ``strategy_version``).  The immutability trigger
+        ``trg_strategies_immutability`` guards ``config``,
+        ``strategy_version``, ``strategy_name``, ``strategy_type`` on
+        UPDATE — the CLOSE-UPDATE in this function touches only
+        ``row_current_ind`` and ``row_end_ts``, neither of which are
+        guarded, so the trigger's ``IS DISTINCT FROM`` checks pass.
 
     Example:
         >>> # Move from draft to testing
         >>> update_strategy_status(strategy_id=42, new_status="testing")
-        >>> # Activate strategy
+        >>> # Activate strategy (supersede closes current row + inserts
+        >>> # a new row with a NEW strategy_id)
         >>> update_strategy_status(
         ...     strategy_id=42,
         ...     new_status="active",
@@ -303,21 +323,115 @@ def update_strategy_status(
         ...     new_status="deprecated",
         ...     deactivated_at=datetime.now()
         ... )
+
+    Related:
+        - Migration 0064 (adds SCD2 temporal columns)
+        - Issue #791 / Epic #745 (Schema Hardening Arc, Cohort C2c)
+        - Pattern 2 in CLAUDE.md: SCD Type 2 Versioning
+        - ``crud_positions.update_position_price`` (SCD2 supersede precedent)
+        - ``crud_markets.update_market_snapshot`` (SCD2 supersede precedent)
     """
-    query = """
+    # Step 1: Fetch the current row by strategy_id.  We need every
+    # immutable column verbatim on the new row — natural key
+    # (strategy_name / strategy_version), identity (strategy_type,
+    # platform_id, domain), config, description, created_at, created_by,
+    # and the carry-forward mutable metrics (paper_* / live_*, notes).
+    #
+    # The row_current_ind = TRUE filter enforces the contract documented
+    # above: superseding a historical row is not supported — a caller
+    # holding a stale strategy_id must re-resolve via natural key before
+    # calling this function.
+    fetch_query = """
+        SELECT strategy_name, strategy_version, strategy_type, platform_id,
+               domain, config, notes, description, created_by,
+               paper_trades_count, paper_roi, live_trades_count, live_roi
+        FROM strategies
+        WHERE strategy_id = %s AND row_current_ind = TRUE
+    """
+
+    close_query = """
         UPDATE strategies
-        SET status = %s,
-            activated_at = %s,
-            deactivated_at = %s,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE strategy_id = %s
+        SET row_current_ind = FALSE,
+            row_end_ts = %s
+        WHERE strategy_id = %s AND row_current_ind = TRUE
+    """
+
+    # The new row carries every field verbatim from the CLOSED row
+    # (strategy_name + strategy_version are the SCD2 natural key and
+    # MUST match — they are also guarded by the immutability trigger
+    # across the logical-entity lifecycle).  ``activated_at`` /
+    # ``deactivated_at`` / ``status`` come from the caller; the new
+    # ``strategy_id`` is auto-generated from the sequence.  ``updated_at``
+    # + ``row_start_ts`` are explicit NOW() so the SCD temporal chain is
+    # coherent (new row's row_start_ts matches old row's row_end_ts).
+    insert_query = """
+        INSERT INTO strategies (
+            platform_id, strategy_name, strategy_version, strategy_type, domain,
+            config, status, activated_at, deactivated_at, notes, description,
+            created_by, paper_trades_count, paper_roi, live_trades_count, live_roi,
+            row_current_ind, row_start_ts, row_end_ts,
+            created_at, updated_at
+        )
+        VALUES (
+            %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s,
+            TRUE, %s, NULL,
+            CURRENT_TIMESTAMP, %s
+        )
         RETURNING strategy_id
     """
 
-    params = (new_status, activated_at, deactivated_at, strategy_id)
-
     with get_cursor(commit=True) as cur:
-        cur.execute(query, params)
+        # 1a: lookup current row
+        cur.execute(fetch_query, (strategy_id,))
+        current = cur.fetchone()
+        if not current:
+            return False
+
+        # 1b: server-side NOW() snapshot so row_end_ts on the close and
+        # row_start_ts on the new row agree to the microsecond (matches
+        # the crud_positions / crud_markets supersede precedent — avoids
+        # gap/overlap between the two clocks that any client-side
+        # datetime.now() would create).
+        cur.execute("SELECT NOW() AS ts")
+        now_row = cur.fetchone()
+        now_ts = now_row["ts"]
+
+        # 2: close the current row
+        cur.execute(close_query, (now_ts, strategy_id))
+
+        # 3: insert the new (superseding) row
+        cur.execute(
+            insert_query,
+            (
+                current["platform_id"],
+                current["strategy_name"],
+                current["strategy_version"],
+                current["strategy_type"],
+                current["domain"],
+                # config: JSONB column; psycopg2 stores the value verbatim,
+                # so we pass the dict-or-str returned from the SELECT
+                # directly.  (``_convert_config_strings_to_decimal`` is
+                # a read-side convenience; round-trip through JSONB on
+                # INSERT does not need it.)
+                json.dumps(current["config"], cls=DecimalEncoder)
+                if not isinstance(current["config"], str)
+                else current["config"],
+                new_status,
+                activated_at,
+                deactivated_at,
+                current["notes"],
+                current["description"],
+                current["created_by"],
+                current["paper_trades_count"],
+                current["paper_roi"],
+                current["live_trades_count"],
+                current["live_roi"],
+                now_ts,  # row_start_ts — matches the close row's row_end_ts
+                now_ts,  # updated_at
+            ),
+        )
         result = cur.fetchone()
         return result is not None
 

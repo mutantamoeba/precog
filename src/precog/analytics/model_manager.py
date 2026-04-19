@@ -174,12 +174,21 @@ class ModelManager:
         cursor = conn.cursor()
 
         try:
+            # Migration 0064: probability_models is SCD Type 2.  New rows
+            # are always current (row_current_ind = TRUE) with
+            # row_start_ts = NOW() and row_end_ts = NULL.  Writing these
+            # explicitly (rather than relying on DEFAULTs) keeps the INSERT
+            # shape self-documenting and matches the SCD2-INSERT
+            # explicitness pattern used by the positions / markets
+            # supersede paths.
             insert_sql = """
                 INSERT INTO probability_models (
                     model_name, model_version, model_class, domain, config,
-                    description, status, created_by, notes
+                    description, status, created_by, notes,
+                    row_current_ind, row_start_ts, row_end_ts
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        TRUE, NOW(), NULL)
                 RETURNING model_id, model_name, model_version, model_class,
                           domain, config, description, status, validation_calibration, validation_accuracy,
                           validation_sample_size, created_at, created_by, notes
