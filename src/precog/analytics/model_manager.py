@@ -174,12 +174,21 @@ class ModelManager:
         cursor = conn.cursor()
 
         try:
+            # Migration 0064: probability_models is SCD Type 2.  New rows
+            # are always current (row_current_ind = TRUE) with
+            # row_start_ts = NOW() and row_end_ts = NULL.  Writing these
+            # explicitly (rather than relying on DEFAULTs) keeps the INSERT
+            # shape self-documenting and matches the SCD2-INSERT
+            # explicitness pattern used by the positions / markets
+            # supersede paths.
             insert_sql = """
                 INSERT INTO probability_models (
                     model_name, model_version, model_class, domain, config,
-                    description, status, created_by, notes
+                    description, status, created_by, notes,
+                    row_current_ind, row_start_ts, row_end_ts
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        TRUE, NOW(), NULL)
                 RETURNING model_id, model_name, model_version, model_class,
                           domain, config, description, status, validation_calibration, validation_accuracy,
                           validation_sample_size, created_at, created_by, notes
@@ -260,6 +269,11 @@ class ModelManager:
         cursor = conn.cursor()
 
         try:
+            # Post-Migration 0064: row_current_ind = TRUE filter returns
+            # the CURRENT SCD2 row.  Historical (superseded) rows are
+            # never returned from the user-facing read API — callers who
+            # need the audit chain should query the CRUD directly with
+            # include_historical semantics.  Glokta P0-3 / Ripley #NEW-C.
             if model_id is not None:
                 # Query by ID
                 select_sql = """
@@ -267,7 +281,7 @@ class ModelManager:
                            domain, config, description, status, validation_calibration, validation_accuracy,
                            validation_sample_size, created_at, created_by, notes
                     FROM probability_models
-                    WHERE model_id = %s
+                    WHERE model_id = %s AND row_current_ind = TRUE
                 """
                 cursor.execute(select_sql, (model_id,))
             else:
@@ -278,6 +292,7 @@ class ModelManager:
                            validation_sample_size, created_at, created_by, notes
                     FROM probability_models
                     WHERE model_name = %s AND model_version = %s
+                      AND row_current_ind = TRUE
                 """
                 cursor.execute(select_sql, (model_name, model_version))
 
@@ -316,12 +331,15 @@ class ModelManager:
         cursor = conn.cursor()
 
         try:
+            # Post-Migration 0064: row_current_ind = TRUE returns one row
+            # per logical (name, version) — consistent with the pre-0064
+            # contract.  SCD history accessible via CRUD include_historical.
             select_sql = """
                 SELECT model_id, model_name, model_version, model_class,
                        domain, config, description, status, validation_calibration, validation_accuracy,
                        validation_sample_size, created_at, created_by, notes
                 FROM probability_models
-                WHERE model_name = %s
+                WHERE model_name = %s AND row_current_ind = TRUE
                 ORDER BY created_at DESC
             """
 
@@ -349,12 +367,15 @@ class ModelManager:
         cursor = conn.cursor()
 
         try:
+            # Post-Migration 0064: both filters apply — historical
+            #'active' rows that have been superseded must not leak
+            # into the live-active list.  Glokta P0-3 / Ripley #NEW-C.
             select_sql = """
                 SELECT model_id, model_name, model_version, model_class,
                        domain, config, description, status, validation_calibration, validation_accuracy,
                        validation_sample_size, created_at, created_by, notes
                 FROM probability_models
-                WHERE status = 'active'
+                WHERE status = 'active' AND row_current_ind = TRUE
                 ORDER BY model_name, created_at DESC
             """
 
@@ -399,8 +420,9 @@ class ModelManager:
         cursor = conn.cursor()
 
         try:
-            # Build dynamic WHERE clause
-            where_clauses: list[str] = []
+            # Post-Migration 0064: row_current_ind = TRUE is always-on,
+            # so list_models never surfaces historical SCD rows.
+            where_clauses: list[str] = ["row_current_ind = TRUE"]
             params: list[str] = []
 
             if status is not None:
@@ -415,10 +437,8 @@ class ModelManager:
                 where_clauses.append("model_class = %s")
                 params.append(model_class)
 
-            # Construct SQL
-            where_sql = ""
-            if where_clauses:
-                where_sql = "WHERE " + " AND ".join(where_clauses)
+            # Construct SQL (always has at least the row_current_ind clause)
+            where_sql = "WHERE " + " AND ".join(where_clauses)
 
             select_sql = f"""
                 SELECT model_id, model_name, model_version, model_class,
@@ -439,73 +459,149 @@ class ModelManager:
             release_connection(conn)
 
     def update_status(self, model_id: int, new_status: str) -> dict[str, Any]:
-        """Update model status (MUTABLE field) with transition validation.
+        """Update model status (MUTABLE field) via SCD Type 2 supersede.
 
         Args:
-            model_id: Model to update
+            model_id: Model to update (MUST reference a CURRENT SCD2 row)
             new_status: New status value
 
         Returns:
-            Updated model as dict
+            Updated model as dict (re-fetched via natural key after the
+            supersede — the new SCD2 row has a NEW model_id).
 
         Raises:
             ValueError: If model not found
             InvalidStatusTransitionError: If transition is invalid
 
         Educational Note:
-            Status is MUTABLE (unlike config). Valid transitions:
+            Status is MUTABLE across SCD2 versions (config is IMMUTABLE).
+            Post-Migration 0064, this method delegates to
+            ``crud_probability_models.update_model_status`` which performs
+            a close+INSERT supersede with FOR UPDATE locking.
+
+            Valid transitions:
             - draft -> testing (start backtesting)
             - testing -> active (promote to production)
             - testing -> draft (revert to development)
             - active -> deprecated (retire old version)
             - deprecated -> [none] (terminal state)
 
-            Config remains IMMUTABLE. To change model parameters,
-            create new version instead.
-
         Example:
             >>> model = manager.update_status(1, 'testing')  # draft -> testing
             >>> model = manager.update_status(1, 'active')   # testing -> active
+
+        References:
+            - Migration 0064 (SCD2 on probability_models)
+            - ``crud_probability_models.update_model_status`` (CRUD supersede)
+            - Glokta P0-1 / Ripley #NEW-A (S62): converted from in-place
+              UPDATE to SCD2 supersede delegation.
         """
+        # Import locally to avoid module-load-time cycles.
+        from precog.database.crud_probability_models import (
+            get_current_model_by_name_version,
+            update_model_status,
+        )
+
+        # N-4: snapshot the caller's model_id before resolution rebinds
+        # the local to the current-row id.  Mirrors StrategyManager.update_status.
+        original_model_id = model_id
+
+        # Resolve caller's (potentially stale) model_id to the CURRENT
+        # SCD2 row.  See StrategyManager.update_status for the ergonomics
+        # rationale — redirect historical ids via the (name, version)
+        # natural key so callers that cached pre-supersede ids keep
+        # working.
         conn = get_connection()
         cursor = conn.cursor()
-
         try:
-            # Get current status for validation
-            cursor.execute("SELECT status FROM probability_models WHERE model_id = %s", (model_id,))
+            cursor.execute(
+                """
+                SELECT model_name, model_version, status
+                FROM probability_models
+                WHERE model_id = %s AND row_current_ind = TRUE
+                """,
+                (model_id,),
+            )
             row = cursor.fetchone()
             if not row:
-                raise ValueError(
-                    f"Model {model_id} not found "
-                    f"(operation=update_status, target_status={new_status})"
+                # Try historical fallback: find the (name, version) on
+                # the historical row and redirect.
+                cursor.execute(
+                    """
+                    SELECT model_name, model_version
+                    FROM probability_models
+                    WHERE model_id = %s
+                    """,
+                    (model_id,),
                 )
-
-            current_status = row[0]
-
-            # Validate transition
-            self._validate_status_transition(current_status, new_status)
-
-            # Update status
-            update_sql = """
-                UPDATE probability_models
-                SET status = %s
-                WHERE model_id = %s
-                RETURNING model_id, model_name, model_version, model_class,
-                          domain, config, description, status, validation_calibration, validation_accuracy,
-                          validation_sample_size, created_at, created_by, notes
-            """
-
-            cursor.execute(update_sql, (new_status, model_id))
-            row = cursor.fetchone()
-            conn.commit()
-
-            logger.info(f"Updated model {model_id} status: {current_status} -> {new_status}")
-
-            return self._row_to_dict(cursor, row)
-
+                hist = cursor.fetchone()
+                if not hist:
+                    raise ValueError(
+                        f"Model {model_id} not found "
+                        f"(operation=update_status, target_status={new_status})"
+                    )
+                # Re-resolve current model via natural key.
+                cursor.execute(
+                    """
+                    SELECT model_id, model_name, model_version, status
+                    FROM probability_models
+                    WHERE model_name = %s AND model_version = %s
+                      AND row_current_ind = TRUE
+                    """,
+                    (hist[0], hist[1]),
+                )
+                current_row = cursor.fetchone()
+                if not current_row:
+                    raise ValueError(
+                        f"Model {model_id} has no current SCD2 row "
+                        f"(operation=update_status, target_status={new_status}). "
+                        "Logical entity appears to have been deleted."
+                    )
+                model_id = current_row[0]
+                model_name = current_row[1]
+                model_version = current_row[2]
+                current_status = current_row[3]
+            else:
+                model_name, model_version, current_status = row[0], row[1], row[2]
         finally:
             cursor.close()
             release_connection(conn)
+
+        # Validate transition
+        self._validate_status_transition(current_status, new_status)
+
+        # Delegate to the SCD2 supersede CRUD.
+        ok = update_model_status(model_id=model_id, new_status=new_status)
+        if not ok:
+            raise ValueError(
+                f"Model {model_id} not found during supersede "
+                f"(operation=update_status, target_status={new_status}). "
+                "A concurrent caller may have closed the row between the "
+                "validate-transition fetch and the supersede."
+            )
+
+        # Re-fetch via natural key — the supersede allocated a NEW model_id.
+        new_row = get_current_model_by_name_version(model_name, model_version)
+        if not new_row:
+            raise ValueError(
+                f"Post-supersede fetch returned None for "
+                f"({model_name!r}, {model_version!r}) "
+                "(operation=update_status)"
+            )
+
+        # Config conversion (string -> Decimal) matches _row_to_dict's behaviour.
+        if new_row.get("config"):
+            new_row["config"] = self._parse_config_from_db(new_row["config"])
+
+        # N-4: emit BOTH the caller's original id and the current-at-
+        # supersede-time id (plus the new SCD2 id) for log traceability
+        # when callers pass stale ids.
+        logger.info(
+            f"Updated model caller_id={original_model_id} "
+            f"current_id={model_id} status: {current_status} -> {new_status} "
+            f"(new SCD2 model_id={new_row['model_id']})"
+        )
+        return new_row
 
     def update_metrics(
         self,
@@ -553,70 +649,127 @@ class ModelManager:
         ):
             raise ValueError("At least one metric must be provided")
 
-        # Build dynamic UPDATE
-        updates: list[str] = []
-        params: list[Decimal | int] = []
+        # Import locally to avoid module-load-time cycles.
+        from precog.database.crud_probability_models import (
+            get_current_model_by_name_version,
+            update_model_metrics,
+        )
 
-        if validation_calibration is not None:
-            updates.append("validation_calibration = %s")
-            params.append(validation_calibration)
+        # N-4: snapshot the caller's model_id pre-resolve for the log line.
+        original_model_id = model_id
 
-        if validation_accuracy is not None:
-            updates.append("validation_accuracy = %s")
-            params.append(validation_accuracy)
-
-        if validation_sample_size is not None:
-            updates.append("validation_sample_size = %s")
-            params.append(validation_sample_size)
-
-        params.append(model_id)
-
+        # Resolve caller's model_id to the CURRENT SCD2 row (with
+        # historical-id fallback for ergonomic compat; see update_status).
         conn = get_connection()
         cursor = conn.cursor()
-
         try:
-            # Safe: updates list contains ONLY hardcoded column names (lines 480-488),
-            # never user input. All values use parameterized queries (%s placeholders).
-            update_sql = f"""
-                UPDATE probability_models
-                SET {", ".join(updates)}
-                WHERE model_id = %s
-                RETURNING model_id, model_name, model_version, model_class,
-                          domain, config, description, status, validation_calibration, validation_accuracy,
-                          validation_sample_size, created_at, created_by, notes
-            """
-
-            cursor.execute(update_sql, params)
-            row = cursor.fetchone()
-
-            if not row:
-                # Build context of which metrics were being updated
-                metrics_attempted = ", ".join(updates)
-                raise ValueError(
-                    f"Model {model_id} not found "
-                    f"(operation=update_metrics, attempted_updates=[{metrics_attempted}])"
-                )
-
-            conn.commit()
-
-            logger.info(
-                f"Updated model {model_id} metrics",
-                extra={
-                    k: v
-                    for k, v in zip(
-                        ["calibration", "accuracy", "sample_size"],
-                        [validation_calibration, validation_accuracy, validation_sample_size],
-                        strict=False,
-                    )
-                    if v is not None
-                },
+            cursor.execute(
+                """
+                SELECT model_name, model_version
+                FROM probability_models
+                WHERE model_id = %s AND row_current_ind = TRUE
+                """,
+                (model_id,),
             )
-
-            return self._row_to_dict(cursor, row)
-
+            row = cursor.fetchone()
+            if not row:
+                # Historical fallback
+                cursor.execute(
+                    """
+                    SELECT model_name, model_version
+                    FROM probability_models
+                    WHERE model_id = %s
+                    """,
+                    (model_id,),
+                )
+                hist = cursor.fetchone()
+                if not hist:
+                    attempted = [
+                        name
+                        for name, value in zip(
+                            [
+                                "validation_calibration",
+                                "validation_accuracy",
+                                "validation_sample_size",
+                            ],
+                            [
+                                validation_calibration,
+                                validation_accuracy,
+                                validation_sample_size,
+                            ],
+                            strict=False,
+                        )
+                        if value is not None
+                    ]
+                    raise ValueError(
+                        f"Model {model_id} not found "
+                        f"(operation=update_metrics, attempted_updates=[{', '.join(attempted)}])"
+                    )
+                cursor.execute(
+                    """
+                    SELECT model_id, model_name, model_version
+                    FROM probability_models
+                    WHERE model_name = %s AND model_version = %s
+                      AND row_current_ind = TRUE
+                    """,
+                    (hist[0], hist[1]),
+                )
+                current_row = cursor.fetchone()
+                if not current_row:
+                    raise ValueError(
+                        f"Model {model_id} has no current SCD2 row "
+                        "(operation=update_metrics). Logical entity appears deleted."
+                    )
+                model_id = current_row[0]
+                model_name = current_row[1]
+                model_version = current_row[2]
+            else:
+                model_name, model_version = row[0], row[1]
         finally:
             cursor.close()
             release_connection(conn)
+
+        # Delegate to SCD2 supersede CRUD.
+        ok = update_model_metrics(
+            model_id=model_id,
+            validation_calibration=validation_calibration,
+            validation_accuracy=validation_accuracy,
+            validation_sample_size=validation_sample_size,
+        )
+        if not ok:
+            raise ValueError(
+                f"Model {model_id} not found during supersede "
+                "(operation=update_metrics). A concurrent caller may have "
+                "closed the row between the pre-supersede fetch and the supersede."
+            )
+
+        # Re-fetch via natural key (supersede allocated new model_id).
+        new_row = get_current_model_by_name_version(model_name, model_version)
+        if not new_row:
+            raise ValueError(
+                f"Post-supersede fetch returned None for "
+                f"({model_name!r}, {model_version!r}) "
+                "(operation=update_metrics)"
+            )
+
+        if new_row.get("config"):
+            new_row["config"] = self._parse_config_from_db(new_row["config"])
+
+        logger.info(
+            f"Updated model caller_id={original_model_id} "
+            f"current_id={model_id} metrics "
+            f"(new SCD2 model_id={new_row['model_id']})",
+            extra={
+                k: v
+                for k, v in zip(
+                    ["calibration", "accuracy", "sample_size"],
+                    [validation_calibration, validation_accuracy, validation_sample_size],
+                    strict=False,
+                )
+                if v is not None
+            },
+        )
+        return new_row
 
     def _prepare_config_for_db(self, config: dict[str, Any]) -> str:
         """Convert config dict to JSONB-safe format (Decimal -> string).
