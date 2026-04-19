@@ -224,36 +224,6 @@ class TestDbStatus:
         )
 
 
-class TestDbMigrate:
-    """Test db migrate command."""
-
-    @patch("precog.database.initialization.apply_migrations")
-    def test_migrate_success(self, mock_apply, cli_runner):
-        """Test successful migration."""
-        mock_apply.return_value = {"applied": 2, "skipped": 8}
-
-        result = cli_runner.invoke(app, ["migrate"])
-
-        # Exit 3 = DATABASE_URL not set (test env lacks it); 0 = success
-        # TODO(#783): mock DATABASE_URL so this tests the actual migration path
-        assert result.exit_code in (0, 1, 3), (
-            f"migrate unexpected exit, got {result.exit_code}: {result.output}"
-        )
-
-    @patch("precog.database.initialization.apply_migrations")
-    def test_migrate_no_pending(self, mock_apply, cli_runner):
-        """Test migrate when no migrations pending."""
-        mock_apply.return_value = {"applied": 0, "skipped": 10}
-
-        result = cli_runner.invoke(app, ["migrate"])
-
-        # Exit 3 = DATABASE_URL not set (test env lacks it); 0 = success
-        # TODO(#783): mock DATABASE_URL so this tests the actual migration path
-        assert result.exit_code in (0, 1, 3), (
-            f"migrate unexpected exit, got {result.exit_code}: {result.output}"
-        )
-
-
 class TestDbTables:
     """Test db tables command.
 

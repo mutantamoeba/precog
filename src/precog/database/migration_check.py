@@ -24,6 +24,7 @@ class MigrationStatus:
     db_version: str | None
     head_version: str | None
     error: str | None = None
+    fatal: bool = False  # True: error is a block condition (e.g. multi-head); False: skippable (e.g. DB unreachable)
 
     @property
     def versions_behind(self) -> int | None:
@@ -84,6 +85,28 @@ def get_db_version() -> str | None:
         return None
 
 
+def get_alembic_heads() -> list[str]:
+    """Return all alembic heads. Linear chain = 1 entry; branched = 2+.
+
+    Used by check_migration_parity() to detect multi-head as a block condition
+    (fatal=True) rather than silently skipping. Glokta S62 review on #867:
+    a branched migration chain is a genuine schema-hygiene problem — silently
+    exiting 0 on it reintroduces the exact silent-skip failure #867 prevents.
+    """
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    db_dir = Path(__file__).parent
+    alembic_ini = db_dir / "alembic.ini"
+    if not alembic_ini.exists():
+        return []
+
+    cfg = Config(str(alembic_ini))
+    cfg.set_main_option("script_location", str(db_dir / "alembic"))
+    script = ScriptDirectory.from_config(cfg)
+    return list(script.get_heads())
+
+
 def check_migration_parity() -> MigrationStatus:
     """Check if the database schema matches the alembic head.
 
@@ -92,16 +115,37 @@ def check_migration_parity() -> MigrationStatus:
     - db_version: current DB migration version (or None)
     - head_version: latest migration in script directory (or None)
     - error: description if the check itself failed
+    - fatal: True when error indicates a block condition (multi-head);
+      False when error is a skippable condition (test DB unreachable)
     """
     try:
-        head = get_alembic_head()
+        heads = get_alembic_heads()
     except Exception as e:
         return MigrationStatus(
             is_current=False,
             db_version=None,
             head_version=None,
-            error=f"Could not read alembic head: {e}",
+            error=f"Could not read alembic heads: {e}",
         )
+
+    if len(heads) > 1:
+        return MigrationStatus(
+            is_current=False,
+            db_version=None,
+            head_version=None,
+            error=f"Multiple alembic heads detected: {sorted(heads)}. Run `alembic merge heads` before pushing.",
+            fatal=True,
+        )
+
+    if len(heads) == 0:
+        return MigrationStatus(
+            is_current=False,
+            db_version=None,
+            head_version=None,
+            error="No alembic head found — migration directory may be empty",
+        )
+
+    head = heads[0]
 
     try:
         db_ver = get_db_version()
@@ -111,14 +155,6 @@ def check_migration_parity() -> MigrationStatus:
             db_version=None,
             head_version=head,
             error=f"Could not read database version: {e}",
-        )
-
-    if head is None:
-        return MigrationStatus(
-            is_current=False,
-            db_version=db_ver,
-            head_version=None,
-            error="No alembic head found — migration directory may be empty",
         )
 
     return MigrationStatus(

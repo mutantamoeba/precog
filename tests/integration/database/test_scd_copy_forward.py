@@ -51,6 +51,7 @@ Markers:
 
 from __future__ import annotations
 
+import logging
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -300,6 +301,154 @@ class TestPositionsEdgeIdCopyForward:
         assert len(rows) == 2
         historical, current = _partition_scd_rows(rows)
         _assert_edge_id_copy_forward(historical, current, expected_edge_pk=edge_pk)
+
+
+@pytest.mark.integration
+class TestPositionsHistoricalIdRepair:
+    """Historical-id repair contract regression guard (PR #863 Glokta P1-1/P1-2)."""
+
+    def test_update_position_price_repairs_historical_id(
+        self,
+        position_with_edge: tuple[int, str, int, int],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Historical id repair path; also asserts id_repaired log line fires (Glokta P1-1)."""
+        historical_surrogate_id, position_bk, _market_pk, _edge_pk = position_with_edge
+
+        # Step 2: supersede once to allocate a new current version.
+        intermediate_id = update_position_price(
+            position_id=historical_surrogate_id,
+            current_price=Decimal("0.5600"),
+        )
+        assert intermediate_id != historical_surrogate_id
+
+        # Step 3-5: call again with the now-historical id and a different
+        # price. Must succeed and allocate a THIRD version.
+        with caplog.at_level(logging.INFO, logger="precog.database.crud_positions"):
+            third_id = update_position_price(
+                position_id=historical_surrogate_id,
+                current_price=Decimal("0.5700"),
+            )
+
+        assert third_id != historical_surrogate_id, (
+            "returned id must differ from caller-supplied historical id"
+        )
+        assert third_id != intermediate_id, (
+            "returned id must differ from the intermediate sibling's id "
+            "(a third SCD version must be created)"
+        )
+
+        # P1-1: the id_repaired log line must fire.
+        repair_log_present = any(
+            "historical position_id" in rec.getMessage()
+            and "repaired to current id" in rec.getMessage()
+            for rec in caplog.records
+        )
+        assert repair_log_present, (
+            "expected an info log line matching 'historical position_id ... "
+            "repaired to current id' when a historical id is passed. "
+            f"Got: {[rec.getMessage() for rec in caplog.records]}"
+        )
+
+        # SCD invariant: exactly one current row at the end.
+        rows = _fetch_scd_chain(position_bk)
+        current_rows = [r for r in rows if r["row_current_ind"]]
+        assert len(current_rows) == 1, (
+            f"expected exactly 1 current row for business key {position_bk!r}, "
+            f"got {len(current_rows)}. Full chain: {rows}"
+        )
+        assert current_rows[0]["id"] == third_id
+
+    def test_close_position_repairs_historical_id(
+        self,
+        position_with_edge: tuple[int, str, int, int],
+    ) -> None:
+        """Historical id repair → status-guard fires on already-closed sibling (Glokta P1-1 audit-trail)."""
+        historical_surrogate_id, _position_bk, _market_pk, _edge_pk = position_with_edge
+
+        # Step 2: first close succeeds and transitions status to 'closed'.
+        _intermediate_id = close_position(
+            position_id=historical_surrogate_id,
+            exit_price=Decimal("0.6000"),
+            exit_reason="test_target_hit",
+            realized_pnl=Decimal("1.0000"),
+        )
+
+        # Step 3: re-invoke with the historical id and different exit params.
+        # The business-key resolution succeeds, but the closure's status
+        # guard fires because the current row's status is 'closed' — this
+        # is the audit trail Glokta's P1-1 fix is designed to produce
+        # (the alternative would be silent state corruption).
+        with pytest.raises(ValueError, match="is not open"):
+            close_position(
+                position_id=historical_surrogate_id,
+                exit_price=Decimal("0.6500"),
+                exit_reason="test_manual",
+                realized_pnl=Decimal("1.5000"),
+            )
+
+    def test_set_trailing_stop_state_repairs_historical_id(
+        self,
+        position_with_edge: tuple[int, str, int, int],
+    ) -> None:
+        """Historical id passed to set_trailing_stop_state must repair."""
+        historical_surrogate_id, position_bk, _market_pk, _edge_pk = position_with_edge
+
+        state_a = {
+            "config": {
+                "activation_threshold": "0.15",
+                "initial_distance": "0.05",
+                "tightening_rate": "0.10",
+                "floor_distance": "0.02",
+            },
+            "activated": False,
+            "activation_price": None,
+            "current_stop_price": "0.4500",
+            "highest_price": "0.5500",
+        }
+        state_b = {
+            "config": {
+                "activation_threshold": "0.15",
+                "initial_distance": "0.05",
+                "tightening_rate": "0.10",
+                "floor_distance": "0.02",
+            },
+            "activated": True,
+            "activation_price": "0.5800",
+            "current_stop_price": "0.5200",
+            "highest_price": "0.6100",
+        }
+
+        # Step 2: supersede once to allocate a new current version.
+        intermediate_id = set_trailing_stop_state(
+            position_id=historical_surrogate_id,
+            trailing_stop_state=state_a,
+        )
+        assert intermediate_id != historical_surrogate_id
+
+        # Step 3-5: call again with the now-historical id. Must succeed
+        # and allocate a THIRD version.
+        third_id = set_trailing_stop_state(
+            position_id=historical_surrogate_id,
+            trailing_stop_state=state_b,
+        )
+
+        assert third_id != historical_surrogate_id, (
+            "returned id must differ from caller-supplied historical id"
+        )
+        assert third_id != intermediate_id, (
+            "returned id must differ from the intermediate sibling's id "
+            "(a third SCD version must be created)"
+        )
+
+        # SCD invariant: exactly one current row at the end.
+        rows = _fetch_scd_chain(position_bk)
+        current_rows = [r for r in rows if r["row_current_ind"]]
+        assert len(current_rows) == 1, (
+            f"expected exactly 1 current row for business key {position_bk!r}, "
+            f"got {len(current_rows)}. Full chain: {rows}"
+        )
+        assert current_rows[0]["id"] == third_id
 
 
 # =============================================================================

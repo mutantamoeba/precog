@@ -95,6 +95,23 @@ echo ""
 export PRECOG_ENV=test
 
 # ==============================================================================
+# STEP 0.2: Test DB Migration Parity Check (#867)
+# ==============================================================================
+# A stale test DB can silently mask real test failures — S61 root cause,
+# 8 files over months. Block the push if the test DB is behind alembic head.
+# Graceful skip if the test DB is unreachable (contributors without a test DB
+# are not blocked). Exit 2 = bug in migration_check itself (fail loudly so
+# the developer sees the real error and fixes it).
+python scripts/check_test_db_migration_parity.py
+PARITY_EXIT=$?
+if [[ $PARITY_EXIT -ne 0 ]]; then
+    echo ""
+    echo "Pre-push aborted by #867 test DB parity check (exit $PARITY_EXIT)."
+    echo "Bypass (at your own risk): git push --no-verify"
+    exit $PARITY_EXIT
+fi
+
+# ==============================================================================
 # STEP 0.25: Clean Stale Bytecode (prevents ghost test discovery)
 # ==============================================================================
 find tests/ -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
@@ -230,6 +247,57 @@ if [[ -n "$FAST_PATH_NAME" ]]; then
     echo "  Stress + Chaos + Race: $([ $RUN_STRESS -eq 1 ] && echo "RUN" || echo "SKIP")"
     echo ""
     echo "  To force full gate:   SKIP_DOCS_FAST_PATH=1 git push"
+    echo ""
+fi
+
+# ==============================================================================
+# STEP 0: Test Type Coverage Audit (#887, session 63)
+# ==============================================================================
+# Fast-fail structural gate — runs before test tiers so a tier-registration gap
+# or missing-test-types failure blocks the push immediately instead of waiting
+# on a 30-60s test run.
+#
+# Policy source: docs/foundation/TESTING_STRATEGY_V3.9.md
+# Script: scripts/audit_test_type_coverage.py --strict
+# History: moved from CI to pre-push in session 63 (#887) — CI's
+# continue-on-error: true had muted the signal into invisibility for months.
+# Umbrella #155 (ancestor) closed without the work landing; #887 tracks the
+# burn-down.
+#
+# Escape hatch (TRANSITION ONLY): SKIP_TEST_TYPE_AUDIT=1 bypasses this gate.
+# Use only when pushing gap-closing work itself (where the push-under-audit
+# would be blocked by pre-existing failures). The 11 known gaps + 3 registered-
+# but-incomplete modules (#887 Slice 1 state) are the transitional inventory;
+# once closed, the skip should never be needed. Do NOT add `SKIP_TEST_TYPE_AUDIT=1`
+# to any CI, alias, or config — it is a one-off escape hatch for interactive use.
+if [[ "${SKIP_TEST_TYPE_AUDIT:-0}" == "1" ]]; then
+    echo "  Test type coverage audit: SKIPPED (SKIP_TEST_TYPE_AUDIT=1 — tracked in #887)"
+    echo ""
+else
+    AUDIT_START=$(date +%s)
+    if ! python scripts/audit_test_type_coverage.py --strict; then
+        AUDIT_END=$(date +%s)
+        AUDIT_DURATION=$((AUDIT_END - AUDIT_START))
+        echo ""
+        echo "Test type coverage audit FAILED (${AUDIT_DURATION}s)"
+        echo ""
+        echo "Fix options:"
+        echo "  - Add missing test types for the listed modules"
+        echo "  - Register untracked modules in MODULE_TIERS in"
+        echo "    scripts/audit_test_type_coverage.py (copy the suggested block"
+        echo "    from the audit output above)"
+        echo "  - Adjust a module's tier if too strict for its maturity"
+        echo "    (experimental = unit only; business/infrastructure = all 8)"
+        echo ""
+        echo "Temporary bypass (transitional only, see #887):"
+        echo "  SKIP_TEST_TYPE_AUDIT=1 git push"
+        echo ""
+        echo "To audit manually:   python scripts/audit_test_type_coverage.py --strict"
+        echo "Tracked in:          GitHub issue #887"
+        exit 1
+    fi
+    AUDIT_END=$(date +%s)
+    echo "  Test type coverage audit: PASSED ($((AUDIT_END - AUDIT_START))s)"
     echo ""
 fi
 

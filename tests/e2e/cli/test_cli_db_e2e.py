@@ -106,68 +106,6 @@ class TestDatabaseInitWorkflow:
             assert result.exit_code in [0, 1, 2]
 
 
-class TestDatabaseMigrationWorkflow:
-    """E2E tests for database migration workflow."""
-
-    def test_complete_migration_workflow(self, cli_runner, isolated_app) -> None:
-        """Test complete migration workflow.
-
-        E2E: Tests dry-run then actual migration.
-
-        Note: The migrate command may call test_connection() in some code paths,
-        so all database functions must be mocked to prevent real database access.
-        """
-        with (
-            patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
-        ):
-            mock_test.return_value = True
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
-
-            # Migration to latest
-            result = cli_runner.invoke(isolated_app, ["db", "migrate"])
-            assert result.exit_code in [0, 1, 2, 3]
-
-    def test_migration_with_status_check(self, cli_runner, isolated_app) -> None:
-        """Test migration with status check workflow.
-
-        E2E: Tests migration then status verification.
-
-        Note: The status command calls both test_connection() AND get_cursor(),
-        so both must be mocked to prevent real database access during tests.
-        """
-        with (
-            patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_cursor") as mock_cursor_ctx,
-        ):
-            mock_test.return_value = True
-            mock_cur = MagicMock()
-            mock_cur.fetchone.return_value = {
-                "version": "PostgreSQL 15.0",
-                "current_database": "precog_test",
-                "table_count": 0,
-                "exists": False,
-                "row_count": 0,
-                "test": 1,
-            }
-            mock_cur.fetchall.return_value = []
-            mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
-            mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
-
-            # Migrate
-            result = cli_runner.invoke(isolated_app, ["db", "migrate"])
-            assert result.exit_code in [0, 1, 2, 3]
-
-            # Check status
-            result = cli_runner.invoke(isolated_app, ["db", "status"])
-            assert result.exit_code in [0, 1, 2]
-
-            # List tables
-            result = cli_runner.invoke(isolated_app, ["db", "tables"])
-            assert result.exit_code in [0, 1, 2]
-
-
 class TestDatabaseInspectionWorkflow:
     """E2E tests for database inspection workflow."""
 

@@ -260,7 +260,9 @@ gh pr create --title "..." --body "..."
 
 Branch protection on `main` (restored session 43, 2026-04-08): requires PR, must be up-to-date with main, and the **`CI Summary`** status check must pass before merge.
 
-`CI Summary` is the umbrella job in `.github/workflows/ci.yml` that aggregates all the underlying jobs (`pre-commit-checks`, `security-scan`, `documentation-validation`, `test`, `integration-tests`, `test-type-coverage`). It is the **only** required status check, by design — most of those underlying jobs are gated on `needs.detect-changes.outputs.code == 'true'` and skip on docs-only PRs. Requiring them individually would block every docs-only PR forever waiting for skipped checks. `CI Summary` runs unconditionally (`if: always()`) and correctly treats skipped jobs as success while still failing on any actual job failure.
+`CI Summary` is the umbrella job in `.github/workflows/ci.yml` that aggregates all the underlying jobs (`pre-commit-checks`, `security-scan`, `documentation-validation`, `test`, `integration-tests`). It is the **only** required status check, by design — most of those underlying jobs are gated on `needs.detect-changes.outputs.code == 'true'` and skip on docs-only PRs. Requiring them individually would block every docs-only PR forever waiting for skipped checks. `CI Summary` runs unconditionally (`if: always()`) and correctly treats skipped jobs as success while still failing on any actual job failure.
+
+**Test type coverage audit** (formerly a CI job with `continue-on-error`) was migrated to `scripts/pre-push-validation.sh` in session 63 (#887) as a fast-fail structural gate. The CI job had muted the signal into invisibility; pre-push enforcement blocks at the author's push instead of reporting a non-gating red X to reviewers.
 
 Admin override is enabled (`enforce_admins: false`) for emergency direct pushes. The Windows test job (`Tests (Python 3.14 on windows-latest, main only)`) is also deliberately not required because per #697 it only runs on main-branch pushes, not PR runs.
 

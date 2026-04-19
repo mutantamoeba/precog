@@ -627,23 +627,31 @@ class TestStrategyManagerUpdates:
         strategy = manager.create_strategy(**strategy_factory)
         assert strategy["status"] == "draft"
 
-        # Execute first transition: draft -> testing (REAL database)
+        # Execute first transition: draft -> testing (REAL database).
+        # Post-Migration 0064, ``update_status`` is an SCD2 supersede:
+        # the returned row carries a NEW strategy_id; the original
+        # strategy_id references a CLOSED historical row with status='draft'.
+        # Use the returned strategy_id for subsequent DB checks.
         result = manager.update_status(strategy_id=strategy["strategy_id"], new_status="testing")
         assert result["status"] == "testing"
+        current_id = result["strategy_id"]
 
-        # Verify database persistence
+        # Verify database persistence on the CURRENT row (by new id).
         db_cursor.execute(
-            "SELECT status FROM strategies WHERE strategy_id = %s", (strategy["strategy_id"],)
+            "SELECT status FROM strategies WHERE strategy_id = %s AND row_current_ind = TRUE",
+            (current_id,),
         )
         assert db_cursor.fetchone()["status"] == "testing"
 
         # Execute second transition: testing -> active (REAL database)
-        result = manager.update_status(strategy_id=strategy["strategy_id"], new_status="active")
+        result = manager.update_status(strategy_id=current_id, new_status="active")
         assert result["status"] == "active"
+        current_id = result["strategy_id"]
 
-        # Verify database persistence
+        # Verify database persistence on the current row.
         db_cursor.execute(
-            "SELECT status FROM strategies WHERE strategy_id = %s", (strategy["strategy_id"],)
+            "SELECT status FROM strategies WHERE strategy_id = %s AND row_current_ind = TRUE",
+            (current_id,),
         )
         assert db_cursor.fetchone()["status"] == "active"
 
@@ -707,10 +715,13 @@ class TestStrategyManagerUpdates:
         assert result["config"]["min_edge"] == Decimal("0.0500")
         assert result["config"] == original_config
 
-        # Verify database persistence
+        # Verify database persistence.  Post-Migration 0064 supersede
+        # allocates a NEW strategy_id; use the returned id, not the
+        # original (which is now a closed historical row).
         db_cursor.execute(
-            "SELECT paper_roi, live_roi, paper_trades_count, live_trades_count, config FROM strategies WHERE strategy_id = %s",
-            (strategy["strategy_id"],),
+            "SELECT paper_roi, live_roi, paper_trades_count, live_trades_count, config "
+            "FROM strategies WHERE strategy_id = %s AND row_current_ind = TRUE",
+            (result["strategy_id"],),
         )
         row = db_cursor.fetchone()
         assert row["paper_roi"] == Decimal("0.1500")
@@ -808,10 +819,16 @@ class TestStrategyManagerIntegration:
         original_config = strategy["config"].copy()
         strategy_id = strategy["strategy_id"]
 
+        # Post-Migration 0064: every status/metrics update is an SCD2
+        # supersede that allocates a NEW strategy_id for the current row.
+        # Track the current id by re-reading from the returned dict on
+        # each step (the original id becomes a historical row).
+
         # 2. Transition to testing (REAL database)
         strategy = manager.update_status(strategy_id=strategy_id, new_status="testing")
         assert strategy["status"] == "testing"
         assert strategy["config"] == original_config  # Config unchanged
+        strategy_id = strategy["strategy_id"]
 
         # 3. Add paper trading metrics (REAL database)
         strategy = manager.update_metrics(
@@ -819,10 +836,12 @@ class TestStrategyManagerIntegration:
         )
         assert strategy["paper_roi"] == Decimal("0.1234")
         assert strategy["paper_trades_count"] == 25
+        strategy_id = strategy["strategy_id"]
 
         # 4. Transition to active (REAL database)
         strategy = manager.update_status(strategy_id=strategy_id, new_status="active")
         assert strategy["status"] == "active"
+        strategy_id = strategy["strategy_id"]
 
         # 5. Add live trading metrics (REAL database)
         strategy = manager.update_metrics(
@@ -830,21 +849,25 @@ class TestStrategyManagerIntegration:
         )
         assert strategy["live_roi"] == Decimal("0.0987")
         assert strategy["live_trades_count"] == 15
+        strategy_id = strategy["strategy_id"]
 
         # 6. Transition to inactive (REAL database)
         strategy = manager.update_status(strategy_id=strategy_id, new_status="inactive")
         assert strategy["status"] == "inactive"
+        strategy_id = strategy["strategy_id"]
 
         # 7. Final transition to deprecated (REAL database)
         strategy = manager.update_status(strategy_id=strategy_id, new_status="deprecated")
         assert strategy["status"] == "deprecated"
+        strategy_id = strategy["strategy_id"]
 
         # Verify config NEVER changed throughout lifecycle
         assert strategy["config"] == original_config
 
-        # Verify final database state
+        # Verify final database state on the CURRENT SCD2 row.
         db_cursor.execute(
-            "SELECT status, paper_roi, live_roi, paper_trades_count, live_trades_count, config FROM strategies WHERE strategy_id = %s",
+            "SELECT status, paper_roi, live_roi, paper_trades_count, live_trades_count, config "
+            "FROM strategies WHERE strategy_id = %s AND row_current_ind = TRUE",
             (strategy_id,),
         )
         row = db_cursor.fetchone()

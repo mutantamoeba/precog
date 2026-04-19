@@ -63,9 +63,10 @@ TEST_TYPES = {
 }
 
 # Module tiers determine REQUIRED test types
-# Critical Path (90%+ coverage) needs ALL 8 types
-# Business Logic (85%+) needs 6 types (skip performance, chaos)
-# Infrastructure (80%+) needs 4 types (unit, integration, stress, race)
+# V3.2 policy (see TIER_REQUIREMENTS below): critical, business, AND infrastructure
+# all require ALL 8 test types. Experimental tier requires only unit.
+# (The earlier tier distinctions — business=6, infrastructure=4 — were retired
+# in TESTING_STRATEGY_V3.2 in favor of uniform strict coverage.)
 #
 # Issue #217: Added missing modules (2025-12-13)
 # - Fixed analytics/ -> trading/ path errors
@@ -203,6 +204,16 @@ MODULE_TIERS = {
     "cli/_future/position": "experimental",
     "cli/_future/strategy": "experimental",
     "cli/_future/trade": "experimental",
+    # Session 63 registrations (#887 Slice 1):
+    # - crud_lookups: #738 lookup-tables work (sessions 53-55)
+    # - crud_probability_models: #883 Migration 0064 SCD2 (session 63)
+    # - migration_check: #875 test-DB parity hook plumbing (session 63)
+    # All three tagged experimental per the line 214 policy definition
+    # ("new modules still in development"). Promote to infrastructure/business
+    # as their test suites expand — track in umbrella #887.
+    "database/crud_lookups": "experimental",
+    "database/crud_probability_models": "experimental",
+    "database/migration_check": "experimental",
 }
 
 # Required test types per tier

@@ -308,6 +308,18 @@ repos:
         pass_filenames: false
         description: "Warns (does NOT block) when staged files match paths referenced by the ADR document and the ADR itself is not staged (G7, Option B criterion 7)"
 
+      # #867: Test DB migration parity — block push if test DB is behind alembic head
+      # Runs at pre-push stage only (too expensive for the pre-commit edit loop).
+      # Sibling of the #792 dev-DB UserPromptSubmit hook, but blocks instead of warns.
+      # Gracefully SKIPs (exit 0) when the test DB is unreachable or unconfigured.
+      - id: test-db-migration-parity
+        name: Test DB Migration Parity (#867)
+        entry: python scripts/check_test_db_migration_parity.py
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        description: "Blocks push if the test DB is behind alembic head (S61 silent-CI fix; #867)"
+
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

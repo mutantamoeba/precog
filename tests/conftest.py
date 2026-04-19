@@ -886,7 +886,7 @@ def cli_app():
     Educational Note:
         Precog CLI uses Typer's subcommand pattern:
         - main.py: Root app with register_commands()
-        - cli/db.py: Database subcommands (init, status, migrate)
+        - cli/db.py: Database subcommands (init, status, tables)
         - cli/system.py: System subcommands (version, health)
         - cli/markets.py: Market subcommands (list, fetch)
         - cli/api.py: API subcommands (status, balance)
