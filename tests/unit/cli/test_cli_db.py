@@ -270,6 +270,69 @@ class TestDbTables:
             f"Expected 0 or 1, got {result.exit_code}: {result.output}"
         )
 
+    @patch("precog.database.connection.get_cursor")
+    def test_tables_filter_matches(self, mock_get_cursor, cli_runner):
+        """Test --filter restricts listing to matching tables (glob pattern)."""
+        fetchall_data = [
+            {"table_name": "games"},
+            {"table_name": "market_snapshots"},
+            {"table_name": "markets"},
+            {"table_name": "orderbook_snapshots"},
+            {"table_name": "positions"},
+        ]
+        # --filter 'market*' should match market_snapshots + markets (2 tables),
+        # so 2 fetchone calls for row counts.
+        fetchone_results = [
+            {"row_count": 50},
+            {"row_count": 20},
+        ]
+        mock_ctx, _mock_cur = _make_mock_cursor(
+            fetchone_side_effect=fetchone_results,
+            fetchall_return=fetchall_data,
+        )
+        mock_get_cursor.side_effect = mock_ctx
+
+        result = cli_runner.invoke(app, ["tables", "--filter", "market*"])
+
+        assert result.exit_code == 0, f"got {result.exit_code}: {result.output}"
+        assert "market_snapshots" in result.output
+        assert "markets" in result.output
+        assert "games" not in result.output
+        assert "orderbook_snapshots" not in result.output
+        assert "positions" not in result.output
+
+    @patch("precog.database.connection.get_cursor")
+    def test_tables_filter_case_insensitive(self, mock_get_cursor, cli_runner):
+        """--filter matches regardless of case."""
+        fetchall_data = [{"table_name": "Markets"}, {"table_name": "games"}]
+        fetchone_results = [{"row_count": 10}]
+        mock_ctx, _mock_cur = _make_mock_cursor(
+            fetchone_side_effect=fetchone_results,
+            fetchall_return=fetchall_data,
+        )
+        mock_get_cursor.side_effect = mock_ctx
+
+        result = cli_runner.invoke(app, ["tables", "-f", "MARKETS"])
+
+        assert result.exit_code == 0, f"got {result.exit_code}: {result.output}"
+        assert "Markets" in result.output
+        assert "games" not in result.output
+
+    @patch("precog.database.connection.get_cursor")
+    def test_tables_filter_no_matches(self, mock_get_cursor, cli_runner):
+        """--filter with no matching tables exits cleanly with informative message."""
+        fetchall_data = [
+            {"table_name": "games"},
+            {"table_name": "markets"},
+        ]
+        mock_ctx, _mock_cur = _make_mock_cursor(fetchall_return=fetchall_data)
+        mock_get_cursor.side_effect = mock_ctx
+
+        result = cli_runner.invoke(app, ["tables", "--filter", "nonexistent*"])
+
+        assert result.exit_code == 0, f"got {result.exit_code}: {result.output}"
+        assert "No tables match filter 'nonexistent*'" in result.output
+
 
 class TestCriticalTables:
     """Test CRITICAL_TABLES constant."""

@@ -25,6 +25,8 @@ Related:
 
 from __future__ import annotations
 
+import fnmatch
+
 import typer
 from rich.table import Table
 
@@ -315,16 +317,30 @@ def tables(
         "-V",
         help="Show column details for each table",
     ),
+    table_filter: str | None = typer.Option(
+        None,
+        "--filter",
+        "-f",
+        help="Filter tables by case-insensitive glob pattern (e.g. 'market*', '*_snapshots').",
+    ),
 ) -> None:
     """List all database tables.
 
-    Shows all tables in the public schema with row counts.
+    Shows all tables in the public schema with row counts. With --filter,
+    restricts the listing to tables whose name matches a case-insensitive
+    glob pattern.
 
     Examples:
         precog db tables
         precog db tables --verbose
+        precog db tables --filter 'market*'
+        precog db tables -f '*_snapshots'
     """
-    console.print("\n[bold cyan]Database Tables[/bold cyan]\n")
+    title_suffix = f" matching '{table_filter}'" if table_filter else ""
+    console.print(
+        f"\n[bold cyan]Database Tables{title_suffix}[/bold cyan]\n",
+        highlight=False,
+    )
 
     try:
         from precog.database.connection import get_cursor
@@ -339,11 +355,24 @@ def tables(
             """)
             result = cur.fetchall()
 
+            if table_filter:
+                pattern_lower = table_filter.lower()
+                result = [
+                    row
+                    for row in result
+                    if fnmatch.fnmatch(row["table_name"].lower(), pattern_lower)
+                ]
+
             if not result:
-                console.print("[yellow]No tables found[/yellow]")
+                msg = (
+                    f"[yellow]No tables match filter '{table_filter}'[/yellow]"
+                    if table_filter
+                    else "[yellow]No tables found[/yellow]"
+                )
+                console.print(msg, highlight=False)
                 return
 
-            table = Table(title=f"Tables ({len(result)} total)")
+            table = Table(title=f"Tables ({len(result)} total){title_suffix}")
             table.add_column("Table", style="cyan")
             table.add_column("Rows", justify="right")
 
