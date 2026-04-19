@@ -869,9 +869,16 @@ class TestStrategyRetrieval:
         assert strategies[0]["status"] == "active"
         assert strategies[0]["strategy_type"] == "value"
 
-        # Verify SELECT query uses WHERE clause with AND
+        # Verify SELECT query uses WHERE clause with AND.  Post-Migration
+        # 0064, list_strategies always includes ``row_current_ind = TRUE``
+        # as an always-on SCD2 filter.
         select_call = mock_cursor.execute.call_args[0]
-        assert "WHERE status = %s AND strategy_type = %s" in select_call[0]
+        sql = select_call[0]
+        assert "row_current_ind = TRUE" in sql, (
+            "Post-0064 list_strategies must always filter row_current_ind = TRUE"
+        )
+        assert "status = %s" in sql
+        assert "strategy_type = %s" in sql
         assert select_call[1] == ["active", "value"]
 
 
@@ -899,6 +906,22 @@ class TestStrategyStatusManagement:
         - REQ-VER-004: Version Lifecycle Management
     """
 
+    @pytest.mark.skip(
+        reason=(
+            "Obsolete post-Migration 0064 remediation (S62 Glokta P0-1). "
+            "Test mocks the pre-0064 in-place UPDATE path on `get_connection`. "
+            "Post-remediation, `StrategyManager.update_status` delegates to "
+            "`crud_strategies.update_strategy_status` (a supersede using "
+            "`get_cursor`), so these hand-written mocks no longer cover the "
+            "code path.  Semantic coverage lives in: (1) integration tests in "
+            "`tests/integration/trading/test_strategy_manager.py` "
+            "(TestStrategyManagerUpdates::test_update_strategy_status) which "
+            "hit real DB and verify SCD2 semantics, and (2) "
+            "`tests/integration/database/test_migration_0064_scd2_strategies_models.py` "
+            "TestUpdateStrategyStatusSupersedes + new read-filter tests.  "
+            "Rewriting this mock to test the CRUD delegation is follow-up work."
+        )
+    )
     def test_update_status_active_to_inactive(self):
         """Verify valid status transition: active -> inactive.
 
@@ -997,6 +1020,16 @@ class TestStrategyStatusManagement:
         assert "WHERE strategy_id = %s" in update_call[0]
         assert update_call[1] == ("inactive", 1)
 
+    @pytest.mark.skip(
+        reason=(
+            "Obsolete post-0064 (S62). Asserts `SET status = %s` in UPDATE "
+            "but SCD2 supersede uses close-and-INSERT — no `SET status` in "
+            "the manager code path.  Immutability is covered by "
+            "`tests/integration/database/test_migration_0064_scd2_strategies_models.py` "
+            "test_update_strategy_status_preserves_config_immutability (and "
+            "its re-inforced value-equality assertion post-remediation P1-2)."
+        )
+    )
     def test_update_status_preserves_config(self):
         """Verify status update does NOT modify config (immutability).
 
@@ -1199,6 +1232,16 @@ class TestStrategyMetricsUpdate:
         - REQ-VER-005: A/B Testing Support (compare metrics between versions)
     """
 
+    @pytest.mark.skip(
+        reason=(
+            "Obsolete post-0064 (S62 Glokta P0-1). Mocks the pre-0064 "
+            "in-place UPDATE path.  Post-remediation update_metrics "
+            "delegates to `crud_strategies.update_strategy_metrics` "
+            "(supersede).  Semantic coverage: integration test "
+            "TestStrategyManagerUpdates::test_update_strategy_metrics "
+            "(real DB, SCD2-aware)."
+        )
+    )
     def test_update_metrics_total_trades(self):
         """Verify updating trade count preserves all other fields.
 
@@ -1273,6 +1316,13 @@ class TestStrategyMetricsUpdate:
         assert "SET paper_trades_count = %s" in update_call[0]
         assert "WHERE strategy_id = %s" in update_call[0]
 
+    @pytest.mark.skip(
+        reason=(
+            "Obsolete post-0064 (S62 Glokta P0-1). Mocks the pre-0064 "
+            "in-place UPDATE path on get_connection.  Semantic coverage: "
+            "integration tests + test_migration_0064."
+        )
+    )
     def test_update_metrics_pnl_tracking(self):
         """Verify updating ROI metrics preserves config immutability.
 
@@ -1357,6 +1407,13 @@ class TestStrategyMetricsUpdate:
         set_clause = set_match.group(1)
         assert "config" not in set_clause.lower(), "Config should NOT be modified in SET clause"
 
+    @pytest.mark.skip(
+        reason=(
+            "Obsolete post-0064 (S62 Glokta P0-1). Mocks the pre-0064 "
+            "in-place UPDATE path.  Semantic coverage: integration tests + "
+            "test_migration_0064 immutability assertions."
+        )
+    )
     def test_metrics_update_preserves_immutable_fields(self):
         """Verify metrics update NEVER touches config, name, version, type.
 
