@@ -305,45 +305,14 @@ class TestPositionsEdgeIdCopyForward:
 
 @pytest.mark.integration
 class TestPositionsHistoricalIdRepair:
-    """Historical-id repair contract (Glokta P1-2, #863 adversarial review).
-
-    After the two-step outside fetch landed in ``update_position_price``,
-    ``close_position``, and ``set_trailing_stop_state`` (crud_positions.py
-    business-key resolution pattern), a caller that passes a NOW-HISTORICAL
-    ``position_id`` — one whose business key still has a current row because
-    a sibling caller superseded it — must operate on the current row rather
-    than raise ``Position not found``.
-
-    Each test exercises this repair path end-to-end against a real DB:
-
-        1. Seed an open position chain.
-        2. Supersede it once via the CRUD under test to allocate a new
-           current version; the original surrogate is now historical.
-        3. Call the CRUD under test AGAIN with the historical id and
-           different parameters.
-        4. Assert the call succeeds (except for ``close_position`` where
-           the retry closure's ``status != 'open'`` guard fires correctly
-           on the already-closed sibling row — that's the audit trail
-           Glokta specifically requested).
-        5. Assert SCD invariants: exactly one ``row_current_ind = TRUE``
-           row at the end; the returned id is distinct from both the
-           historical caller-supplied id AND the intermediate sibling id
-           (i.e. a third SCD version was created).
-
-    These tests are the direct regression guard for PR #863 Glokta's
-    P1-1 (observability) and P1-2 (test coverage) findings.
-    """
+    """Historical-id repair contract regression guard (PR #863 Glokta P1-1/P1-2)."""
 
     def test_update_position_price_repairs_historical_id(
         self,
         position_with_edge: tuple[int, str, int, int],
         caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """Historical id whose business key has a current row must repair.
-
-        Also asserts the ``id_repaired`` info log line fires — Glokta P1-1
-        observability requirement.
-        """
+        """Historical id repair path; also asserts id_repaired log line fires (Glokta P1-1)."""
         historical_surrogate_id, position_bk, _market_pk, _edge_pk = position_with_edge
 
         # Step 2: supersede once to allocate a new current version.
@@ -394,16 +363,7 @@ class TestPositionsHistoricalIdRepair:
         self,
         position_with_edge: tuple[int, str, int, int],
     ) -> None:
-        """Historical id passed to close_position must repair to current row.
-
-        The test first supersedes via ``close_position`` (transitioning status
-        to 'closed'), then re-invokes ``close_position`` with the historical
-        id. The retry closure's ``status != 'open'`` guard fires correctly on
-        the repaired id — this is exactly the audit-trail behavior Glokta
-        requested: the guard fires on the CURRENT row (the sibling's closed
-        version), surfacing the stale-state collision loudly rather than
-        silently inserting a new current version over a closed position.
-        """
+        """Historical id repair → status-guard fires on already-closed sibling (Glokta P1-1 audit-trail)."""
         historical_surrogate_id, _position_bk, _market_pk, _edge_pk = position_with_edge
 
         # Step 2: first close succeeds and transitions status to 'closed'.
