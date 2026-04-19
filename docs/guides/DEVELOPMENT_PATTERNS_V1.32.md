@@ -11014,7 +11014,97 @@ Agent deployments are expensive in session budget and attention. Shipping ghost 
 
 ---
 
+## Pattern 73: "Keep Heading, Replace Body with Pointer" -- Structural Refactor Idiom (ALWAYS for Memory/Doc File Extraction)
+
+**Severity:** MEDIUM -- when refactoring a growing markdown file by extracting sections to topic files, preserving the section heading with a one-line pointer (instead of deleting the section) keeps existing anchor-style cross-references working throughout the codebase.
+
+### Problem / Trigger
+
+A growing markdown file (MEMORY.md, protocols.md, long guides) has sections that need to move to topic files. Multiple memory files, source files, and PR descriptions reference those sections via anchor syntax: `[text](file.md#section-anchor)` or `file.md § Section`.
+
+Naive extraction removes the section entirely from the source file → every cross-reference in the codebase becomes a broken link. The refactor shrinks the source file but creates a wave of broken-reference debt.
+
+### The Pattern / Rule
+
+When extracting a section to a topic file:
+
+1. Copy the full section verbatim to the new topic file (with proper frontmatter).
+2. In the source file, **keep the section heading** (`## Section Name`) exactly as-is -- same text, same hierarchy level, same markdown-anchor behavior.
+3. Replace the section **body** with a single-line pointer: `See [topic_file.md](topic_file.md) for full content.`
+
+The preserved heading continues to function as an anchor target. Anchor-style links (`#section-anchor`) keep resolving. Readers land on the pointer and click through for detail.
+
+### Why
+
+Session 62 S79 first-fire refactored MEMORY.md (565 → 141 lines, -75%) and protocols.md (703 → 592 lines, -16%) via 15 extractions (8 session_NN_actual.md files + 6 checklist_*.md files + 1 history archive). Zero cross-references broke. Affected links that continued resolving:
+
+- `protocols.md § Delegation Workflow` (referenced from roster_agents.md + feedback_process_adherence.md)
+- `protocols.md § Hierarchical Council Protocol` (referenced from roster_agents.md)
+- `protocols.md § Mock Fidelity Rule` (referenced from feedback_mock_factory_not_class.md + feedback_test_pattern_compliance.md + patterns_to_add_42e.md)
+- `protocols.md § Flair Protocol` (referenced from multiple memory files)
+- MEMORY.md session blocks referenced informally in conversation transcripts
+
+Alternative approaches fail:
+
+- **Delete section entirely** → every anchor-style reference breaks. Grep-and-fix across the codebase is tedious and prone to missing uses.
+- **Keep section body entirely** → file doesn't shrink. Defeats the refactor's purpose.
+- **Move the heading with the content** → `protocols.md#section-anchor` now points at a nonexistent anchor. Same breakage as "delete entirely."
+
+### Wrong
+
+```markdown
+# Before extract:
+## Delegation Workflow
+1. Select agent
+2. Announce to user
+3. Build prompt
+... [30 lines]
+
+# After naive extract (heading + body deleted):
+# (nothing -- section is gone)
+```
+
+Broken: `[Delegation Workflow](protocols.md#delegation-workflow)` in `roster_agents.md:8` now links to nothing.
+
+### Right
+
+```markdown
+# Before extract:
+## Delegation Workflow
+1. Select agent
+2. Announce to user
+... [30 lines]
+
+# After correct extract (heading preserved, body replaced with pointer):
+## Delegation Workflow
+
+See [checklist_delegation.md](checklist_delegation.md) for the full 7-step workflow.
+```
+
+Heading preserved → `protocols.md#delegation-workflow` anchor still resolves → reader lands on the pointer line and clicks through.
+
+### When This Pattern Applies
+
+- S79 file-size discipline refactors (MEMORY.md / protocols.md / growing-guide extractions)
+- Moving stable, cross-referenced sections from growing markdown files to dedicated topic files
+- Any refactor where `#anchor` links or `§ Section` references exist in the codebase
+
+### When NOT to Apply
+
+- Sections with NO external references (verify via grep first; safe to delete cleanly)
+- Files without anchor-style cross-reference culture (plain copy/move is fine)
+- Transient content (session-specific sections, temporary planning, superseded notes) -- these are often better to delete with an explicit archive note than to preserve as ghost-heading pointers
+- When the "heading" is generated / transient (auto-generated indexes, TOC-only headings with no anchor callers)
+
+### Source
+
+- Session 62 S79 first-fire -- The Librarian's refactor (MEMORY.md 565→141 lines, protocols.md 703→592 lines, 15 new topic files, zero broken cross-references)
+- See also: Pattern 72 (Scope Correction), S79 trigger (roster_triggers.md § Process & Meta), checklist_delegation.md (canonical extraction example), session_62_actual.md
+
+---
+
 V1.32 Updates:
+- Added Pattern 73 ("Keep Heading, Replace Body with Pointer" -- Structural Refactor Idiom) -- preserve heading + one-line pointer when extracting sections to topic files, so anchor-style cross-references keep resolving. Source: Session 62 S79 Librarian refactor (MEMORY.md 565→141, protocols.md 703→592, 15 extractions, zero broken cross-references).
 - Added Pattern 65 (Mock the Entry Point, Not the Terminal Constructor) -- factory-level mocking rule operationalizing CLAUDE.md Critical Pattern #7. Source: Session 49 discovery + Session 50 #764 retrofit.
 - Added Pattern 66 (Strict Exit-Code Assertions as Decay Detection) -- forbids loose `exit_code in [0, 1, 2]` asserts. Source: Session 50 #764 retrofit; complements #808 ratchet and #769 CLI flag linter.
 - Added Pattern 67 (`assert_called` as the Fail-Loud Invariant for Mocks) -- every `patch()` paired with call assertion. Source: Session 50 retrofit, Joe Chip P1 findings.
