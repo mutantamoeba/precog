@@ -11,8 +11,8 @@ Related:
 - migration_batch_plan_v1.md: Migration 0026 spec
 
 Usage:
-    pytest tests/unit/database/test_account_ledger_crud.py -v
-    pytest tests/unit/database/test_account_ledger_crud.py -v -m unit
+    pytest tests/unit/database/test_crud_ledger_account.py -v
+    pytest tests/unit/database/test_crud_ledger_account.py -v -m unit
 """
 
 from datetime import UTC, datetime
