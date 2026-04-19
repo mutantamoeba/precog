@@ -264,12 +264,19 @@ class StrategyManager:
         cursor = conn.cursor()
 
         try:
+            # Post-Migration 0064: filter row_current_ind = TRUE so the
+            # returned row is the CURRENT SCD2 version.  Historical
+            # (superseded) rows with the same strategy_id never exist
+            # post-0064 because supersede allocates a fresh id — but
+            # the filter is load-bearing because before 0064 strategy_ids
+            # were reused, and tests creating rows via raw SQL might
+            # leave historical rows around.
             select_sql = """
                 SELECT strategy_id, strategy_name, strategy_version, strategy_type,
                        domain, config, description, status, paper_roi, live_roi,
                        paper_trades_count, live_trades_count, created_at, created_by, notes
                 FROM strategies
-                WHERE strategy_id = %s
+                WHERE strategy_id = %s AND row_current_ind = TRUE
             """
 
             cursor.execute(select_sql, (strategy_id,))
@@ -300,12 +307,17 @@ class StrategyManager:
         cursor = conn.cursor()
 
         try:
+            # Post-Migration 0064: row_current_ind = TRUE filter returns
+            # the CURRENT SCD2 row per (name, version) — one row per
+            # logical version, consistent with the pre-0064 contract
+            # ("all versions" means "all versions I declared", not "all
+            # SCD history rows").
             select_sql = """
                 SELECT strategy_id, strategy_name, strategy_version, strategy_type,
                        domain, config, description, status, paper_roi, live_roi,
                        paper_trades_count, live_trades_count, created_at, created_by, notes
                 FROM strategies
-                WHERE strategy_name = %s
+                WHERE strategy_name = %s AND row_current_ind = TRUE
                 ORDER BY strategy_version DESC
             """
 
@@ -338,13 +350,16 @@ class StrategyManager:
         cursor = conn.cursor()
 
         try:
-            # Use partial index for better performance (idx_strategies_active)
+            # Post-Migration 0064: both filters apply — status='active'
+            # AND row_current_ind = TRUE — so a historical row that was
+            # 'active' before being superseded does not shadow the
+            # live version.  Glokta P0-3 / Ripley #NEW-C.
             select_sql = """
                 SELECT strategy_id, strategy_name, strategy_version, strategy_type,
                        domain, config, description, status, paper_roi, live_roi,
                        paper_trades_count, live_trades_count, created_at, created_by, notes
                 FROM strategies
-                WHERE status = 'active'
+                WHERE status = 'active' AND row_current_ind = TRUE
                 ORDER BY strategy_name, strategy_version
             """
 
@@ -399,8 +414,11 @@ class StrategyManager:
         cursor = conn.cursor()
 
         try:
-            # Build dynamic WHERE clause
-            where_clauses: list[str] = []
+            # Post-Migration 0064: row_current_ind = TRUE is an always-on
+            # filter.  Historical SCD rows are not part of the "list"
+            # contract — callers who want SCD history should query
+            # crud_strategies.get_all_strategy_versions(..., include_historical=True).
+            where_clauses: list[str] = ["row_current_ind = TRUE"]
             params: list[str] = []
 
             if status is not None:
@@ -415,10 +433,8 @@ class StrategyManager:
                 where_clauses.append("strategy_type = %s")
                 params.append(strategy_type)
 
-            # Construct SQL
-            where_sql = ""
-            if where_clauses:
-                where_sql = "WHERE " + " AND ".join(where_clauses)
+            # Construct SQL (always has at least the row_current_ind clause)
+            where_sql = "WHERE " + " AND ".join(where_clauses)
 
             select_sql = f"""
                 SELECT strategy_id, strategy_name, strategy_version, strategy_type,
@@ -444,21 +460,31 @@ class StrategyManager:
             release_connection(conn)
 
     def update_status(self, strategy_id: int, new_status: str) -> dict[str, Any]:
-        """Update strategy status (MUTABLE field).
+        """Update strategy status (MUTABLE field) via SCD Type 2 supersede.
 
         Args:
-            strategy_id: Strategy to update
+            strategy_id: Strategy to update (MUST reference a CURRENT SCD2 row)
             new_status: New status ('draft', 'testing', 'active', 'inactive', 'deprecated')
 
         Returns:
-            Updated strategy dict
+            Updated strategy dict (re-fetched via natural key after the
+            supersede — the new SCD2 row has a NEW strategy_id).
 
         Raises:
             ValueError: If strategy not found
             InvalidStatusTransitionError: If transition is invalid
 
         Educational Note:
-            Status is MUTABLE (config is not!). Common workflows:
+            Status is MUTABLE across SCD2 versions (config is IMMUTABLE).
+            Post-Migration 0064, this method delegates to
+            ``crud_strategies.update_strategy_status`` which performs a
+            close+INSERT supersede with FOR UPDATE locking.  The close
+            flips the current row's ``row_current_ind`` to FALSE and the
+            INSERT creates a new row with a NEW ``strategy_id`` carrying
+            the new status — the caller sees the new row via the natural
+            key re-fetch below.
+
+            Common workflows:
             - Development: draft -> testing -> active
             - Retirement: active -> inactive -> deprecated
             - Revert: testing -> draft
@@ -469,45 +495,82 @@ class StrategyManager:
 
         References:
             - REQ-VER-004: Version Lifecycle Management
+            - Migration 0064 (SCD2 on strategies)
+            - ``crud_strategies.update_strategy_status`` (the CRUD supersede)
+            - Glokta P0-1 / Ripley #NEW-A (S62): converted from in-place
+              UPDATE to SCD2 supersede delegation.
         """
-        # Get current status
+        # Import locally to avoid a module-load-time cycle between the
+        # CRUD layer and the manager layer (crud -> connection -> config).
+        from precog.database.crud_strategies import (
+            get_strategy_by_name_and_version,
+            update_strategy_status,
+        )
+
+        # Resolve caller's (potentially stale) strategy_id to the CURRENT
+        # SCD2 row.  Post-Migration 0064, ``update_status`` is a
+        # supersede: previous supersedes left the old strategy_id
+        # referencing a historical (closed) row.  To preserve ergonomic
+        # compatibility with the pre-0064 contract ("pass any id, I'll
+        # update the logical entity"), we resolve stale ids to the
+        # current version via the (name, version) natural key.
         strategy = self.get_strategy(strategy_id)
-        if not strategy:
-            raise ValueError(
-                f"Strategy {strategy_id} not found "
-                f"(operation=update_status, target_status={new_status})"
-            )
+        if strategy is None:
+            # strategy_id might be a historical SCD row.  Look it up
+            # WITHOUT the row_current_ind filter, grab (name, version),
+            # and redirect to the current row.
+            strategy = self._resolve_historical_id(strategy_id)
+            if strategy is None:
+                raise ValueError(
+                    f"Strategy {strategy_id} not found "
+                    f"(operation=update_status, target_status={new_status})"
+                )
+            # The current strategy_id for this (name, version) is on
+            # the re-resolved ``strategy`` dict — use it for the supersede.
+            strategy_id = strategy["strategy_id"]
 
         current_status = strategy["status"]
 
         # Validate transition
         self._validate_status_transition(current_status, new_status)
 
-        # Update status
-        conn = get_connection()
-        cursor = conn.cursor()
+        # Delegate to the SCD2 supersede CRUD.  Returns True on success,
+        # False if the row vanished between the get_strategy fetch and the
+        # supersede (extraordinary race — concurrent deletion).
+        ok = update_strategy_status(strategy_id=strategy_id, new_status=new_status)
+        if not ok:
+            raise ValueError(
+                f"Strategy {strategy_id} not found during supersede "
+                f"(operation=update_status, target_status={new_status}). "
+                "A concurrent caller may have closed the row between the "
+                "validate-transition fetch and the supersede."
+            )
 
-        try:
-            update_sql = """
-                UPDATE strategies
-                SET status = %s
-                WHERE strategy_id = %s
-                RETURNING strategy_id, strategy_name, strategy_version, strategy_type,
-                          domain, config, description, status, paper_roi, live_roi,
-                          paper_trades_count, live_trades_count, created_at, created_by, notes
-            """
+        # The supersede allocated a NEW strategy_id for the new SCD2 row;
+        # re-fetch via the natural key (which is preserved across
+        # supersedes) to return the current row with the new status.
+        new_row = get_strategy_by_name_and_version(
+            strategy["strategy_name"], strategy["strategy_version"]
+        )
+        if not new_row:
+            # Should be unreachable — we just inserted it.  Defensive.
+            raise ValueError(
+                f"Post-supersede fetch returned None for "
+                f"({strategy['strategy_name']!r}, {strategy['strategy_version']!r}) "
+                "(operation=update_status)"
+            )
 
-            cursor.execute(update_sql, (new_status, strategy_id))
-            row = cursor.fetchone()
-            conn.commit()
+        # Re-parse config through the manager's Decimal-converter so the
+        # returned row matches the pre-0064 shape (broader numeric-string
+        # → Decimal conversion than the CRUD's whitelist helper).
+        if new_row.get("config") is not None:
+            new_row["config"] = self._parse_config_from_db(new_row["config"])
 
-            logger.info(f"Updated strategy {strategy_id} status: {current_status} -> {new_status}")
-
-            return self._row_to_dict(cursor, row)
-
-        finally:
-            cursor.close()
-            release_connection(conn)
+        logger.info(
+            f"Updated strategy {strategy_id} status: {current_status} -> {new_status} "
+            f"(new SCD2 strategy_id={new_row['strategy_id']})"
+        )
+        return new_row
 
     def update_metrics(
         self,
@@ -547,76 +610,124 @@ class StrategyManager:
         if all(v is None for v in [paper_roi, live_roi, paper_trades_count, live_trades_count]):
             raise ValueError("At least one metric must be provided")
 
-        # Build dynamic UPDATE
-        updates: list[str] = []
-        params: list[Decimal | int] = []
+        # Import locally to avoid a module-load-time cycle.
+        from precog.database.crud_strategies import (
+            get_strategy_by_name_and_version,
+            update_strategy_metrics,
+        )
 
-        if paper_roi is not None:
-            updates.append("paper_roi = %s")
-            params.append(paper_roi)
-
-        if live_roi is not None:
-            updates.append("live_roi = %s")
-            params.append(live_roi)
-
-        if paper_trades_count is not None:
-            updates.append("paper_trades_count = %s")
-            params.append(paper_trades_count)
-
-        if live_trades_count is not None:
-            updates.append("live_trades_count = %s")
-            params.append(live_trades_count)
-
-        params.append(strategy_id)
-
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        try:
-            # Safe: updates list contains ONLY hardcoded column names (lines 462-475),
-            # never user input. All values use parameterized queries (%s placeholders).
-            update_sql = f"""
-                UPDATE strategies
-                SET {", ".join(updates)}
-                WHERE strategy_id = %s
-                RETURNING strategy_id, strategy_name, strategy_version, strategy_type,
-                          domain, config, description, status, paper_roi, live_roi,
-                          paper_trades_count, live_trades_count, created_at, created_by, notes
-            """
-
-            cursor.execute(update_sql, params)
-            row = cursor.fetchone()
-
-            if not row:
-                # Build context of which metrics were being updated
-                metrics_attempted = ", ".join(updates)
-                raise ValueError(
-                    f"Strategy {strategy_id} not found "
-                    f"(operation=update_metrics, attempted_updates=[{metrics_attempted}])"
-                )
-
-            conn.commit()
-
-            logger.info(
-                f"Updated strategy {strategy_id} metrics",
-                extra={
-                    k: v
-                    for k, v in zip(
-                        ["paper_roi", "live_roi", "paper_trades", "live_trades"],
+        # Resolve the caller's (potentially stale) strategy_id to the
+        # CURRENT SCD2 row.  See update_status for the rationale — we
+        # preserve the pre-0064 ergonomics ("pass any id") by redirecting
+        # historical ids to the current row of the same (name, version).
+        strategy = self.get_strategy(strategy_id)
+        if strategy is None:
+            strategy = self._resolve_historical_id(strategy_id)
+            if strategy is None:
+                attempted_metrics = [
+                    name
+                    for name, value in zip(
+                        ["paper_roi", "live_roi", "paper_trades_count", "live_trades_count"],
                         [paper_roi, live_roi, paper_trades_count, live_trades_count],
                         strict=False,
                     )
-                    if v is not None
-                },
+                    if value is not None
+                ]
+                raise ValueError(
+                    f"Strategy {strategy_id} not found "
+                    f"(operation=update_metrics, attempted_updates=[{', '.join(attempted_metrics)}])"
+                )
+            strategy_id = strategy["strategy_id"]
+
+        # Delegate to the SCD2 supersede CRUD.
+        ok = update_strategy_metrics(
+            strategy_id=strategy_id,
+            paper_roi=paper_roi,
+            live_roi=live_roi,
+            paper_trades_count=paper_trades_count,
+            live_trades_count=live_trades_count,
+        )
+        if not ok:
+            raise ValueError(
+                f"Strategy {strategy_id} not found during supersede "
+                f"(operation=update_metrics). A concurrent caller may have "
+                "closed the row between the pre-supersede fetch and the "
+                "supersede itself."
             )
 
-            return self._row_to_dict(cursor, row)
+        # Re-fetch via natural key (the supersede allocated a NEW strategy_id).
+        new_row = get_strategy_by_name_and_version(
+            strategy["strategy_name"], strategy["strategy_version"]
+        )
+        if not new_row:
+            raise ValueError(
+                f"Post-supersede fetch returned None for "
+                f"({strategy['strategy_name']!r}, {strategy['strategy_version']!r}) "
+                "(operation=update_metrics)"
+            )
 
+        # Re-parse config through the manager's Decimal-converter (broader
+        # than the CRUD whitelist) so the returned row matches pre-0064
+        # shape.
+        if new_row.get("config") is not None:
+            new_row["config"] = self._parse_config_from_db(new_row["config"])
+
+        logger.info(
+            f"Updated strategy {strategy_id} metrics "
+            f"(new SCD2 strategy_id={new_row['strategy_id']})",
+            extra={
+                k: v
+                for k, v in zip(
+                    ["paper_roi", "live_roi", "paper_trades", "live_trades"],
+                    [paper_roi, live_roi, paper_trades_count, live_trades_count],
+                    strict=False,
+                )
+                if v is not None
+            },
+        )
+        return new_row
+
+    # Private helper methods
+
+    def _resolve_historical_id(self, strategy_id: int) -> dict[str, Any] | None:
+        """Resolve a stale strategy_id to the current SCD2 row.
+
+        Post-Migration 0064 every status/metrics update allocates a new
+        strategy_id.  Callers that hold an id from before a prior
+        supersede still expect ``update_status(stale_id)`` to work on
+        the logical entity.  This helper finds the historical row,
+        reads its ``(strategy_name, strategy_version)`` natural key, and
+        returns the CURRENT row for that key — or None if the id never
+        existed or the logical entity has been deleted entirely.
+
+        Returns:
+            The current SCD2 row as a dict (same shape as ``get_strategy``),
+            or None if no such row exists.
+        """
+        from precog.database.crud_strategies import get_strategy_by_name_and_version
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        try:
+            # Unfiltered lookup (might return historical row with row_current_ind = FALSE).
+            cursor.execute(
+                """
+                SELECT strategy_name, strategy_version
+                FROM strategies
+                WHERE strategy_id = %s
+                """,
+                (strategy_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            # row is tuple from raw psycopg2 cursor.
+            name, version = row[0], row[1]
         finally:
             cursor.close()
             release_connection(conn)
 
-    # Private helper methods
+        return get_strategy_by_name_and_version(name, version)
 
     def _prepare_config_for_db(self, config: dict[str, Any]) -> str:
         """Convert config dict to JSONB string (Decimal -> string conversion).

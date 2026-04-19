@@ -400,13 +400,36 @@ def test_update_strategy_status_preserves_config_immutability(db_pool: Any) -> N
         # guarded columns.
         assert update_strategy_status(first_id, "testing") is True
 
-        strategy = get_strategy(first_id)
-        assert strategy is not None
-        # config stored verbatim on the CLOSED row.
-        stored_config = strategy["config"]
+        # Re-resolve the CURRENT row via the natural key (post-0064
+        # supersede allocates a new strategy_id; get_strategy filters to
+        # row_current_ind = TRUE and the old id is now historical).
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                SELECT * FROM strategies
+                WHERE strategy_name = %s AND row_current_ind = TRUE
+                """,
+                (strategy_name,),
+            )
+            current_row = cur.fetchone()
+        assert current_row is not None, "Post-supersede current row missing"
+        # config stored verbatim on the CURRENT row.  Parse through
+        # ``_convert_config_strings_to_decimal`` so we compare
+        # Decimal values (not raw JSONB strings) — restores the
+        # semantic value-equality that the pre-0064 test enforced
+        # but the post-0064 "key-set only" variant silently
+        # weakened.  Glokta P1-2.
+        from precog.database.crud_shared import _convert_config_strings_to_decimal
+
+        stored_config = current_row["config"]
         if isinstance(stored_config, str):
             stored_config = json.loads(stored_config)
-        assert set(stored_config.keys()) == set(original_config.keys())
+        stored_decoded = _convert_config_strings_to_decimal(stored_config)
+        original_decoded = _convert_config_strings_to_decimal(original_config)
+        assert stored_decoded == original_decoded, (
+            f"Config values must be preserved verbatim across supersede. "
+            f"stored={stored_decoded!r}, original={original_decoded!r}"
+        )
     finally:
         with get_cursor(commit=True) as cur:
             cur.execute(
@@ -706,4 +729,239 @@ def test_probability_models_partial_unique_rejects_duplicate_current_rows(
             cur.execute(
                 "DELETE FROM probability_models WHERE model_name = %s",
                 (model_name,),
+            )
+
+
+# =============================================================================
+# Group 7: Read CRUDs filter row_current_ind = TRUE (Glokta P0-3 / Ripley #NEW-C)
+# =============================================================================
+
+
+def test_get_strategy_excludes_historical_row(db_pool: Any) -> None:
+    """``get_strategy(id)`` returns None for a historical (superseded) id.
+
+    Post-Migration 0064, the read CRUDs must filter ``row_current_ind =
+    TRUE``.  Before the remediation, ``get_strategy(closed_id)`` returned
+    the stale historical row — callers silently saw pre-supersede
+    status/metrics.
+    """
+    from precog.database.crud_strategies import (
+        get_active_strategy_version,
+        get_all_strategy_versions,
+        get_strategy_by_name_and_version,
+        list_strategies,
+    )
+
+    suffix = uuid.uuid4().hex[:8]
+    strategy_name = f"test_0064_read_filter_{suffix}"
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(
+            "DELETE FROM strategies WHERE strategy_name = %s",
+            (strategy_name,),
+        )
+
+    try:
+        first_id = create_strategy(
+            strategy_name=strategy_name,
+            strategy_version="v1.0",
+            strategy_type="momentum",
+            config={"min_lead": 7},
+            status="draft",
+        )
+        assert first_id is not None
+
+        # Supersede: closes first_id, creates a new current row.
+        assert update_strategy_status(first_id, "active") is True
+
+        # get_strategy on the CLOSED id returns None (no current row).
+        assert get_strategy(first_id) is None, (
+            "get_strategy must return None for a superseded id (row_current_ind = FALSE)"
+        )
+
+        # get_strategy_by_name_and_version returns the CURRENT row.
+        current = get_strategy_by_name_and_version(strategy_name, "v1.0")
+        assert current is not None, "Natural-key lookup must find the current row"
+        assert current["status"] == "active", (
+            f"Natural-key lookup must return the current row (not the closed historical). "
+            f"Got status={current['status']!r}"
+        )
+        assert current["strategy_id"] != first_id, "Current row must have the NEW SCD id"
+
+        # get_active_strategy_version must not shadow with the closed row.
+        active = get_active_strategy_version(strategy_name)
+        assert active is not None
+        assert active["strategy_id"] == current["strategy_id"], (
+            f"get_active_strategy_version returned the wrong row. "
+            f"Got strategy_id={active['strategy_id']}, expected {current['strategy_id']}"
+        )
+
+        # get_all_strategy_versions default: only current rows (1 row).
+        versions = get_all_strategy_versions(strategy_name)
+        assert len(versions) == 1, (
+            f"Default get_all_strategy_versions must return only current rows; got {len(versions)}"
+        )
+        assert versions[0]["strategy_id"] == current["strategy_id"]
+
+        # With include_historical=True: both the closed + current (2 rows).
+        all_versions = get_all_strategy_versions(strategy_name, include_historical=True)
+        assert len(all_versions) == 2, (
+            f"include_historical=True must surface the closed row too; got {len(all_versions)}"
+        )
+
+        # list_strategies filtered by name: only 1 current row regardless of status filter.
+        all_active = list_strategies(status="active", limit=100)
+        live = [s for s in all_active if s["strategy_name"] == strategy_name]
+        assert len(live) == 1, (
+            f"list_strategies(status='active') must return only the CURRENT active row; got {len(live)}"
+        )
+        assert live[0]["strategy_id"] == current["strategy_id"]
+    finally:
+        with get_cursor(commit=True) as cur:
+            cur.execute(
+                "DELETE FROM strategies WHERE strategy_name = %s",
+                (strategy_name,),
+            )
+
+
+def test_model_manager_get_model_excludes_historical_row(db_pool: Any) -> None:
+    """``ModelManager.get_model(id)`` returns None for a superseded id."""
+    suffix = uuid.uuid4().hex[:8]
+    model_name = f"test_0064_read_filter_{suffix}"
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(
+            "DELETE FROM probability_models WHERE model_name = %s",
+            (model_name,),
+        )
+
+    try:
+        manager = ModelManager()
+        created = manager.create_model(
+            model_name=model_name,
+            model_version="v1.0",
+            model_class="elo",
+            config={"k_factor": Decimal("32.0")},
+            domain="nfl",
+        )
+        first_id = created["model_id"]
+
+        # Supersede via the manager-level path (draft -> testing).
+        superseded = manager.update_status(first_id, "testing")
+        assert superseded["model_id"] != first_id, (
+            "update_status supersede must allocate a new model_id"
+        )
+
+        # get_model by the CLOSED id returns None (row_current_ind filter).
+        assert manager.get_model(model_id=first_id) is None, (
+            "get_model on a superseded id must return None"
+        )
+
+        # get_model via natural key returns the current row.
+        current = manager.get_model(model_name=model_name, model_version="v1.0")
+        assert current is not None
+        assert current["status"] == "testing"
+        assert current["model_id"] == superseded["model_id"]
+
+        # get_models_by_name returns ONE row per logical version.
+        all_versions = manager.get_models_by_name(model_name)
+        assert len(all_versions) == 1, (
+            f"get_models_by_name must return one row per logical version; got {len(all_versions)}"
+        )
+
+        # list_models returns the current row only.
+        active_models = manager.list_models(status="testing")
+        live = [m for m in active_models if m["model_name"] == model_name]
+        assert len(live) == 1
+        assert live[0]["model_id"] == superseded["model_id"]
+    finally:
+        with get_cursor(commit=True) as cur:
+            cur.execute(
+                "DELETE FROM probability_models WHERE model_name = %s",
+                (model_name,),
+            )
+
+
+def test_update_strategy_status_carries_forward_activated_at(db_pool: Any) -> None:
+    """P1-1 integration: activated_at carries forward on a deactivate call.
+
+    Scenario (from Glokta P1-1):
+        1. Create strategy, status=draft.
+        2. Activate at t1 (activated_at=t1, deactivated_at=None).
+        3. Deactivate at t2 (caller passes deactivated_at=t2, NO activated_at).
+        4. Post-remediation: current row has activated_at=t1 AND deactivated_at=t2.
+
+    Pre-remediation bug: step 3 produced activated_at=NULL, deactivated_at=t2 —
+    audit chain broken.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from precog.database.crud_strategies import update_strategy_status
+
+    suffix = uuid.uuid4().hex[:8]
+    strategy_name = f"test_0064_timestamp_carry_{suffix}"
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(
+            "DELETE FROM strategies WHERE strategy_name = %s",
+            (strategy_name,),
+        )
+
+    try:
+        first_id = create_strategy(
+            strategy_name=strategy_name,
+            strategy_version="v1.0",
+            strategy_type="momentum",
+            config={"min_lead": 7},
+            status="draft",
+        )
+        assert first_id is not None
+
+        # Step 2: activate at t1.  Re-resolve the CURRENT id after each
+        # supersede — supersede allocates a new strategy_id each time.
+        t1 = datetime(2026, 4, 18, 10, 0, 0, tzinfo=UTC)
+        assert update_strategy_status(first_id, "active", activated_at=t1) is True
+
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                SELECT strategy_id, activated_at, deactivated_at, status
+                FROM strategies
+                WHERE strategy_name = %s AND row_current_ind = TRUE
+                """,
+                (strategy_name,),
+            )
+            after_activate = cur.fetchone()
+        assert after_activate["activated_at"] == t1
+        assert after_activate["deactivated_at"] is None
+        assert after_activate["status"] == "active"
+        active_id = after_activate["strategy_id"]
+
+        # Step 3: deactivate at t2.  Caller passes ONLY deactivated_at.
+        t2 = t1 + timedelta(hours=3)
+        assert update_strategy_status(active_id, "deprecated", deactivated_at=t2) is True
+
+        # Step 4: activated_at MUST still be t1 (carry-forward).  This is
+        # the regression-guard assertion for Glokta P1-1.
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                SELECT activated_at, deactivated_at, status
+                FROM strategies
+                WHERE strategy_name = %s AND row_current_ind = TRUE
+                """,
+                (strategy_name,),
+            )
+            after_deactivate = cur.fetchone()
+        assert after_deactivate["activated_at"] == t1, (
+            f"P1-1 regression: activated_at must carry forward from the activate call. "
+            f"Got {after_deactivate['activated_at']!r}, expected {t1!r}"
+        )
+        assert after_deactivate["deactivated_at"] == t2
+        assert after_deactivate["status"] == "deprecated"
+    finally:
+        with get_cursor(commit=True) as cur:
+            cur.execute(
+                "DELETE FROM strategies WHERE strategy_name = %s",
+                (strategy_name,),
             )

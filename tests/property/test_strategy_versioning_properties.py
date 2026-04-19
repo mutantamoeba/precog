@@ -296,17 +296,33 @@ def test_strategy_status_mutable(db_pool, clean_test_data, status_sequence):
         )
         current_strategy_id = strategy["strategy_id"]
 
-        # CRITICAL: Verify config unchanged (immutability preserved across SCD2 versions)
+        # CRITICAL: Verify config unchanged (immutability preserved across SCD2 versions).
+        # Compare value equality through ``_convert_config_strings_to_decimal``
+        # so JSONB-round-tripped Decimal strings ("0.25") compare equal to
+        # the native original_config numeric values after the helper
+        # restores them.  Glokta P1-2: the pre-0064 assertion was whole-
+        # value equality; the post-0064 "key-set only" fallback hides
+        # silent value mutation (e.g., a future supersede bug that
+        # converts floats through round-trip and loses precision).
         import json as _json
+
+        from precog.database.crud_shared import (
+            _convert_config_strings_to_decimal,
+        )
 
         stored_config = strategy["config"]
         if isinstance(stored_config, str):
             stored_config = _json.loads(stored_config)
-        # The stored config uses string-encoded Decimals, but
-        # original_config values here are native floats/ints; compare
-        # by JSON-normalised key sets + float round-trip where needed.
-        assert set(stored_config.keys()) == set(original_config.keys()), (
-            "Config keys changed during status update! Config should be IMMUTABLE."
+        stored_decoded = _convert_config_strings_to_decimal(stored_config)
+        original_decoded = _convert_config_strings_to_decimal(
+            {
+                k: (str(v) if isinstance(v, float | Decimal) else v)
+                for k, v in original_config.items()
+            }
+        )
+        assert stored_decoded == original_decoded, (
+            f"Config values changed during status update! Config must be IMMUTABLE. "
+            f"stored={stored_decoded!r}, original={original_decoded!r}"
         )
 
 
