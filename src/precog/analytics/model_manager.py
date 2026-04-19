@@ -502,6 +502,10 @@ class ModelManager:
             update_model_status,
         )
 
+        # N-4: snapshot the caller's model_id before resolution rebinds
+        # the local to the current-row id.  Mirrors StrategyManager.update_status.
+        original_model_id = model_id
+
         # Resolve caller's (potentially stale) model_id to the CURRENT
         # SCD2 row.  See StrategyManager.update_status for the ergonomics
         # rationale — redirect historical ids via the (name, version)
@@ -589,8 +593,12 @@ class ModelManager:
         if new_row.get("config"):
             new_row["config"] = self._parse_config_from_db(new_row["config"])
 
+        # N-4: emit BOTH the caller's original id and the current-at-
+        # supersede-time id (plus the new SCD2 id) for log traceability
+        # when callers pass stale ids.
         logger.info(
-            f"Updated model {model_id} status: {current_status} -> {new_status} "
+            f"Updated model caller_id={original_model_id} "
+            f"current_id={model_id} status: {current_status} -> {new_status} "
             f"(new SCD2 model_id={new_row['model_id']})"
         )
         return new_row
@@ -646,6 +654,9 @@ class ModelManager:
             get_current_model_by_name_version,
             update_model_metrics,
         )
+
+        # N-4: snapshot the caller's model_id pre-resolve for the log line.
+        original_model_id = model_id
 
         # Resolve caller's model_id to the CURRENT SCD2 row (with
         # historical-id fallback for ergonomic compat; see update_status).
@@ -745,7 +756,9 @@ class ModelManager:
             new_row["config"] = self._parse_config_from_db(new_row["config"])
 
         logger.info(
-            f"Updated model {model_id} metrics (new SCD2 model_id={new_row['model_id']})",
+            f"Updated model caller_id={original_model_id} "
+            f"current_id={model_id} metrics "
+            f"(new SCD2 model_id={new_row['model_id']})",
             extra={
                 k: v
                 for k, v in zip(

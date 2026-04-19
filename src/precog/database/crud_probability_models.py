@@ -76,9 +76,20 @@ def update_model_status(
         - ``crud_positions.update_position_price`` (FOR UPDATE precedent)
         - Glokta P0-1 / P0-2, Ripley #NEW-A / #NEW-B
     """
+    # Fetch the current row with FOR UPDATE.  Every carry-forward column
+    # must be SELECTed here or it is silently dropped on the new SCD2
+    # row.  Round-2 remediation (S62 re-review):
+    #   * activated_at / deactivated_at — audit-trail timestamps, sibling
+    #     of the strategies P1-1 finding (Glokta N-1).
+    #   * training_start_date / training_end_date / training_sample_size —
+    #     training provenance (Glokta N-2).  These are the metadata
+    #     describing which dataset the model was trained on and must
+    #     survive every status/metric supersede unchanged.
     fetch_query = """
         SELECT model_name, model_version, model_class, domain, config,
                description, notes, created_by,
+               activated_at, deactivated_at,
+               training_start_date, training_end_date, training_sample_size,
                validation_calibration, validation_accuracy, validation_sample_size
         FROM probability_models
         WHERE model_id = %s AND row_current_ind = TRUE
@@ -92,16 +103,24 @@ def update_model_status(
         WHERE model_id = %s AND row_current_ind = TRUE
     """
 
+    # INSERT column list must mirror the fetch carry-forward set plus
+    # the caller-provided ``status`` and the SCD2 row-management columns.
+    # The table's DEFAULT now() kicks in for ``created_at`` (same SCD2
+    # "new row, new created_at" semantics as the strategies side).
     insert_query = """
         INSERT INTO probability_models (
             model_name, model_version, model_class, domain, config,
             description, status, created_by, notes,
+            activated_at, deactivated_at,
+            training_start_date, training_end_date, training_sample_size,
             validation_calibration, validation_accuracy, validation_sample_size,
             row_current_ind, row_start_ts, row_end_ts
         )
         VALUES (
             %s, %s, %s, %s, %s,
             %s, %s, %s, %s,
+            %s, %s,
+            %s, %s, %s,
             %s, %s, %s,
             TRUE, %s, NULL
         )
@@ -120,6 +139,12 @@ def update_model_status(
 
             cur.execute(close_query, (now_ts, model_id))
 
+            # Straight carry-forward for activated_at/deactivated_at
+            # (probability_models' public API does not expose these as
+            # caller-provided params — they are managed by the manager
+            # layer via status transitions).  If that ever changes,
+            # mirror the COALESCE pattern from
+            # ``crud_strategies.update_strategy_status``.
             cur.execute(
                 insert_query,
                 (
@@ -134,6 +159,11 @@ def update_model_status(
                     new_status,
                     current["created_by"],
                     current["notes"],
+                    current["activated_at"],
+                    current["deactivated_at"],
+                    current["training_start_date"],
+                    current["training_end_date"],
+                    current["training_sample_size"],
                     current["validation_calibration"],
                     current["validation_accuracy"],
                     current["validation_sample_size"],
@@ -186,9 +216,17 @@ def update_model_metrics(
     ):
         raise ValueError("At least one metric must be provided")
 
+    # Same fetch/INSERT carry-forward surface as ``update_model_status``
+    # plus ``status`` itself (unchanged on a metrics update).  Round-2
+    # remediation mirrors the 5 newly-carried columns
+    # (activated_at/deactivated_at + training_*) added to
+    # ``update_model_status`` — silently dropping them on a metrics
+    # supersede would bypass the N-1+N-2 fix on an adjacent path.
     fetch_query = """
         SELECT model_name, model_version, model_class, domain, config,
                description, status, notes, created_by,
+               activated_at, deactivated_at,
+               training_start_date, training_end_date, training_sample_size,
                validation_calibration, validation_accuracy, validation_sample_size
         FROM probability_models
         WHERE model_id = %s AND row_current_ind = TRUE
@@ -206,12 +244,16 @@ def update_model_metrics(
         INSERT INTO probability_models (
             model_name, model_version, model_class, domain, config,
             description, status, created_by, notes,
+            activated_at, deactivated_at,
+            training_start_date, training_end_date, training_sample_size,
             validation_calibration, validation_accuracy, validation_sample_size,
             row_current_ind, row_start_ts, row_end_ts
         )
         VALUES (
             %s, %s, %s, %s, %s,
             %s, %s, %s, %s,
+            %s, %s,
+            %s, %s, %s,
             %s, %s, %s,
             TRUE, %s, NULL
         )
@@ -244,6 +286,11 @@ def update_model_metrics(
                     current["status"],
                     current["created_by"],
                     current["notes"],
+                    current["activated_at"],
+                    current["deactivated_at"],
+                    current["training_start_date"],
+                    current["training_end_date"],
+                    current["training_sample_size"],
                     validation_calibration
                     if validation_calibration is not None
                     else current["validation_calibration"],

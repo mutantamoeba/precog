@@ -17,7 +17,7 @@ Epic: #745 (Schema Hardening Arc, Cohort C2c)
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -35,9 +35,20 @@ class TestUpdateModelStatusSCD2Unit:
 
     @patch("precog.database.crud_probability_models.get_cursor")
     def test_update_model_status_supersedes_current_row(self, mock_get_cursor: MagicMock) -> None:
-        """SCD2 supersede path: SELECT FOR UPDATE → NOW() → UPDATE close → INSERT new."""
+        """SCD2 supersede path: SELECT FOR UPDATE → NOW() → UPDATE close → INSERT new.
+
+        Round-2 remediation: the fetch/INSERT now carries 5 additional
+        columns — activated_at, deactivated_at (sibling of strategies P1-1,
+        Glokta N-1) and training_start_date / training_end_date /
+        training_sample_size (Glokta N-2).  The fixture populates all 5
+        with non-NULL values so the carry-forward path is exercised (NULL
+        values would pass even on a regression that dropped the column).
+        """
         mock_cursor = MagicMock()
         now_ts = datetime(2026, 4, 18, 12, 0, 0, tzinfo=UTC)
+        existing_activated = datetime(2026, 4, 1, 9, 0, 0, tzinfo=UTC)
+        training_start = date(2025, 9, 1)
+        training_end = date(2025, 12, 31)
         mock_cursor.fetchone.side_effect = [
             {
                 "model_name": "elo_nfl",
@@ -48,6 +59,13 @@ class TestUpdateModelStatusSCD2Unit:
                 "description": None,
                 "notes": None,
                 "created_by": None,
+                # N-1 carry-forward columns (non-NULL to exercise the path).
+                "activated_at": existing_activated,
+                "deactivated_at": None,
+                # N-2 carry-forward columns.
+                "training_start_date": training_start,
+                "training_end_date": training_end,
+                "training_sample_size": 4200,
                 "validation_calibration": None,
                 "validation_accuracy": None,
                 "validation_sample_size": None,
@@ -74,6 +92,18 @@ class TestUpdateModelStatusSCD2Unit:
         assert "FOR UPDATE" in fetch_sql, (
             "update_model_status fetch must use FOR UPDATE (Glokta P0-2 mirror)"
         )
+        # N-1/N-2 regression guards: fetch must SELECT each new carry-forward column.
+        for col in (
+            "activated_at",
+            "deactivated_at",
+            "training_start_date",
+            "training_end_date",
+            "training_sample_size",
+        ):
+            assert col in fetch_sql, (
+                f"Round-2 remediation: fetch must SELECT {col} "
+                f"(N-1/N-2 carry-forward regression guard)"
+            )
 
         # NOW() snapshot + CLOSE-UPDATE + INSERT in sequence.
         now_sql = mock_cursor.execute.call_args_list[1][0][0]
@@ -88,6 +118,56 @@ class TestUpdateModelStatusSCD2Unit:
         assert "INSERT INTO probability_models" in insert_sql
         assert "row_current_ind" in insert_sql
         assert "row_start_ts" in insert_sql
+        # N-1/N-2 regression guards: INSERT column list must include each new column.
+        for col in (
+            "activated_at",
+            "deactivated_at",
+            "training_start_date",
+            "training_end_date",
+            "training_sample_size",
+        ):
+            assert col in insert_sql, (
+                f"Round-2 remediation: INSERT col list must include {col} "
+                f"(N-1/N-2 carry-forward regression guard)"
+            )
+
+        # Pattern 43 grep #4: verify the INSERT VALUES tuple carries each
+        # new column at the expected positional index.  Post-remediation
+        # INSERT col order (18 caller-populated slots before the TRUE / NULL
+        # literals, excluding row_current_ind/row_end_ts which are literals):
+        #   0  model_name
+        #   1  model_version
+        #   2  model_class
+        #   3  domain
+        #   4  config
+        #   5  description
+        #   6  status               (caller-provided: new_status)
+        #   7  created_by
+        #   8  notes
+        #   9  activated_at         (N-1 carry-forward)
+        #   10 deactivated_at       (N-1 carry-forward)
+        #   11 training_start_date  (N-2 carry-forward)
+        #   12 training_end_date    (N-2 carry-forward)
+        #   13 training_sample_size (N-2 carry-forward)
+        #   14 validation_calibration
+        #   15 validation_accuracy
+        #   16 validation_sample_size
+        #   17 row_start_ts         (now_ts)
+        insert_params = mock_cursor.execute.call_args_list[3][0][1]
+        assert insert_params[6] == "testing", "caller-provided status at index 6"
+        assert insert_params[9] == existing_activated, (
+            f"N-1: activated_at must carry forward. Got {insert_params[9]!r}"
+        )
+        assert insert_params[10] is None, "deactivated_at carries None from current row"
+        assert insert_params[11] == training_start, (
+            f"N-2: training_start_date must carry forward. Got {insert_params[11]!r}"
+        )
+        assert insert_params[12] == training_end, (
+            f"N-2: training_end_date must carry forward. Got {insert_params[12]!r}"
+        )
+        assert insert_params[13] == 4200, (
+            f"N-2: training_sample_size must carry forward. Got {insert_params[13]!r}"
+        )
 
     @patch("precog.database.crud_probability_models.get_cursor")
     def test_update_model_status_returns_false_when_row_missing(
@@ -112,9 +192,18 @@ class TestUpdateModelMetricsSCD2Unit:
 
     @patch("precog.database.crud_probability_models.get_cursor")
     def test_update_model_metrics_supersedes_current_row(self, mock_get_cursor: MagicMock) -> None:
-        """Metrics supersede: SELECT FOR UPDATE → NOW() → close → INSERT."""
+        """Metrics supersede: SELECT FOR UPDATE → NOW() → close → INSERT.
+
+        Round-2 remediation: adds 5 new carry-forward columns
+        (activated_at, deactivated_at, training_*) — fixture populates all
+        with non-NULL values + positional assertions document the new
+        index-shifted INSERT parameter order.
+        """
         mock_cursor = MagicMock()
         now_ts = datetime(2026, 4, 18, 12, 0, 0, tzinfo=UTC)
+        existing_activated = datetime(2026, 4, 1, 9, 0, 0, tzinfo=UTC)
+        training_start = date(2025, 9, 1)
+        training_end = date(2025, 12, 31)
         mock_cursor.fetchone.side_effect = [
             {
                 "model_name": "elo_nfl",
@@ -126,6 +215,13 @@ class TestUpdateModelMetricsSCD2Unit:
                 "status": "testing",
                 "notes": None,
                 "created_by": None,
+                # N-1 carry-forward columns.
+                "activated_at": existing_activated,
+                "deactivated_at": None,
+                # N-2 carry-forward columns.
+                "training_start_date": training_start,
+                "training_end_date": training_end,
+                "training_sample_size": 4200,
                 "validation_calibration": None,
                 "validation_accuracy": None,
                 "validation_sample_size": None,
@@ -148,24 +244,72 @@ class TestUpdateModelMetricsSCD2Unit:
         fetch_sql = mock_cursor.execute.call_args_list[0][0][0]
         assert "FOR UPDATE" in fetch_sql
         assert "row_current_ind = TRUE" in fetch_sql
+        # N-1/N-2 regression guards on the fetch SELECT.
+        for col in (
+            "activated_at",
+            "deactivated_at",
+            "training_start_date",
+            "training_end_date",
+            "training_sample_size",
+        ):
+            assert col in fetch_sql, f"Round-2 remediation: metrics fetch must SELECT {col}"
 
         # Pattern 43 grep #4: INSERT carries forward status (from current row)
         # and the SPECIFIC metric COLUMNS updated.  Caller passed calibration
         # and sample_size but NOT accuracy — accuracy must be carried forward.
         insert_call = mock_cursor.execute.call_args_list[3]
         insert_params = insert_call[0][1]
-        # INSERT positional order (from crud_probability_models.py):
-        #   (model_name, model_version, model_class, domain, config,
-        #    description, status, created_by, notes,
-        #    validation_calibration, validation_accuracy, validation_sample_size,
-        #    row_start_ts)
-        # status at index 6, calibration at 9, accuracy at 10, sample_size at 11.
+        insert_sql = insert_call[0][0]
+        for col in (
+            "activated_at",
+            "deactivated_at",
+            "training_start_date",
+            "training_end_date",
+            "training_sample_size",
+        ):
+            assert col in insert_sql, (
+                f"Round-2 remediation: metrics INSERT col list must include {col}"
+            )
+
+        # Post-remediation INSERT positional order (matches the SQL in
+        # crud_probability_models.update_model_metrics):
+        #   0  model_name
+        #   1  model_version
+        #   2  model_class
+        #   3  domain
+        #   4  config
+        #   5  description
+        #   6  status               (carry-forward)
+        #   7  created_by
+        #   8  notes
+        #   9  activated_at         (N-1 carry-forward)
+        #   10 deactivated_at       (N-1 carry-forward)
+        #   11 training_start_date  (N-2 carry-forward)
+        #   12 training_end_date    (N-2 carry-forward)
+        #   13 training_sample_size (N-2 carry-forward)
+        #   14 validation_calibration (caller-provided or carry-forward)
+        #   15 validation_accuracy
+        #   16 validation_sample_size
+        #   17 row_start_ts
         assert insert_params[6] == "testing", "status must carry forward unchanged"
-        assert insert_params[9] == Decimal("0.05"), "caller calibration flows through"
-        assert insert_params[10] is None, (
+        assert insert_params[9] == existing_activated, (
+            f"N-1: activated_at must carry forward on metrics supersede. Got {insert_params[9]!r}"
+        )
+        assert insert_params[10] is None, "deactivated_at carries current row's None"
+        assert insert_params[11] == training_start, (
+            f"N-2: training_start_date must carry forward. Got {insert_params[11]!r}"
+        )
+        assert insert_params[12] == training_end, (
+            f"N-2: training_end_date must carry forward. Got {insert_params[12]!r}"
+        )
+        assert insert_params[13] == 4200, (
+            f"N-2: training_sample_size must carry forward. Got {insert_params[13]!r}"
+        )
+        assert insert_params[14] == Decimal("0.05"), "caller calibration flows through"
+        assert insert_params[15] is None, (
             "accuracy NOT provided; must carry forward the current row's None"
         )
-        assert insert_params[11] == 1000, "caller sample_size flows through"
+        assert insert_params[16] == 1000, "caller sample_size flows through"
 
     @patch("precog.database.crud_probability_models.get_cursor")
     def test_update_model_metrics_returns_false_when_row_missing(

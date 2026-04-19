@@ -507,6 +507,13 @@ class StrategyManager:
             update_strategy_status,
         )
 
+        # Preserve the caller's original strategy_id for the log line
+        # below (N-4): after resolution the ``strategy_id`` local is
+        # rebound to the CURRENT row's id — without a snapshot, the log
+        # would claim we updated the resolved id, losing the traceability
+        # back to what the caller actually passed.
+        original_strategy_id = strategy_id
+
         # Resolve caller's (potentially stale) strategy_id to the CURRENT
         # SCD2 row.  Post-Migration 0064, ``update_status`` is a
         # supersede: previous supersedes left the old strategy_id
@@ -566,8 +573,13 @@ class StrategyManager:
         if new_row.get("config") is not None:
             new_row["config"] = self._parse_config_from_db(new_row["config"])
 
+        # N-4: emit BOTH the caller's original id and the current-at-
+        # supersede-time id so log consumers can correlate a stale
+        # caller id (from a cached handle) with the CURRENT row id the
+        # supersede acted on, plus the NEW id allocated by the supersede.
         logger.info(
-            f"Updated strategy {strategy_id} status: {current_status} -> {new_status} "
+            f"Updated strategy caller_id={original_strategy_id} "
+            f"current_id={strategy_id} status: {current_status} -> {new_status} "
             f"(new SCD2 strategy_id={new_row['strategy_id']})"
         )
         return new_row
@@ -615,6 +627,10 @@ class StrategyManager:
             get_strategy_by_name_and_version,
             update_strategy_metrics,
         )
+
+        # N-4: snapshot the caller's id pre-resolve so the log below can
+        # emit caller_id + current_id as separate fields.
+        original_strategy_id = strategy_id
 
         # Resolve the caller's (potentially stale) strategy_id to the
         # CURRENT SCD2 row.  See update_status for the rationale — we
@@ -673,7 +689,8 @@ class StrategyManager:
             new_row["config"] = self._parse_config_from_db(new_row["config"])
 
         logger.info(
-            f"Updated strategy {strategy_id} metrics "
+            f"Updated strategy caller_id={original_strategy_id} "
+            f"current_id={strategy_id} metrics "
             f"(new SCD2 strategy_id={new_row['strategy_id']})",
             extra={
                 k: v

@@ -965,3 +965,125 @@ def test_update_strategy_status_carries_forward_activated_at(db_pool: Any) -> No
                 "DELETE FROM strategies WHERE strategy_name = %s",
                 (strategy_name,),
             )
+
+
+def test_update_model_status_carries_forward_training_and_activation_metadata(
+    db_pool: Any,
+) -> None:
+    """Round-2 (Glokta N-1 + N-2): probability_models status supersede must
+    carry forward activated_at, deactivated_at, and the 3 training_* columns
+    byte-for-byte.
+
+    Scenario:
+        1. Create model (status=draft).
+        2. UPDATE the current row directly to populate training_start_date,
+           training_end_date, training_sample_size, activated_at — real
+           managers set these via their own paths; the direct UPDATE is
+           fine here because it targets the CURRENT row (the immutability
+           trigger only guards config/model_version/model_name/model_class).
+        3. Call ``update_model_status`` to transition status draft -> testing.
+        4. Assert the new CURRENT row preserves all 5 values byte-for-byte.
+
+    Pre-remediation bug: steps 1-3 "worked" but the INSERT dropped all 5
+    columns, leaving the new current row with NULLs for training_* and
+    activated_at — training provenance and audit chain broken.
+    """
+    from datetime import UTC, date, datetime
+
+    from precog.database.crud_probability_models import update_model_status
+
+    suffix = uuid.uuid4().hex[:8]
+    model_name = f"test_0064_model_carry_{suffix}"
+    model_version = "v1.0"
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(
+            "DELETE FROM probability_models WHERE model_name = %s",
+            (model_name,),
+        )
+
+    try:
+        manager = ModelManager()
+        model = manager.create_model(
+            model_name=model_name,
+            model_version=model_version,
+            model_class="elo",
+            config={"k_factor": Decimal("32.0")},
+            domain="nfl",
+            status="draft",
+        )
+        model_id = model["model_id"]
+
+        # Step 2: backfill training metadata + activated_at directly on
+        # the current row.  (training_* has no public CRUD setter today;
+        # activated_at is normally set via a status transition, but we're
+        # testing the carry-forward on a SECOND status transition here.)
+        training_start = date(2025, 9, 1)
+        training_end = date(2025, 12, 31)
+        training_n = 4200
+        activated = datetime(2026, 4, 10, 9, 0, 0, tzinfo=UTC)
+        deactivated = datetime(2026, 4, 15, 17, 30, 0, tzinfo=UTC)
+        with get_cursor(commit=True) as cur:
+            cur.execute(
+                """
+                UPDATE probability_models
+                SET training_start_date = %s,
+                    training_end_date = %s,
+                    training_sample_size = %s,
+                    activated_at = %s,
+                    deactivated_at = %s
+                WHERE model_id = %s
+                """,
+                (training_start, training_end, training_n, activated, deactivated, model_id),
+            )
+
+        # Step 3: supersede status.  Post-remediation every one of the 5
+        # columns above must appear verbatim on the new current row.
+        assert update_model_status(model_id=model_id, new_status="testing") is True
+
+        # Step 4: byte-for-byte carry-forward assertions.
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                SELECT model_id, status, activated_at, deactivated_at,
+                       training_start_date, training_end_date, training_sample_size
+                FROM probability_models
+                WHERE model_name = %s AND model_version = %s
+                  AND row_current_ind = TRUE
+                """,
+                (model_name, model_version),
+            )
+            after = cur.fetchone()
+        assert after is not None, "Post-supersede current row must exist"
+        assert after["status"] == "testing", "status must reflect the supersede"
+        assert after["model_id"] != model_id, (
+            "Supersede must allocate a NEW model_id (SCD2 invariant)"
+        )
+        # N-1 guards.
+        assert after["activated_at"] == activated, (
+            f"N-1: activated_at must carry forward on status supersede. "
+            f"Got {after['activated_at']!r}, expected {activated!r}"
+        )
+        assert after["deactivated_at"] == deactivated, (
+            f"N-1: deactivated_at must carry forward on status supersede. "
+            f"Got {after['deactivated_at']!r}, expected {deactivated!r}"
+        )
+        # N-2 guards.
+        assert after["training_start_date"] == training_start, (
+            f"N-2: training_start_date must carry forward. "
+            f"Got {after['training_start_date']!r}, expected {training_start!r}"
+        )
+        assert after["training_end_date"] == training_end, (
+            f"N-2: training_end_date must carry forward. "
+            f"Got {after['training_end_date']!r}, expected {training_end!r}"
+        )
+        assert after["training_sample_size"] == training_n, (
+            f"N-2: training_sample_size must carry forward. "
+            f"Got {after['training_sample_size']!r}, expected {training_n!r}"
+        )
+    finally:
+        with get_cursor(commit=True) as cur:
+            cur.execute(
+                "DELETE FROM probability_models WHERE model_name = %s",
+                (model_name,),
+            )
