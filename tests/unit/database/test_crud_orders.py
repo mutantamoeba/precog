@@ -12,8 +12,8 @@ Related:
 - Glokta findings #1-#5
 
 Usage:
-    pytest tests/unit/database/test_order_crud.py -v
-    pytest tests/unit/database/test_order_crud.py -v -m unit
+    pytest tests/unit/database/test_crud_orders.py -v
+    pytest tests/unit/database/test_crud_orders.py -v -m unit
 """
 
 from decimal import Decimal
