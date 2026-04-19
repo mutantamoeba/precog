@@ -38,9 +38,9 @@ class TestCheckMigrationParity:
     """Test check_migration_parity() integration."""
 
     @patch("precog.database.migration_check.get_db_version")
-    @patch("precog.database.migration_check.get_alembic_head")
+    @patch("precog.database.migration_check.get_alembic_heads")
     def test_current_when_versions_match(self, mock_head, mock_db):
-        mock_head.return_value = "0057"
+        mock_head.return_value = ["0057"]
         mock_db.return_value = "0057"
 
         result = check_migration_parity()
@@ -51,9 +51,9 @@ class TestCheckMigrationParity:
         assert result.error is None
 
     @patch("precog.database.migration_check.get_db_version")
-    @patch("precog.database.migration_check.get_alembic_head")
+    @patch("precog.database.migration_check.get_alembic_heads")
     def test_behind_when_db_older(self, mock_head, mock_db):
-        mock_head.return_value = "0057"
+        mock_head.return_value = ["0057"]
         mock_db.return_value = "0055"
 
         result = check_migration_parity()
@@ -64,9 +64,9 @@ class TestCheckMigrationParity:
         assert result.versions_behind == 2
 
     @patch("precog.database.migration_check.get_db_version")
-    @patch("precog.database.migration_check.get_alembic_head")
+    @patch("precog.database.migration_check.get_alembic_heads")
     def test_behind_when_db_empty(self, mock_head, mock_db):
-        mock_head.return_value = "0057"
+        mock_head.return_value = ["0057"]
         mock_db.return_value = None
 
         result = check_migration_parity()
@@ -75,7 +75,7 @@ class TestCheckMigrationParity:
         assert result.db_version is None
 
     @patch("precog.database.migration_check.get_db_version")
-    @patch("precog.database.migration_check.get_alembic_head")
+    @patch("precog.database.migration_check.get_alembic_heads")
     def test_error_on_head_failure(self, mock_head, mock_db):
         mock_head.side_effect = RuntimeError("Script dir broken")
 
@@ -85,9 +85,9 @@ class TestCheckMigrationParity:
         assert "Script dir broken" in result.error
 
     @patch("precog.database.migration_check.get_db_version")
-    @patch("precog.database.migration_check.get_alembic_head")
+    @patch("precog.database.migration_check.get_alembic_heads")
     def test_error_on_db_failure(self, mock_head, mock_db):
-        mock_head.return_value = "0057"
+        mock_head.return_value = ["0057"]
         mock_db.side_effect = RuntimeError("DB unreachable")
 
         result = check_migration_parity()
@@ -96,9 +96,9 @@ class TestCheckMigrationParity:
         assert "DB unreachable" in result.error
 
     @patch("precog.database.migration_check.get_db_version")
-    @patch("precog.database.migration_check.get_alembic_head")
+    @patch("precog.database.migration_check.get_alembic_heads")
     def test_error_when_no_head(self, mock_head, mock_db):
-        mock_head.return_value = None
+        mock_head.return_value = []
         mock_db.return_value = "0057"
 
         result = check_migration_parity()

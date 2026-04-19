@@ -95,6 +95,23 @@ echo ""
 export PRECOG_ENV=test
 
 # ==============================================================================
+# STEP 0.2: Test DB Migration Parity Check (#867)
+# ==============================================================================
+# A stale test DB can silently mask real test failures — S61 root cause,
+# 8 files over months. Block the push if the test DB is behind alembic head.
+# Graceful skip if the test DB is unreachable (contributors without a test DB
+# are not blocked). Exit 2 = bug in migration_check itself (fail loudly so
+# the developer sees the real error and fixes it).
+python scripts/check_test_db_migration_parity.py
+PARITY_EXIT=$?
+if [[ $PARITY_EXIT -ne 0 ]]; then
+    echo ""
+    echo "Pre-push aborted by #867 test DB parity check (exit $PARITY_EXIT)."
+    echo "Bypass (at your own risk): git push --no-verify"
+    exit $PARITY_EXIT
+fi
+
+# ==============================================================================
 # STEP 0.25: Clean Stale Bytecode (prevents ghost test discovery)
 # ==============================================================================
 find tests/ -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
