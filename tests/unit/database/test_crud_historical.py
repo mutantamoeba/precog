@@ -11,8 +11,8 @@ Related:
 - Pattern 1: Decimal Precision (NEVER USE FLOAT)
 
 Usage:
-    pytest tests/unit/database/test_historical_data_crud.py -v
-    pytest tests/unit/database/test_historical_data_crud.py -v -m unit
+    pytest tests/unit/database/test_crud_historical.py -v
+    pytest tests/unit/database/test_crud_historical.py -v -m unit
 """
 
 from unittest.mock import MagicMock, patch
