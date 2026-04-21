@@ -429,8 +429,8 @@ def get_edge_lifecycle(
     Query the edge_lifecycle view for analytics.
 
     The view includes computed fields:
-    - realized_pnl: settlement_value - market_price (for 'yes' outcomes)
-      or market_price - settlement_value (for 'no' outcomes)
+    - realized_pnl: settlement_value - market_price (for both 'yes' and 'no'
+      outcomes, YES-side position semantics)
     - hours_to_resolution: time from edge creation to resolution in hours
 
     Args:
