@@ -10,7 +10,7 @@ Related Issue: Issue #234 (State Change Detection)
 """
 
 import pytest
-from hypothesis import assume, given, settings
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
 from precog.database.crud_game_states import (
@@ -575,6 +575,28 @@ def basketball_situation_strategy(draw: st.DrawFn) -> dict:
 
 
 @st.composite
+def football_situation_strategy(draw: st.DrawFn) -> dict:
+    """Generate a realistic football situation dict.
+
+    Mirrors TRACKED_SITUATION_KEYS["football"] in crud_game_states.py:
+    possession, down, distance, yard_line, is_red_zone, home_win_probability.
+    """
+    return {
+        "possession": draw(nfl_teams),
+        "down": draw(down_strategy),
+        "distance": draw(distance_strategy),
+        "yard_line": draw(yard_line_strategy),
+        "is_red_zone": draw(red_zone_strategy),
+        "home_win_probability": draw(
+            st.one_of(
+                st.none(),
+                st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_subnormal=False),
+            )
+        ),
+    }
+
+
+@st.composite
 def hockey_situation_strategy(draw: st.DrawFn) -> dict:
     """Generate a realistic hockey situation dict."""
     return {
@@ -742,6 +764,99 @@ class TestGameStateChangedSportAwareProperties:
 
         result = game_state_changed(
             current, home_score, away_score, period, game_status, new_situation, league="nhl"
+        )
+
+        assert result is False
+
+    @given(
+        situation=football_situation_strategy(),
+    )
+    @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
+    def test_football_situation_strategy_has_tracked_keys(
+        self,
+        situation: dict,
+    ) -> None:
+        """football_situation_strategy produces every key in TRACKED_SITUATION_KEYS['football'].
+
+        Regression test for #915: ensures the fixture stays in sync with the
+        tracked-keys list. If someone adds a key to TRACKED_SITUATION_KEYS["football"]
+        without extending the strategy, this test fires.
+        """
+        for key in TRACKED_SITUATION_KEYS["football"]:
+            assert key in situation, f"football_situation_strategy missing key: {key}"
+
+    @given(
+        home_score=score_strategy,
+        away_score=score_strategy,
+        period=period_strategy,
+        game_status=game_status_strategy,
+        situation=football_situation_strategy(),
+        league=st.sampled_from(["nfl", "ncaaf"]),
+    )
+    @settings(max_examples=100)
+    def test_football_same_situation_reflexive(
+        self,
+        home_score: int,
+        away_score: int,
+        period: int,
+        game_status: str,
+        situation: dict,
+        league: str,
+    ) -> None:
+        """Same football situation with league should always return False."""
+        current = {
+            "home_score": home_score,
+            "away_score": away_score,
+            "period": period,
+            "game_status": game_status,
+            "situation": situation,
+        }
+
+        result = game_state_changed(
+            current, home_score, away_score, period, game_status, situation, league=league
+        )
+
+        assert result is False
+
+    @given(
+        home_score=score_strategy,
+        away_score=score_strategy,
+        period=period_strategy,
+        game_status=game_status_strategy,
+        situation=football_situation_strategy(),
+        new_clock=st.text(min_size=0, max_size=5),
+        league=st.sampled_from(["nfl", "ncaaf"]),
+    )
+    @settings(max_examples=100)
+    def test_football_untracked_change_ignored(
+        self,
+        home_score: int,
+        away_score: int,
+        period: int,
+        game_status: str,
+        situation: dict,
+        new_clock: str,
+        league: str,
+    ) -> None:
+        """Football changes to untracked fields (e.g., clock) should NOT trigger state change."""
+        current = {
+            "home_score": home_score,
+            "away_score": away_score,
+            "period": period,
+            "game_status": game_status,
+            "situation": situation,
+        }
+
+        # Only change an untracked field (clock is not in TRACKED_SITUATION_KEYS["football"])
+        new_situation = situation.copy()
+        new_situation["clock"] = new_clock
+
+        # Keep tracked fields identical
+        for key in TRACKED_SITUATION_KEYS["football"]:
+            new_situation[key] = situation[key]
+
+        result = game_state_changed(
+            current, home_score, away_score, period, game_status, new_situation, league=league
         )
 
         assert result is False
