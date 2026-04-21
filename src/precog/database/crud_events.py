@@ -666,13 +666,13 @@ def _fill_event_null_fields(
     set_parts: list[str] = []
     params: list[Any] = []
 
-    if start_time and existing.get("start_time") is None:
+    if start_time is not None and existing.get("start_time") is None:
         set_parts.append("start_time = %s")
         params.append(start_time)
-    if end_time and existing.get("end_time") is None:
+    if end_time is not None and existing.get("end_time") is None:
         set_parts.append("end_time = %s")
         params.append(end_time)
-    if status and existing.get("status") is None:
+    if status is not None and existing.get("status") is None:
         set_parts.append("status = %s")
         params.append(status)
     if game_id is not None and existing.get("game_id") is None:

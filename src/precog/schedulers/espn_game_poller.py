@@ -1428,7 +1428,7 @@ class ESPNGamePoller(BasePoller):
         )
 
         # Update final result in games dimension if game is complete
-        if game_id and normalized_status in ("final", "final_ot"):
+        if game_id and normalized_status == "final":
             try:
                 update_game_result(
                     game_id=game_id,

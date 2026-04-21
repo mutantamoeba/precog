@@ -227,6 +227,41 @@ class TestStatusNormalization:
         poller = ESPNGamePoller(espn_client=mock_espn_client)
         assert poller._normalize_game_status("") == "pre"
 
+    @pytest.mark.parametrize(
+        "raw_status",
+        [
+            "pre",
+            "PRE",
+            "scheduled",
+            "in",
+            "IN",
+            "in_progress",
+            "halftime",
+            "HALFTIME",
+            "post",
+            "final",
+            "final/ot",
+            "final/2ot",
+            "unknown",
+            "weird_status",
+            "",
+        ],
+    )
+    def test_normalize_never_outputs_final_ot(
+        self, mock_espn_client: MagicMock, raw_status: str
+    ) -> None:
+        """Regression test for #916: _normalize_game_status never emits 'final_ot'.
+
+        The caller in _process_game previously checked for 'final_ot' as a
+        possible output, but the normalizer maps every overtime variant
+        (final/ot, final/2ot) to 'final'. This test pins that invariant so the
+        dead-branch removal in _process_game stays safe.
+        """
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+        result = poller._normalize_game_status(raw_status)
+        assert result != "final_ot"
+        assert result in {"pre", "in_progress", "halftime", "final"}
+
 
 # =============================================================================
 # Unit Tests: Poll Once

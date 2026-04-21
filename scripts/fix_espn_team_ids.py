@@ -507,7 +507,7 @@ def generate_sql_updates(
                 f"INSERT INTO teams (team_code, team_name, display_name, sport, league, "  # noqa: S608
                 f"espn_team_id, current_elo_rating, conference, division) VALUES "
                 f"('{m['espn_code']}', '{m['name']}', '{display}', '{sport}', '{sport}', "
-                f"'{m['espn_id']}', 1500, NULL, NULL);"
+                f"'{m['espn_id']}', NULL, NULL, NULL);"
             )
 
     lines.append("")

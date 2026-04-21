@@ -2876,6 +2876,53 @@ class TestFillEventNullFields:
         assert 15 in params
 
     @patch("precog.database.crud_events.get_cursor")
+    def test_empty_string_start_time_is_written(self, mock_get_cursor):
+        """start_time='' is falsy in Python but ``is not None`` — should still be written.
+
+        Regression test for #914: previously ``if start_time and ...`` would
+        silently skip empty-string values. After the fix we use ``is not None``
+        (matching the adjacent game_id pattern), so "" is treated as a real
+        caller-provided value and written to the column.
+        """
+        mock_cursor = MagicMock()
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        existing = {"id": 42, "start_time": None, "end_time": None, "status": None, "game_id": None}
+
+        _fill_event_null_fields(existing, start_time="", end_time="", status="")
+
+        mock_cursor.execute.assert_called_once()
+        sql = mock_cursor.execute.call_args[0][0]
+        params = mock_cursor.execute.call_args[0][1]
+        # All three fields should appear in SET clause
+        set_clause = sql.split("WHERE")[0]
+        assert "start_time" in set_clause
+        assert "end_time" in set_clause
+        assert "status" in set_clause
+        # Empty-string params included
+        assert params.count("") == 3
+
+    @patch("precog.database.crud_events.get_cursor")
+    def test_none_string_fields_are_skipped(self, mock_get_cursor):
+        """None caller values for start_time/end_time/status should still be skipped.
+
+        Regression test for #914: verifies the ``is not None`` guard still
+        correctly filters out None (the common no-value case). Paired with
+        test_empty_string_start_time_is_written, this pins down both ends of
+        the behavior change.
+        """
+        mock_cursor = MagicMock()
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        existing = {"id": 42, "start_time": None, "end_time": None, "status": None, "game_id": None}
+
+        _fill_event_null_fields(existing, start_time=None, end_time=None, status=None)
+
+        mock_cursor.execute.assert_not_called()
+
+    @patch("precog.database.crud_events.get_cursor")
     def test_game_id_zero_is_treated_as_value(self, mock_get_cursor):
         """game_id=0 is falsy in Python but should still be written if existing is NULL.
 
