@@ -94,6 +94,34 @@ ASCII output for console (Windows cp1252). Explicit UTF-8 for file I/O.
 ### 6. Immutable Versioning
 Strategies and models are immutable once created. Create new version, don't modify existing.
 
+### 8. Single Source of Truth (Pattern 73) — canonical rule + pointers, never duplicates
+
+**The rule:** Any rule, value, formula, or logic that appears in more than one location MUST have ONE canonical definition plus pointers/imports from the others. **Never copy the rule text, formula, or logic.** Applies identically to docs and code.
+
+```python
+# CORRECT (code) — canonical constant, imports from elsewhere
+# db/constants.py
+VALID_EDGE_OUTCOMES = ("yes", "no", "void", "unresolved")
+
+# crud_analytics.py
+from precog.database.constants import VALID_EDGE_OUTCOMES
+if actual_outcome not in VALID_EDGE_OUTCOMES: ...
+
+# CORRECT (docs) — canonical rule + pointer
+# protocols.md § Step 7a has the full claude-review parse rule
+# Session-start Step 5a: "apply the canonical parse rule from Step 7a"
+
+# WRONG — duplicated rule text / logic
+# crud_analytics.py
+if actual_outcome not in ("yes", "no", "void", "unresolved"): ...  # copy
+# crud_other.py
+if actual_outcome not in ("yes", "no", "void", "unresolved"): ...  # copy drifts eventually
+```
+
+**Why this is critical:** duplicated rules silently drift when one copy is updated and others aren't. Session 66 found three Pattern 73 violations in one session (claude-review parse rule, slotting checklist, Pipeline Completeness Gate) — all had the same shape: *rule exists somewhere, invocation point doesn't reference it, drift goes undetected until someone asks the right question.* See Pattern 73 in `docs/guides/DEVELOPMENT_PATTERNS_V*.md`.
+
+**Before copying any rule/logic to a second location: either (a) extract to a shared helper/constant and import, or (b) write a pointer that references the canonical location.** Audit triggers S81 + #929 check for compliance periodically.
+
 ### 7. External API Test Mocking — VCR OR live, NEVER hand-written
 
 Tests that exercise code calling **Kalshi, ESPN, or any HTTP client** use one of two approaches — **never** hand-written `MagicMock` response dicts:
