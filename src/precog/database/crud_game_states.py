@@ -876,6 +876,11 @@ def get_or_create_game(
     # NULL + UNIQUE constraints; we then immediately rewrite it to the
     # canonical ``GAM-{id}``.  IF the conflict branch wins, the TEMP
     # sentinel never reaches the row (``games.game_key`` is preserved).
+    #
+    # NOTE (#933 / Epic #935): ``espn_event_id`` is an EXTERNAL key. It has no
+    # uniqueness guarantee on ``games`` — ON CONFLICT targets the internal
+    # business key only. Do not add ``espn_event_id`` to the ON CONFLICT target
+    # list; use ``games.id`` (PK) or ``uq_games_matchup`` tuple for joins.
     temp_game_key = f"TEMP-{uuid.uuid4()}"
 
     query = """
