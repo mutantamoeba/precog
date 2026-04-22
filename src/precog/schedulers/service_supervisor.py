@@ -37,7 +37,6 @@ import logging
 import os
 import socket
 import threading
-import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -48,6 +47,7 @@ from typing import Any, Protocol, cast
 from precog.database.crud_schedulers import (
     check_active_schedulers,
     cleanup_stale_schedulers,
+    delete_schedulers_for_host,
     upsert_scheduler_status,
 )
 from precog.database.crud_system import (
@@ -660,36 +660,88 @@ class ServiceSupervisor:
         """
         Stop all services gracefully.
 
-        Signals shutdown, then stops each service with timeout.
-        Updates database status for each service to enable cross-process
-        status queries to show accurate state.
+        Shutdown ordering (Issue #755):
+          1. Set ``_shutdown_event`` (instant; signals monitoring loops to exit).
+          2. Join the health + metrics monitoring threads BEFORE touching the
+             scheduler_status table. This closes the race where a late
+             heartbeat from ``_health_check_loop`` could overwrite (or
+             re-freshen) a row that the stop phase has already cleaned up,
+             leaving a stale "running"-looking row that blocks the next
+             startup guard.
+          3. Stop each service (best-effort; one service's ``stop()``
+             failure does not abort the loop).
+          4. In a ``finally`` block, DELETE every scheduler_status row for
+             this host. This runs even if step 3 raised, guaranteeing the
+             table is clean on return.
+
+        Host-scoped: the DELETE uses ``WHERE host_id = self.host_id`` so a
+        multi-host deployment never deletes another host's rows.
+
+        References:
+            - Issue #755: Scheduler shutdown leaves stale scheduler_status rows
+            - feedback_scheduler_shutdown_discipline.md (session 69)
         """
         self.logger.info("Shutting down all services...")
-        self._shutdown_event.set()
+        try:
+            # Step 1: signal shutdown. Event.set() is idempotent and infallible
+            # on a live Event; wrapped in the outer try solely to guarantee the
+            # finally-block DELETE runs even if unrelated state (a logger call,
+            # an attribute access) raises at the top of this function.
+            self._shutdown_event.set()
 
-        for name, state in self.services.items():
+            # Step 2 (pre-emptive): stop background threads BEFORE DB cleanup
+            # so no heartbeat can race with the row-DELETE below. The
+            # background loops check ``_shutdown_event.is_set()`` at every
+            # iteration (top of _health_check_loop / _metrics_loop), so they
+            # exit on their next wake — usually within ~1 health_check_interval.
+            # ``join(timeout)`` does not kill threads if it times out, but the
+            # loops are daemons and will die with the process. If a dangling
+            # upsert slips through after the DELETE, it re-inserts a single
+            # fresh row which will be swept by cleanup_stale_schedulers() at
+            # the next startup (heartbeat ages past stale_threshold in ~2x
+            # health_check_interval).
+            if self._health_thread and self._health_thread.is_alive():
+                self._health_thread.join(timeout=5)
+                if self._health_thread.is_alive():
+                    self.logger.warning(
+                        "Health thread did not exit within 5s; proceeding with DB cleanup"
+                    )
+            if self._metrics_thread and self._metrics_thread.is_alive():
+                self._metrics_thread.join(timeout=5)
+                if self._metrics_thread.is_alive():
+                    self.logger.warning(
+                        "Metrics thread did not exit within 5s; proceeding with DB cleanup"
+                    )
+
+            # Step 3: stop each service, isolating failures per-service
+            for name, state in self.services.items():
+                try:
+                    if state.service and state.service.is_running():
+                        self.logger.info("Stopping service: %s", name)
+                        self._update_db_status(name, "stopping")
+                        state.service.stop()
+                        self.logger.info("Service stopped: %s", name)
+                except Exception as e:
+                    # Log and continue; we must still fall through to DB cleanup
+                    self.logger.error("Error stopping service %s: %s", name, e)
+        finally:
+            # Step 4: atomic, host-scoped row cleanup. This runs even if a
+            # service.stop() raised above OR if an unexpected exception fired
+            # during shutdown_event.set() / thread joins. After this, the
+            # startup guard cannot mis-diagnose this host as having a
+            # concurrent instance.
             try:
-                if state.service and state.service.is_running():
-                    self.logger.info("Stopping service: %s", name)
-                    # Report 'stopping' status to database
-                    self._update_db_status(name, "stopping")
-                    state.service.stop()
-                    # Report 'stopped' status to database
-                    self._update_db_status(name, "stopped")
-                    self.logger.info("Service stopped: %s", name)
-                else:
-                    # Mark as stopped even if not running (cleanup)
-                    self._update_db_status(name, "stopped")
+                deleted = delete_schedulers_for_host(self.host_id)
+                self.logger.info(
+                    "Cleared %d scheduler_status row(s) on shutdown (host=%s)",
+                    deleted,
+                    self.host_id,
+                )
             except Exception as e:
-                self.logger.error("Error stopping service %s: %s", name, e)
-                # Report 'failed' status with error message
-                self._update_db_status(name, "failed", error_message=str(e))
-
-        # Wait for monitoring threads
-        if self._health_thread and self._health_thread.is_alive():
-            self._health_thread.join(timeout=5)
-        if self._metrics_thread and self._metrics_thread.is_alive():
-            self._metrics_thread.join(timeout=5)
+                # DB cleanup failure should not mask an in-flight exception
+                # from the try block — just log. Stale-row cleanup will
+                # still fire on the NEXT startup via cleanup_stale_schedulers.
+                self.logger.error("Failed to clear scheduler_status rows on shutdown: %s", e)
 
         uptime = self.uptime_seconds
         self.logger.info(
@@ -1039,7 +1091,19 @@ class ServiceSupervisor:
             state.config.max_retries,
         )
 
-        time.sleep(delay)
+        # #755 Ripley BLOCK fix: use interruptible wait rather than bare time.sleep.
+        # Event.wait(timeout) returns True if the event was set during/before the
+        # wait, False if the timeout elapsed. If shutdown fires mid-backoff, abort
+        # the restart entirely — otherwise the dangling thread wakes AFTER stop_all
+        # has DELETEd scheduler_status rows and reinserts a FRESH 'starting' row
+        # that trips the next startup's guard. Mirrors the interruptible-wait
+        # pattern at _health_check_loop:764 and _metrics_loop:1126.
+        if self._shutdown_event.wait(delay):
+            self.logger.info(
+                "Restart of %s aborted: shutdown signaled during backoff",
+                name,
+            )
+            return
 
         try:
             # Report 'starting' status before restart attempt
