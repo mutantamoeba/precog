@@ -1,9 +1,23 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.25
-**Last Updated:** 2025-12-25
+**Version:** 1.26
+**Last Updated:** 2026-04-22
 **Status:** ✅ Current
+**Changes in v1.26:**
+- **THREE-TIER IDENTITY MODEL + 7 OTHER PHASE 2/2.5 ACCEPTED ADRs**: Added ADR-110 through ADR-117 (8 ADRs; 3 overwrote stale TBD placeholders)
+- **ADR-110 (overwrites TBD):** Neil Paine Sports Elo Archives — FiveThirtyEight replacement source with capability matrix
+- **ADR-111 (overwrites TBD):** Sport-Specific Team Code Mappings — canonical dict per sport for Kalshi ticker → team resolution
+- **ADR-112 (overwrites TBD):** `team_season_records` VIEW — dual-source (games + elo) W/L/D tracking
+- **ADR-113:** FastAPI as Web Backend for Manual Trade Placement MVP (Phase 2 Stage 2a)
+- **ADR-114:** External Data Source Architecture — Three-Tier pattern with multi-source reconciliation
+- **ADR-115:** Database Domain Module Architecture — per-domain CRUD organization (supersedes monolithic crud.py)
+- **ADR-116:** ODS Schema Conventions — Universal Surrogate PK, Business Key Suffix, FK Naming, RESTRICT Default
+- **ADR-117:** Three-Tier Identity Model for Schema Design — every identifier column classified as Tier 1 (internal PK), Tier 2 (business key), or Tier 3 (external key, ASSUMED NOT UNIQUE). Epic #935 Phase 2.
+- Updated ARCHITECTURE_DECISIONS reference from V2.35 to V2.36
+- Total ADRs catalogued: 98 → 103 (5 net-new row entries; 3 TBD placeholder slots at ADR-110/111/112 were overwritten in place rather than added as new rows). Highest ADR number assigned: 109 → 117.
+- **Section renames / additions:** "Phase 2: Live Data Integration (Planned)" renamed to "Phase 2C: Elo Data Sources & Team Code Normalization" (ADR-110/111/112 are Phase 2C Elo work, not live integration). Four new Core Engine sub-sections added for ADR-113 (Manual Trade Placement Web Backend), ADR-114 (External Data Source Architecture), ADR-115 (Database Domain Module), and ADR-116/117 (Schema Hardening Arc — Epics #745, #935).
+- **Category-range review (flagged for future attention, no change in this PR):** ADR-115/116/117 are schema/foundation-flavor but land in the 100-199 Core Engine range because that is where the 100-series ADRs have accumulated since ADR-100. The "ADR Number Ranges" table (Foundation = 001-099, Core Engine = 100-199) is no longer a clean fit — Jorge to review.
 **Changes in v1.25:**
 - **ELO RATING SYSTEM (PHASE 2C)**: Added ADR-109 for Elo rating computation architecture
 - **ADR-109:** Elo Rating System for Sports Predictions - K-factor tuning, home advantage, margin multiplier
@@ -370,13 +384,38 @@ This document provides a systematic index of all Precog architecture decisions u
 | ADR-108 | Hybrid Cloud Architecture for Live Data Collection | 2025-12-21 | ✅ | 2.5 | ADR-108_Hybrid_Cloud_Architecture.md |
 | ADR-109 | Elo Rating System for Sports Predictions | 2025-12-24 | ✅ | 2C | ARCHITECTURE_DECISIONS_V2.32.md |
 
-### Phase 2: Live Data Integration (Planned)
+### Phase 2C: Elo Data Sources & Team Code Normalization
 
 | ADR | Title | Date | Status | Phase | Document |
 |-----|-------|------|--------|-------|----------|
-| ADR-110 | TBD - ESPN API Integration Strategy | - | 🔵 | 2 | - |
-| ADR-111 | TBD - Game State Polling Frequency | - | 🔵 | 2 | - |
-| ADR-112 | TBD - Data Staleness Detection | - | 🔵 | 2 | - |
+| ADR-110 | Neil Paine Sports Elo Archives (FiveThirtyEight Replacement) — MIT-licensed GitHub archives for NFL/NBA/NHL historical Elo data in dual-row CSV format | 2025-12-26 | ✅ | 2C | ARCHITECTURE_DECISIONS_V2.36 |
+| ADR-111 | Sport-Specific Team Code Mappings — nested `SPORT_CODE_MAPPINGS[sport][code]` dict replaces sport-agnostic lookup to prevent cross-sport contamination (e.g. SEA/NHL ≠ SEA/NBA) | 2025-12-26 | ✅ | 2C | ARCHITECTURE_DECISIONS_V2.36 |
+| ADR-112 | `team_season_records` VIEW — dual-source W/L/D tracking unioning `historical_games` + `game_states` with NOT EXISTS deduplication; single source of truth for standings queries | 2025-12-26 | ✅ | 2C | ARCHITECTURE_DECISIONS_V2.36 |
+
+### Phase 2: Manual Trade Placement MVP — Web Backend
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-113 | FastAPI as Web Backend for Manual Trade Placement MVP — uvicorn ASGI server, `src/precog/web/` package, `precog web start` CLI, Pydantic Decimal serialization, two-axis env model integration | 2026-03-12 | 🔵 | 2 | ARCHITECTURE_DECISIONS_V2.36 |
+
+### Phase 2: External Data Source Architecture
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-114 | External Data Source Architecture — Three-Tier Pattern with Multi-Source Reconciliation — classifies sources as Tier A (continuous)/B (periodic)/C (batch); Fetch/Normalize/Deliver responsibilities; ServiceSupervisor registry; TeamCodeService; three-axis cadence/cost/domain classification | 2026-03-27 | ✅ | 2 | ARCHITECTURE_DECISIONS_V2.36 |
+
+### Phase 1: Database Module Organization
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-115 | Database Domain Module Architecture — 15 per-domain `crud_*.py` modules replace 8,329-line `crud_operations.py` monolith; no facade, no cross-module imports; consumers import directly from domain modules | 2026-04-04 | ✅ | 1 | ARCHITECTURE_DECISIONS_V2.36 |
+
+### Phase A': Schema Hardening Arc (Epic #745, Epic #935)
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-116 | ODS Schema Conventions — Universal Surrogate PK + Business Key Suffix + FK Naming + RESTRICT Default — four rules: every table uses `id SERIAL PRIMARY KEY`, business keys use `_key` suffix, FKs use `<parent>_id`, `ON DELETE RESTRICT` is the default; partially supersedes ADR-014, refines ADR-089 | 2026-04-12 | ✅ | A' | ARCHITECTURE_DECISIONS_V2.36 |
+| ADR-117 | Three-Tier Identity Model for Schema Design — Tier 1 internal PK (always unique), Tier 2 internal business key (case-by-case unique), Tier 3 external key (ASSUMED NOT UNIQUE); no UNIQUE on Tier-3 columns without a documented vendor contract; `ON CONFLICT` targets Tier 1/2 only; Epic #935 Phase 2 | 2026-04-21 | ✅ | Epic #935 | ARCHITECTURE_DECISIONS_V2.36 |
 
 ### Phase 3: Edge Detection (Planned)
 
@@ -1324,25 +1363,10 @@ coverage_tiers:
 ---
 ## ADR Statistics
 
-**Total ADRs:** 105
-**Accepted (✅):** 55 (Phase 0-2.5 complete)
-**Proposed (🔵):** 50 (Phase 2-10)
-**Rejected (❌):** 0
-**Superseded (⚠️):** 1 (ADR-089 Dual-Key Pattern superseded by schema implementation)
+**Total ADRs catalogued in this index:** 103 (unique ADR-row count as of v1.26)
+**Highest ADR number assigned:** 117
 
-**By Phase:**
-- Phase 0: 17 ADRs (100% accepted)
-- Phase 0.5: 12 ADRs (100% accepted)
-- Phase 1: 12 ADRs (6 accepted for DB completion + 6 planned for API best practices)
-- Phase 1.5: 12 ADRs (100% accepted - property-based testing POC + schema standardization + no edge manager + 8 test type framework + dual-key pattern + trade/position attribution architecture [3 ADRs] + workflow enforcement infrastructure [4 ADRs])
-- Phase 1.9: 4 ADRs (3 accepted: Alembic + TimescaleDB deferral + CI-safe stress testing, 1 planned: Testcontainers)
-- Phase 0.6c: 5 ADRs (100% accepted - includes cross-platform standards)
-- Phase 0.7: 6 ADRs (2 accepted: Python 3.14 compatibility + Branch Protection + 4 planned)
-- **Phase 2.5: 4 ADRs (3 accepted: Service Supervisor + ESPN Mapping + Historical Data Collection, 1 deferred: CloudWatch/ELK)** ⭐ UPDATED
-- Phase 2: 3 ADRs (0% - planned)
-- Phase 3: 2 ADRs (0% - planned)
-- Phase 4: 5 ADRs (1 deferred: CloudWatch/ELK from Phase 2.5 + 4 planned)
-- Phase 5: 3 ADRs (0% - planned)
+> **NOTE (v1.26 reconciliation):** The per-status (Accepted / Proposed / Rejected / Superseded) and per-phase sub-counts previously listed here had drifted to stale figures from the v1.22-v1.25 era (multiple version bumps without statistics recompute). They have been REMOVED rather than propagated further out of sync. For authoritative per-ADR status and phase metadata, consult the canonical `ARCHITECTURE_DECISIONS_V2.36.md` directly — that file is the single source of truth. Re-populating this statistics block with accurate aggregates is a separate follow-up; filing this would itself be Pattern 73 work (derive from canonical, don't maintain in two places).
 
 ---
 
@@ -1355,11 +1379,12 @@ coverage_tiers:
 
 ---
 
-**Document Version:** 1.23
+**Document Version:** 1.26
 **Created:** 2025-10-21
-**Last Updated:** 2025-12-15
+**Last Updated:** 2026-04-22
 **Purpose:** Systematic architecture decision tracking and reference
 **Critical Changes:**
+- v1.26: Added ADR-110 through ADR-117 (8 ADRs; 3 overwrote stale TBD placeholders at 110/111/112, 5 net-new at 113-117). Includes Three-Tier Identity Model (ADR-117, Epic #935 Phase 2). Closes #959.
 - v1.23: Added ADR-106 for Historical Data Collection Architecture (Phase 2.5 - unified source adapter pattern for batch historical data seeding)
 - v1.20: Added ADR-100, ADR-101, ADR-102 for Phase 2.5 Service Supervisor infrastructure (live data collection services)
 - v1.19: Added ADR-099 for CI-safe stress test markers (Issue #168 - skipif vs xfail(run=False) decision)
@@ -1374,6 +1399,6 @@ coverage_tiers:
 - v1.6: Added ADR-074 for property-based testing integration (Hypothesis framework POC complete)
 - v1.5: Added ADR-054 for Python 3.14 compatibility (Ruff security rules instead of Bandit)
 
-**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.27.md
+**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.36.md
 
-**END OF ADR INDEX V1.20**
+**END OF ADR INDEX V1.26**
