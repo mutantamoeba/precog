@@ -345,6 +345,36 @@ class TestInsertTemporalAlignmentBatch:
         assert "DO NOTHING" in sql
         assert "market_snapshot_id, game_state_id" in sql
 
+    @patch("precog.database.crud_ledger.execute_values")
+    @patch("precog.database.crud_ledger.get_cursor")
+    def test_batch_insert_passes_page_size_full_batch(self, mock_get_cursor, mock_exec_values):
+        """execute_values is called with page_size=len(params) for accurate rowcount.
+
+        psycopg2.extras.execute_values defaults page_size=100. For batches >100 rows,
+        cur.rowcount reports only the LAST page's count. The fix passes
+        page_size=len(validated_params) so rowcount reflects the full batch.
+
+        This test uses N=150 rows to exercise the >100 boundary (issue #912).
+        """
+        mock_cursor = _mock_cursor_context(mock_get_cursor)
+        mock_cursor.rowcount = 150
+
+        # 150 rows crosses the default 100-row page boundary
+        rows = []
+        for i in range(150):
+            row = _default_alignment_dict()
+            row["market_snapshot_id"] = 2000 + i
+            row["game_state_id"] = 3000 + i
+            rows.append(row)
+
+        insert_temporal_alignment_batch(rows)
+
+        # execute_values must have been called with page_size=150 as a kwarg
+        call_kwargs = mock_exec_values.call_args.kwargs
+        assert call_kwargs.get("page_size") == 150, (
+            f"expected page_size=150, got {call_kwargs.get('page_size')!r}"
+        )
+
 
 # =============================================================================
 # GET ALIGNMENTS BY MARKET TESTS

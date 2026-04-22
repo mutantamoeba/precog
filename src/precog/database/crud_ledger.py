@@ -560,8 +560,18 @@ def insert_temporal_alignment_batch(alignments: list[dict]) -> int:
     # submitted. ON CONFLICT DO NOTHING will skip duplicates; cur.rowcount
     # on execute_values reports the effective count, unlike executemany
     # where DB-API 2.0 leaves rowcount undefined across iterations.
+    #
+    # page_size=len(validated_params) forces a single page so cur.rowcount
+    # reflects the full batch. Default page_size=100 would otherwise report
+    # only the last page's rowcount for batches > 100 rows (issue #912).
     with get_cursor(commit=True) as cur:
-        execute_values(cur, insert_query, validated_params, template=template)
+        execute_values(
+            cur,
+            insert_query,
+            validated_params,
+            template=template,
+            page_size=len(validated_params),
+        )
         return cast("int", cur.rowcount)
 
 
@@ -823,8 +833,17 @@ def upsert_market_trades_batch(trades: list[dict]) -> int:
 
     template = "(%s, %s, %s, %s, %s, %s, %s, %s)"
 
+    # page_size=len(validated_params) forces a single page so cur.rowcount
+    # reflects the full batch. Default page_size=100 would otherwise report
+    # only the last page's rowcount for batches > 100 rows (issue #912).
     with get_cursor(commit=True) as cur:
-        execute_values(cur, insert_query, validated_params, template=template)
+        execute_values(
+            cur,
+            insert_query,
+            validated_params,
+            template=template,
+            page_size=len(validated_params),
+        )
         return cast("int", cur.rowcount)
 
 
