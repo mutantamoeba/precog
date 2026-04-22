@@ -265,7 +265,7 @@ def update_edge_outcome(
 
     This is a lifecycle event (not an SCD version change), so we update
     the current row directly rather than creating a new SCD version.
-    Also sets edge_status to 'settled'.
+    Also sets edge_status: 'void' when actual_outcome='void', 'settled' otherwise.
 
     Args:
         edge_pk: Surrogate PK (edges.id), NOT the edge_key business key
@@ -291,6 +291,12 @@ def update_edge_outcome(
         ...     settlement_value=Decimal("1.0000"),
         ... )
         >>> # Edge 42 now has edge_status='settled', actual_outcome='yes'
+        >>> success = update_edge_outcome(
+        ...     edge_pk=43,
+        ...     actual_outcome='void',
+        ...     settlement_value=Decimal("0.0000"),
+        ... )
+        >>> # Edge 43 now has edge_status='void', actual_outcome='void'
 
     References:
         - Migration 0023: edges enrichment
@@ -307,12 +313,12 @@ def update_edge_outcome(
         SET actual_outcome = %s,
             settlement_value = %s,
             resolved_at = COALESCE(%s, NOW()),
-            edge_status = 'settled'
+            edge_status = CASE WHEN %s = 'void' THEN 'void' ELSE 'settled' END
         WHERE id = %s AND row_current_ind = TRUE
     """
 
     with get_cursor(commit=True) as cur:
-        cur.execute(query, (actual_outcome, settlement_value, resolved_at, edge_pk))
+        cur.execute(query, (actual_outcome, settlement_value, resolved_at, actual_outcome, edge_pk))
         return int(cur.rowcount or 0) > 0
 
 
