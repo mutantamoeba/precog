@@ -62,14 +62,23 @@ class TestSystemRace:
         assert len(results) > 0
         assert all(r == 0 for r in results)
 
-    def test_concurrent_help_calls(self, runner):
-        """Test concurrent help command calls."""
+    def test_concurrent_help_calls(self):
+        """Test concurrent help command calls.
+
+        Uses per-thread CliRunner instances because Typer's CliRunner holds
+        internal stdout-redirection state that is NOT thread-safe when
+        shared across threads. Under full-suite CPU/IO contention, sharing
+        a single CliRunner produces intermittent exit_code=1 from stdout
+        closure races (see #755-adjacent PR in session 69). Fix-pattern:
+        each thread owns its own CliRunner — no shared mutable state.
+        """
         results = []
         errors = []
 
         def invoke_help():
+            local_runner = CliRunner()
             try:
-                result = runner.invoke(app, ["--help"])
+                result = local_runner.invoke(app, ["--help"])
                 results.append(result.exit_code)
             except Exception as e:
                 errors.append(str(e))

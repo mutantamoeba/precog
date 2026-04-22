@@ -172,6 +172,10 @@ def _mock_startup_guard_crud():
             "precog.schedulers.service_supervisor.cleanup_stale_schedulers",
             return_value=0,
         ),
+        patch(
+            "precog.schedulers.service_supervisor.delete_schedulers_for_host",
+            return_value=0,
+        ),
     ):
         yield
 

@@ -412,6 +412,52 @@ def delete_scheduler_status(host_id: str, service_name: str) -> bool:
         return int(cur.rowcount or 0) > 0
 
 
+def delete_schedulers_for_host(host_id: str) -> int:
+    """
+    Delete all scheduler status records for a given host.
+
+    This is the shutdown-cleanup helper called by ``ServiceSupervisor.stop_all()``.
+    It guarantees that no scheduler_status rows remain for the host after shutdown,
+    which prevents the startup guard from incorrectly treating a cleanly-stopped
+    supervisor as a concurrent instance on the next start.
+
+    Host-scoping is critical: a multi-host deployment must not delete another
+    host's rows. The caller is expected to pass ``socket.gethostname()`` (via the
+    supervisor's ``self.host_id`` property).
+
+    Args:
+        host_id: Hostname whose scheduler_status rows should be removed.
+
+    Returns:
+        Number of rows deleted (0 if nothing was tracked).
+
+    Example:
+        >>> import socket
+        >>> deleted = delete_schedulers_for_host(socket.gethostname())
+        >>> logger.info("Cleared %d scheduler_status rows on shutdown", deleted)
+
+    Educational Note:
+        This is a pre-emptive, atomic cleanup. Compared to upserting
+        status='stopped' per service, a DELETE:
+          1. Cannot be overwritten by a late-arriving heartbeat from a
+             monitoring thread that hasn't joined yet.
+          2. Leaves the table in a clean state, so the startup guard's
+             stale-row detection doesn't need to distinguish
+             "cleanly stopped" from "crashed".
+
+    References:
+        - Migration 0012: scheduler_status table schema
+        - Issue #755: Scheduler shutdown leaves stale scheduler_status rows
+    """
+    query = """
+        DELETE FROM scheduler_status
+        WHERE host_id = %s
+    """
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, (host_id,))
+        return int(cur.rowcount or 0)
+
+
 # =============================================================================
 # Elo Rating Operations
 # =============================================================================

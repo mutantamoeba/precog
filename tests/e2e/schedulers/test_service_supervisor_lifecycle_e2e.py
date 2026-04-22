@@ -752,8 +752,17 @@ class TestDatabaseIPCE2E:
 
         supervisor.stop_all()
 
-    def test_scheduler_status_shows_stopped_after_stop(self, supervisor: ServiceSupervisor) -> None:
-        """Verify scheduler_status transitions to 'stopped' after stop_all()."""
+    def test_scheduler_status_cleared_after_stop(self, supervisor: ServiceSupervisor) -> None:
+        """Verify scheduler_status rows are DELETED after stop_all() (Issue #755).
+
+        Prior contract: stop_all() upserted status='stopped'. That left stale
+        rows with fresh heartbeats, which the startup guard misread as
+        concurrent instances and blocked restart.
+
+        Current contract (per Issue #755): stop_all() DELETEs rows host-scoped.
+        The table has no entry for this host after a clean shutdown, which
+        lets the next start_all() proceed unambiguously.
+        """
         service = RealisticMockService(name="espn", poll_interval=0.1)
         supervisor.add_service("espn", service, ServiceConfig(name="ESPN Stop"))
 
@@ -763,9 +772,8 @@ class TestDatabaseIPCE2E:
         supervisor.stop_all()
 
         status = get_scheduler_status(supervisor.host_id, "espn")
-        assert status is not None
-        assert status["status"] == "stopped", (
-            f"Expected 'stopped' after stop_all(), got '{status['status']}'"
+        assert status is None, (
+            f"Expected scheduler_status row to be deleted after stop_all(), got: {status}"
         )
 
     def test_scheduler_status_heartbeat_updates(self, supervisor: ServiceSupervisor) -> None:
