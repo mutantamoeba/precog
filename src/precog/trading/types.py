@@ -208,7 +208,7 @@ class PositionResponse(TypedDict):
     position_key: str  # Business key (format: 'POS-{id}', stays constant)
 
     # Trade attribution
-    market_id: str  # Market identifier
+    market_id: int  # Integer FK to markets(id) surrogate PK (per Migration 0022)
     strategy_id: int  # Strategy that generated signal
     model_id: int  # Model that calculated probability
 
