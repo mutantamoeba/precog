@@ -1,13 +1,19 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.33
+**Version:** 1.34
 **Created:** 2025-11-13
 **Last Updated:** 2026-04-21
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.34:**
+- **Added Pattern 79: Three-Tier Identity Model for Schema Design (ALWAYS for New Tables, Migrations, and Constraint Additions)**
+- Closes the codification half of Epic #935 (three-tier identity model). Pairs with ADR-117 (decision-context twin).
+- ToC hygiene: added entries for Patterns 73-79 (the V1.33 release shipped Patterns 74-78 without updating the ToC; V1.34 cleans the incremental gap but does NOT rebuild the Pattern 24-64 ToC backfill — tracked separately as #951 item 3).
+- Intro hygiene: updated the stale "17 critical patterns" / "all 10 patterns" counts that predate every pattern added since V1.5 (#951 item 4).
+- Origin: Session 67 #933 `UniqueViolation` incident + Option D fix (migration 0066, PR #938) + Epic #935 user reframing ("external keys are NOT unique; design for that").
 **Changes in V1.33:**
 - **Added Pattern 74: Rename-Over-Rewrite for Audit Coverage Gaps (ALWAYS for Audit-Driven Test-Coverage Work)**
 - **Added Pattern 75: Verify Active Priorities Before Dispatch (ALWAYS for MEMORY.md-Driven Agent Work)**
@@ -369,14 +375,21 @@
 30. [Pattern 70: Convergent-Reviewer Signal Rule (ALWAYS for Multi-Reviewer Dispatch)](#pattern-70-convergent-reviewer-signal-rule-always-for-multi-reviewer-dispatch)
 31. [Pattern 71: Verify High-Confidence Sentinel Claims Via Code Inspection Before Acting (ALWAYS for Sentinel-Frame Findings)](#pattern-71-verify-high-confidence-sentinel-claims-via-code-inspection-before-acting-always-for-sentinel-frame-findings)
 32. [Pattern 72: Scope Correction Via Mechanical Pre-ANNOUNCE Scoping (ALWAYS for Tier 2 Dispatches)](#pattern-72-scope-correction-via-mechanical-pre-announce-scoping-always-for-tier-2-dispatches)
-33. [Pattern Quick Reference](#pattern-quick-reference)
-34. [Related Documentation](#related-documentation)
+33. [Pattern 73: "Keep Heading, Replace Body with Pointer" — Structural Refactor Idiom (ALWAYS for Memory/Doc File Extraction)](#pattern-73-keep-heading-replace-body-with-pointer----structural-refactor-idiom-always-for-memorydoc-file-extraction)
+34. [Pattern 74: Rename-Over-Rewrite for Audit Coverage Gaps (ALWAYS for Audit-Driven Test-Coverage Work)](#pattern-74-rename-over-rewrite-for-audit-coverage-gaps-always-for-audit-driven-test-coverage-work)
+35. [Pattern 75: Verify Active Priorities Before Dispatch (ALWAYS for MEMORY.md-Driven Agent Work)](#pattern-75-verify-active-priorities-before-dispatch-always-for-memorymd-driven-agent-work)
+36. [Pattern 76: Session vs Trigger Nomenclature (ALWAYS for Prose Referencing Session or Trigger Numbers)](#pattern-76-session-vs-trigger-nomenclature-always-for-prose-referencing-session-or-trigger-numbers)
+37. [Pattern 77: PM Triage Beats Mechanical Thresholds for Soft Gates (ALWAYS for Tier B / Non-Load-Bearing Audits)](#pattern-77-pm-triage-beats-mechanical-thresholds-for-soft-gates-always-for-tier-b--non-load-bearing-audits)
+38. [Pattern 78: Two-Gate Audit Discipline — Bug Presence + Fix Validity (ALWAYS for Retrospective Claude-Review Audits)](#pattern-78-two-gate-audit-discipline--bug-presence--fix-validity-always-for-retrospective-claude-review-audits)
+39. [Pattern 79: Three-Tier Identity Model for Schema Design (ALWAYS for New Tables, Migrations, and Constraint Additions)](#pattern-79-three-tier-identity-model-for-schema-design-always-for-new-tables-migrations-and-constraint-additions)
+40. [Pattern Quick Reference](#pattern-quick-reference)
+41. [Related Documentation](#related-documentation)
 
 ---
 
 ## Introduction
 
-This guide contains **17 critical development patterns** that must be followed throughout the Precog project. These patterns address:
+This guide contains **79 development patterns** that must be followed throughout the Precog project. (The V1.0 baseline was 10 patterns; the count has grown organically via the S80 periodic promotion sweep as the project hits new failure modes.) These patterns address:
 
 - **Financial Precision:** Decimal-only arithmetic for sub-penny pricing
 - **Data Versioning:** Dual versioning system for mutable vs. immutable data
@@ -407,7 +420,7 @@ These patterns prevent such issues through **defense in depth**:
 - **Before implementing features:** Review relevant patterns
 - **During code review:** Verify patterns are followed
 - **When debugging:** Check if pattern violations caused the bug
-- **When onboarding:** Study all 10 patterns
+- **When onboarding:** Study the critical-severity patterns first (Patterns 1-4, 8, 10, 13, 14, 21, 22), then the Pattern Quick Reference at the bottom of this file
 
 **Pattern Categories:**
 
@@ -8830,7 +8843,7 @@ last_trading_price = history[-2]['yes_price']  # Second-to-last row = last pre-s
 
 ### Foundation Documents
 - `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` - All requirements
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.36.md` - All ADRs (includes ADR-002, ADR-018-020, ADR-048, ADR-053-054, ADR-074)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.36.md` - All ADRs (includes ADR-002, ADR-018-020, ADR-048, ADR-053-054, ADR-074, ADR-117)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.8.md` - Phase planning
 
 ### Implementation Guides
@@ -11652,6 +11665,135 @@ Session 65 pre-S68 audit: Gate A = 89% (8/9 findings were live bugs). Gate B was
 - S81 trigger in `protocols.md § Decay Panel` — broadened-filter second-pass re-audits must include Gate B
 - `feedback_audit_fix_validity_gate.md` — canonical origin memo
 - Pattern 75 (Verify Active Priorities Before Dispatch) — adjacent two-gate discipline for forward-looking priorities
+
+---
+
+V1.34 Updates:
+- Added Pattern 79 (Three-Tier Identity Model for Schema Design) — classify every identifier column as Tier 1 (internal PK), Tier 2 (internal business key), or Tier 3 (external key); NO `UNIQUE` on Tier 3; ON CONFLICT targets Tier 1/2 only. Source: Session 67 #933 `UniqueViolation` + Option D fix (migration 0066, PR #938) + Epic #935 user reframing. Pairs with ADR-117.
+- ToC: added entries for Patterns 73-79 (V1.33 shipped Patterns 74-78 without ToC entries; V1.34 closes the incremental gap. The larger Pattern 24-64 ToC backfill is tracked as #951 item 3 and is NOT in scope here).
+- Intro count: "17 critical patterns" → "79 development patterns"; "Study all 10 patterns" → critical-severity-first onboarding guidance (#951 item 4).
+
+## Pattern 79: Three-Tier Identity Model for Schema Design (ALWAYS for New Tables, Migrations, and Constraint Additions)
+
+**Severity:** CRITICAL — misclassifying an external identifier as UNIQUE causes silent data loss during upstream drift. In money-adjacent tables (`games`, `markets`, `events`) the failure mode is a poller crash + ingestion stall during active game time.
+
+### Problem / Trigger
+
+Every identifier column in the schema belongs to one of three tiers. The tiers have very different uniqueness guarantees, and conflating them is the root cause of a recurring bug class: `UniqueViolation` crashes on external identifiers that we incorrectly declared `UNIQUE`.
+
+Session 67's #933 was the canonical instance. The ESPN game-state poller crashed with `duplicate key value violates unique constraint "idx_games_espn_event"` during an NCAAF mid-season window where ESPN's internal team code for Ole Miss shifted (`MISS` → `MS`). The poller's ON CONFLICT target (the matchup business key) stopped matching the existing row, so the INSERT proceeded — and tripped the `UNIQUE` index on `games.espn_event_id`. Market-data ingestion stalled. Three local fixes were considered (change ON CONFLICT, pre-flight lookup, catch-and-ignore). The user's reframe dissolved all three: **"external keys are NOT unique; design for that."** The UNIQUE itself was the bug. The crash was the correct failure mode of a wrong schema.
+
+### The Pattern / Rule
+
+Classify every identifier column before constraining it:
+
+| Tier | What | Uniqueness contract | Examples |
+|---|---|---|---|
+| **1 — Internal PK** | Surrogate integer ID assigned by this DB | **100% unique by definition** | `games.id`, `edges.id`, `markets.id` |
+| **2 — Internal business key** | Stable identifier we compose inside this system from trusted source facts | **Case-by-case — evaluate before constraining** | `(sport, game_date, home_team_id, away_team_id)` composite; `game_key = 'GAM-{id}'`; `MKT-{id}`, `POS-{id}` |
+| **3 — External key** | Identifier sourced from a platform/API we don't control | **ASSUMED NOT UNIQUE** until proven otherwise by immutable vendor contract (rare) | `espn_event_id`, `kalshi_ticker`, `polymarket_condition_id`, `cbbd_game_id` |
+
+**Four operational rules follow:**
+
+1. **Tier-3 columns get NO `UNIQUE` constraints.** No partial UNIQUE. No single-column UNIQUE. No composite UNIQUE where any component is a Tier-3 column. The schema cannot assert a property it can't enforce — and vendors routinely re-use, re-assign, or drift identifiers without warning.
+
+2. **Tier-3 columns SHOULD get non-unique indexes** for lookup performance. Partial indexes (`WHERE <col> IS NOT NULL`) are often correct when historical imports intentionally leave the column NULL (e.g., FiveThirtyEight / Kaggle data without ESPN IDs).
+
+3. **`ON CONFLICT` targets must be Tier 1 or Tier 2** — never Tier 3. The conflict-resolution strategy embeds a uniqueness assumption; only tiers that support the assumption are safe.
+
+4. **Pollers that ingest Tier-3 data must tolerate duplicates** — silently retain data on upstream drift. A `UniqueViolation` crash on ingestion is the wrong failure mode for every production-relevant drift scenario (cross-season, cross-league, mid-season code shifts).
+
+### Wrong
+
+```sql
+-- Pre-migration-0066 state (the bug):
+CREATE UNIQUE INDEX idx_games_espn_event
+    ON games (espn_event_id)
+    WHERE espn_event_id IS NOT NULL;
+-- espn_event_id is Tier 3. The UNIQUE asserts a property we cannot guarantee.
+-- Result (session 67, NCAAF ESPN team-code drift):
+--   psycopg2.errors.UniqueViolation: duplicate key value violates unique
+--   constraint "idx_games_espn_event"
+-- Observed impact: market-data ingestion stall during active games.
+```
+
+```python
+# Poller logic matching the wrong schema — ON CONFLICT targets the business
+# key, but the Tier-3 UNIQUE fires independently:
+cur.execute("""
+    INSERT INTO games (sport, game_date, home_team_id, away_team_id, espn_event_id, ...)
+    VALUES (%s, %s, %s, %s, %s, ...)
+    ON CONFLICT ON CONSTRAINT uq_games_matchup DO UPDATE SET ...
+""", params)
+# When upstream team-code drift causes uq_games_matchup to miss, the INSERT
+# proceeds and crashes on idx_games_espn_event instead of silently updating
+# a retained row.
+```
+
+### Right
+
+```sql
+-- Migration 0066 (post-#938) — the fix:
+-- src/precog/database/alembic/versions/0066_demote_games_espn_event_unique.py:79
+CREATE INDEX idx_games_espn_event
+    ON games (espn_event_id)
+    WHERE espn_event_id IS NOT NULL;
+-- espn_event_id is Tier 3. Non-unique partial btree: lookup performance
+-- preserved, cross-row uniqueness NOT asserted. ESPN may drift / re-use
+-- identifiers; schema tolerates it.
+
+-- Identity + uniqueness on games continues to be enforced by:
+--   games_pkey           -- Tier 1 (surrogate id)
+--   uq_games_matchup     -- Tier 2 (sport + game_date + home + away)
+--   idx_games_game_key   -- Tier 2 (GAM-{id} stable reference)
+```
+
+```python
+# Poller logic on the corrected schema — ON CONFLICT still targets the
+# Tier-2 business key. When drift causes a miss, the INSERT proceeds and
+# retains the data as a new row (no crash). Detection of the duplicate
+# espn_event_id (if any) is deferred to the cross-table audit / data
+# quality monitor — not to a crash-on-write constraint.
+cur.execute("""
+    INSERT INTO games (sport, game_date, home_team_id, away_team_id, espn_event_id, ...)
+    VALUES (%s, %s, %s, %s, %s, ...)
+    ON CONFLICT ON CONSTRAINT uq_games_matchup DO UPDATE SET ...
+""", params)
+```
+
+### Decision Checklist Before Adding Any Identifier Column or UNIQUE Constraint
+
+1. **Identify the tier.** Does this column get its value from (a) `SERIAL` / `GENERATED` inside this DB, (b) composition of trusted internal facts, or (c) a platform we don't control?
+2. **If Tier 3 — stop.** No UNIQUE. Consider whether a non-unique index is warranted for lookup performance.
+3. **If Tier 2 — evaluate case-by-case.** Is the composite genuinely stable across the entity's lifecycle? (Business keys CAN drift — see #796 CSGO teams, #913 double-count edge cases.) Composite uniqueness is usually defensible on matchup/natural-key tables; be more skeptical on entity-level surrogate business keys.
+4. **If Tier 1 — always UNIQUE (that's the PK definition).**
+5. **Write down the tier in the migration docstring.** Future authors reading the migration should see "espn_event_id is Tier 3 — non-unique by policy" in the DDL comments. Docstring convention from migration 0066 is a good template.
+
+### When NOT to Apply (Tier-3 UNIQUE Exceptions)
+
+A Tier-3 UNIQUE is permitted ONLY when an **immutable vendor contract** guarantees uniqueness across the entire scope of possible rows in this table. This is rare and must be documented in the migration:
+
+- The vendor publishes a formal stability/uniqueness guarantee in their API contract (not an inferred pattern).
+- The scope of the table matches the scope of the guarantee (e.g., vendor guarantees uniqueness per league — not usable as a UNIQUE if our table spans leagues).
+- There is a concrete, documented operational consequence (e.g., "we need ON CONFLICT DO NOTHING at this layer and we can't push it to the business key") that justifies the coupling.
+
+If you can't name the specific vendor doc section in the migration docstring: it's Tier 3 with no UNIQUE. Default to caution; external-identifier uniqueness assumptions compound into silent data loss.
+
+### Internal-Only Identifiers (Tier-2 Nuance)
+
+Business keys that are generated internally (e.g., `GAM-{id}`, `MKT-{id}`, `POS-{id}`) are Tier 2, not Tier 1. They often warrant UNIQUE — but the UNIQUE lives on the business key, not on any external column. Migration 0058's `_key` naming convention (ADR-116 Rule 2) was introduced partly to make this distinction grepable: anything ending in `_key` is internal Tier 2; anything named after a vendor (`espn_`, `kalshi_`, `cbbd_`) is Tier 3.
+
+### Source
+
+- Session 67 #933 — `UniqueViolation` incident that surfaced the tier-conflation bug
+- Migration 0066 (`src/precog/database/alembic/versions/0066_demote_games_espn_event_unique.py:1`) — the Option D fix: demote Tier-3 UNIQUE to non-unique partial index
+- PR #938 — session-67 Tier 2 full pipeline (Holden design → Samwise build → Glokta + Brawne review → Ripley sentinel)
+- Epic #935 — Identity Semantics Audit & Hardening (multi-session arc)
+- #936 — this ADR tracking issue
+- #937 — cross-table external-key UNIQUE audit (sweep follow-up, cites this pattern)
+- **ADR-117** — three-tier identity model decision context (this pattern is the operational how; the ADR is the why)
+- ADR-116 (ODS Schema Conventions) — the `_key` / external-`_id` naming convention that makes Tier 2 vs Tier 3 grepable
+- User reframing (session 67, verbatim): *"External keys are NOT unique; design for that."*
 
 ---
 
