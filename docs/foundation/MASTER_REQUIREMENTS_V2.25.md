@@ -333,7 +333,7 @@ precog/
   3. `MASTER_INDEX_V2.53.md` - Complete document inventory
   4. `ARCHITECTURE_DECISIONS_V2.36.md` - All ADRs with design rationale (Phase 0-4.5, ADR-117 adds three-tier identity model)
   5. `REQUIREMENT_INDEX_V1.17.md` - Systematic requirement catalog
-  6. `ADR_INDEX_V1.25.md` - Architecture decision index
+  6. `ADR_INDEX_V1.26.md` - Architecture decision index (ADR-110 through ADR-117 added v1.26; includes Three-Tier Identity Model)
   7. `TESTING_STRATEGY_V3.9.md` - Test cases, coverage requirements, test isolation patterns
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
