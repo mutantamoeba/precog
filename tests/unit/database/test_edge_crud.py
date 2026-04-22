@@ -247,8 +247,8 @@ class TestUpdateEdgeOutcome:
         assert result is False
 
     @patch("precog.database.crud_analytics.get_cursor")
-    def test_update_edge_outcome_sets_status_settled(self, mock_get_cursor):
-        """Test that outcome update sets edge_status to 'settled'."""
+    def test_update_edge_outcome_uses_conditional_edge_status(self, mock_get_cursor):
+        """SQL pins CASE WHEN for edge_status + 5-element param tuple (#911)."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
         mock_cursor.rowcount = 1
 
@@ -259,8 +259,16 @@ class TestUpdateEdgeOutcome:
         )
 
         sql = mock_cursor.execute.call_args[0][0]
-        assert "settled" in sql
+        params = mock_cursor.execute.call_args[0][1]
+        assert "CASE WHEN" in sql, "edge_status must be conditional post-#911"
+        assert "'void'" in sql, "CASE must handle void outcome"
+        assert "'settled'" in sql, "CASE must preserve settled ELSE branch"
         assert "row_current_ind = TRUE" in sql
+        assert len(params) == 5, (
+            f"expected 5 params post-#911 (actual_outcome binds for SET + CASE); got {len(params)}"
+        )
+        assert params[0] == "yes", "param[0] binds UPDATE SET actual_outcome"
+        assert params[3] == "yes", "param[3] binds CASE WHEN %s = 'void'"
 
     @patch("precog.database.crud_analytics.get_cursor")
     def test_update_edge_outcome_validates_decimal(self, mock_get_cursor):
