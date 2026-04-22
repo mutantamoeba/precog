@@ -43,7 +43,7 @@ pytestmark = [pytest.mark.integration]
 
 # Unique business-key prefix keeps this file's fixture data disjoint
 # from other integration tests that may be seeding similar tables.
-_PREFIX = "TEMPALI"
+_PREFIX = "TEST-TEMPALI"
 
 
 # =============================================================================
@@ -164,7 +164,7 @@ def fk_chain() -> Any:
     # Use a per-test unique suffix so concurrent xdist workers don't
     # collide on business keys (ticker, external_id, espn_event_id).
     # Short suffix (4 hex) because team_code is varchar(10); longer
-    # suffix-prefixed codes like "TEMPALI-H1234" exceed the limit.
+    # suffix-prefixed codes like "TEST-TEMPALI-H1234" exceed the limit.
     suffix_long = uuid.uuid4().hex[:8]
     suffix_short = suffix_long[:4]
     espn_event_id = f"{_PREFIX}-ESPN-{suffix_long}"
