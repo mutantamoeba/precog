@@ -1,9 +1,17 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.35
-**Last Updated:** March 27, 2026
+**Version:** 2.36
+**Last Updated:** April 21, 2026
 **Status:** ✅ Current
+**Changes in v2.36:**
+- **THREE-TIER IDENTITY MODEL:** Added ADR-117 codifying Epic #935's identity taxonomy for schema design
+  - ADR-117: Every identifier column is Tier 1 (internal PK, 100% unique), Tier 2 (internal business key, case-by-case), or Tier 3 (external key, ASSUMED NOT UNIQUE)
+  - No `UNIQUE` on Tier 3 columns; `ON CONFLICT` targets must be Tier 1 or 2; pollers tolerate duplicate external keys silently
+  - Shipped in response to session 67 #933 `UniqueViolation` incident — Option D fix (demote `idx_games_espn_event` UNIQUE → non-unique) via migration 0066 (PR #938)
+  - Operational how-to companion: Pattern 79 in `DEVELOPMENT_PATTERNS_V1.34.md`
+  - Unblocks cross-table audit in #937
+  - Cross-references: Epic #935, #933, #936 (this ADR's tracking issue), #937, #938, ADR-116 (naming convention), ADR-089 (dual-key foundation), migration 0066
 **Changes in v2.35:**
 - **EXTERNAL DATA SOURCE ARCHITECTURE:** Added ADR-114 for three-tier source pattern with multi-source reconciliation
   - ADR-114: External Data Source Architecture — Three-Tier Pattern with Multi-Source Reconciliation
@@ -17093,4 +17101,93 @@ Tracked under umbrella issue #787 (C2b PK/FK Standardization), epic #745.
 - **Pattern 47:** Verify Schema Before Fixing Pattern Violations (live-DB audit methodology used to validate these rules)
 - **Session 52:** Design session — live-DB audit, Holden+Galadriel design review, ODS framing analysis
 
-**END OF ARCHITECTURE DECISIONS V2.37**
+---
+
+## Decision #117/ADR-117: Three-Tier Identity Model for Schema Design
+
+**Date:** April 21, 2026
+**Status:** ✅ Accepted
+**Phase:** Epic #935 — Identity Semantics Audit & Hardening (multi-session arc)
+**Priority:** 🔴 Critical (foundational identity convention — governs every `UNIQUE`, `ON CONFLICT`, and external-id column going forward)
+**Supersedes:** Refines ADR-116 (ODS Schema Conventions) with the tier taxonomy that drove the `_key` vs `<vendor>_id` naming split; complements ADR-089 (Dual-Key Schema Pattern) by extending the two-layer (surrogate + business key) model to a three-layer (surrogate + internal business key + external key) taxonomy.
+
+### Context: External identifiers are not ours to constrain
+
+Precog ingests identifiers from platforms we do not control (ESPN, Kalshi, Polymarket, CBBD, Odds API). Historically, the schema treated some of these external identifiers as if they were internal — most notably, migration 0035 added a partial `UNIQUE` index on `games.espn_event_id`. This was a wrong schema-safety assumption, and in session 67 it caused the exact failure mode the assumption should have prevented.
+
+**The incident (session 67, #933):** During an NCAAF mid-season window, the ESPN game-state poller crashed with `duplicate key value violates unique constraint "idx_games_espn_event"`. Root cause: ESPN shifted its internal team code for Ole Miss from `MISS` to `MS`, which caused the poller's `ON CONFLICT ON CONSTRAINT uq_games_matchup` target to miss the existing row. The subsequent `INSERT` proceeded — and tripped the `UNIQUE` on `espn_event_id`. Market-data ingestion stalled during active games.
+
+Three local fixes were initially proposed:
+
+1. Change the `ON CONFLICT` target to cover the drift case.
+2. Add a pre-flight `SELECT` to de-duplicate before `INSERT`.
+3. Catch-and-ignore the `UniqueViolation` at the caller.
+
+The user's reframe dissolved all three: **"External keys are NOT unique; design for that."** The `UNIQUE` itself was the bug. The crash was the correct failure mode of a wrong schema — the schema asserted a property it cannot enforce, and the vendor legitimately violated it. **Option D** emerged: demote the `UNIQUE` to a non-unique index (retain lookup performance, drop the uniqueness assertion) and let the business-key `ON CONFLICT` handle legitimate upsert cases. Shipped as migration 0066 (PR #938).
+
+**Why this needs an ADR, not just a fix:** the same misclassification pattern is likely present on other external-id columns across the schema (#937 tracks the cross-table audit). Without a codified decision, each site gets re-argued; with one, the rule becomes a grep-able policy.
+
+### Decision: Adopt the three-tier identity model
+
+Every identifier column in the Precog schema belongs to exactly one of three tiers, and each tier has a fixed uniqueness contract:
+
+| Tier | Source of the value | Uniqueness contract | Representative columns |
+|---|---|---|---|
+| **1 — Internal PK** | `SERIAL` / `GENERATED` inside this database | **100% unique by definition** | `games.id`, `edges.id`, `markets.id`, `positions.id` |
+| **2 — Internal business key** | Composed inside this system from trusted internal facts | **Case-by-case — may or may not be UNIQUE; decide per column with explicit rationale** | `games.game_key` (`GAM-{id}`), `(sport, game_date, home_team_id, away_team_id)` composite matchup, `positions.position_key` (`POS-{id}`) |
+| **3 — External key** | Sourced from a platform/API we do not control | **ASSUMED NOT UNIQUE.** A Tier-3 UNIQUE is permitted ONLY against an immutable vendor contract guaranteeing uniqueness across the table's scope — documented in the migration | `games.espn_event_id`, `markets.kalshi_ticker`, `events.polymarket_condition_id`, `historical_games.cbbd_game_id` |
+
+**Four operational consequences:**
+
+1. **No `UNIQUE` on Tier-3 columns** (single or composite). Pre-existing Tier-3 UNIQUEs are migration targets for demotion.
+2. **Tier-3 columns may carry non-unique indexes** for lookup performance. Partial indexes are often correct (e.g., `WHERE espn_event_id IS NOT NULL` for tables mixing API-sourced rows with historical imports that intentionally leave the column NULL).
+3. **`ON CONFLICT` clauses must target Tier 1 (PK) or Tier 2 (business key)** — never a Tier-3 column.
+4. **Pollers ingesting Tier-3 data must tolerate duplicate external keys.** The correct failure mode for vendor drift is "retain data as a new row; surface the anomaly via data-quality monitoring" — not "crash on ingest."
+
+The tier is recorded in the migration docstring that creates or demotes the column/constraint, so future readers see the classification at the site of the decision (see `0066_demote_games_espn_event_unique.py` docstring as the template).
+
+### Alternatives Considered
+
+1. **"External keys are mostly unique — guard with `try/except` and pre-flight `SELECT`" (rejected).** This is an application-layer workaround for a schema-layer misclassification. It scatters the tolerance logic across every consumer, reopens race-condition surface (lookup-then-insert is not atomic), and depends on every future caller remembering the pattern. The correct location for the tolerance is the schema: demote the UNIQUE and let the business-key `ON CONFLICT` do the work atomically.
+
+2. **"Change `ON CONFLICT` to cover the drift cases" (rejected).** The poller would need to detect which drift case it's in (team-code change? season change? league overlap?) and choose the appropriate `ON CONFLICT` target per case. This couples the ingest path to every shape of vendor drift we've observed so far — and, by construction, will miss the drift shapes we haven't observed yet. The three-tier model generalizes: *any* Tier-3 drift is tolerated without per-case code.
+
+3. **"Accept the crash as legitimate — something is wrong if external IDs repeat" (rejected).** Treats vendor drift as our operational problem, which inverts the causal chain. Vendors routinely re-use, re-assign, and drift identifiers; our schema must not escalate that into a production-ingest stall. Crash-on-ingest is the wrong failure mode for every production-relevant drift scenario observed to date.
+
+4. **Option D — demote Tier-3 UNIQUEs, use Tier-1/2 for `ON CONFLICT`, let pollers retain data silently (accepted).** Shipped as migration 0066 for the `games.espn_event_id` instance. Generalized here as the policy for the rest of the schema.
+
+### Consequences
+
+**Positive:**
+
+- **Strictly better data capture.** Pre-fix behavior silently lost `game_states` SCD Type 2 rows whenever ESPN drift triggered the `ON CONFLICT` miss + `UniqueViolation` cascade. Post-fix behavior retains the data — the cost of a schema-integrity crash is borne by upstream drift, not by market-data ingestion during active games.
+- **Grep-able policy surface.** Columns suffixed `_id` where the prefix is a vendor name (`espn_`, `kalshi_`, `polymarket_`, `cbbd_`) are Tier 3; columns suffixed `_key` are Tier 2 (per ADR-116 Rule 2); columns named `id` are Tier 1. The ADR-116 naming convention becomes the visible manifestation of the three-tier taxonomy.
+- **Embeds the correct failure mode.** Upstream vendor drift is tolerated by default; silent data loss is replaced by silent retention + monitorable anomalies.
+
+**Trade-offs:**
+
+- **Requires #937 cross-table audit** to find and demote pre-existing Tier-3 UNIQUEs across the schema. The audit is not in scope for this ADR; the ADR lands first so #937 can cite it.
+- **Requires poller discipline:** ingest paths must not catch-and-ignore `UniqueViolation` as a proxy tolerance. If a constraint still fires, either the tier is mis-classified or the `ON CONFLICT` target is wrong — fix one of those, don't paper over it.
+- **Accepts duplicate-external-key detection as a data-quality concern.** If two distinct internal rows share an `espn_event_id`, that's a legitimate anomaly worth surfacing via a monitor — but it is no longer a crash-on-write concern. Session 67 Ripley follow-ups (#940-#948) track observability hooks for this class.
+
+**Durable design principle (not just a schema rule):** *Honor the classification — don't soften it to match current effort.* This was user direction in the same session ("strong enforcement over tier-weakening," in the `SKIP_TEST_TYPE_AUDIT=1` context). Here it manifests as: don't re-tag an external column as "mostly unique" to keep the UNIQUE; demote it and build the tolerance in. The decision shape generalizes.
+
+### Implementation
+
+- **Migration 0066** (shipped PR #938, session 67): demote `idx_games_espn_event` from partial `UNIQUE` → non-unique partial index. Docstring records `espn_event_id` as Tier 3 and embeds the Epic #935 cross-reference.
+- **Pattern 79** (DEVELOPMENT_PATTERNS_V1.34) — operational how-to companion to this ADR. Includes the wrong/right code examples, the 5-step pre-migration decision checklist, and the Tier-3 UNIQUE exception rule (requires documented vendor contract).
+- **Cross-table audit (#937)** — blocked on this ADR landing. Will systematically enumerate every `UNIQUE` / composite UNIQUE / `ON CONFLICT` in the schema and classify each component column by tier. Any Tier-3 UNIQUE not backed by a documented vendor contract becomes a demotion-migration candidate.
+
+### Cross-References
+
+- **Pattern 79** (`DEVELOPMENT_PATTERNS_V1.34.md`): operational how-to — the decision checklist, wrong/right examples, the Tier-3 UNIQUE exception rule
+- **ADR-116:** ODS Schema Conventions — the `_key` / external-`_id` naming convention that makes Tier 2 vs Tier 3 grep-able
+- **ADR-089:** Dual-Key Schema Pattern — foundational (two-layer surrogate + business key); this ADR extends to a three-layer taxonomy by separating internal business keys from external keys
+- **Migration 0066:** `src/precog/database/alembic/versions/0066_demote_games_espn_event_unique.py` — the canonical Option D implementation; docstring embeds the three-tier framing
+- **PR #938:** session-67 Tier 2 full pipeline (Holden design → Samwise build → Glokta + Brawne review → Ripley sentinel) that shipped migration 0066
+- **Issue #933:** `UniqueViolation` incident that surfaced the tier-conflation bug (resolved by migration 0066)
+- **Issue #935 (Epic):** Identity Semantics Audit & Hardening — the multi-session umbrella; Phase 1 = #933 fix, Phase 2 = this ADR, Phase 3 = #937 cross-table sweep
+- **Issue #937:** cross-table external-key UNIQUE audit (blocked on this ADR landing)
+- **Session 67:** Design-review origin — the user reframing ("external keys are NOT unique; design for that") that collapsed the three local-fix options and introduced Option D
+
+**END OF ARCHITECTURE DECISIONS V2.36**
