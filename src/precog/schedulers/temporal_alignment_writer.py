@@ -101,11 +101,13 @@ _UNALIGNED_QUERY = """
     WHERE e.game_id IS NOT NULL
       -- Idiomatic parameterized interval: pass the seconds count as a
       -- plain integer parameter and let PostgreSQL multiply. Prior
-      -- versions used INTERVAL '%s seconds' which embedded the parameter
+      -- versions used INTERVAL '%%s seconds' which embedded the parameter
       -- inside a string literal -- safe while lookback_seconds was
       -- int-typed, but brittle if the type were ever loosened and
       -- unconventional psycopg2 usage (parameters should be values, not
-      -- SQL fragments).
+      -- SQL fragments). NOTE: %%s in this comment is escaped (psycopg2
+      -- parses the %% format-string before PostgreSQL sees the SQL, and
+      -- treats %%s inside SQL comments as placeholders unless doubled).
       AND ms.row_start_ts > NOW() - (%s * INTERVAL '1 second')
       AND NOT EXISTS (
           SELECT 1 FROM temporal_alignment ta
