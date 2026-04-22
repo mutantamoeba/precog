@@ -331,7 +331,7 @@ precog/
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
   2. `MASTER_REQUIREMENTS_V2.25.md` - This document (requirements through Phase 10)
   3. `MASTER_INDEX_V2.53.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.35.md` - All 112 ADRs with design rationale (Phase 0-4.5)
+  4. `ARCHITECTURE_DECISIONS_V2.36.md` - All ADRs with design rationale (Phase 0-4.5, ADR-117 adds three-tier identity model)
   5. `REQUIREMENT_INDEX_V1.17.md` - Systematic requirement catalog
   6. `ADR_INDEX_V1.25.md` - Architecture decision index
   7. `TESTING_STRATEGY_V3.9.md` - Test cases, coverage requirements, test isolation patterns

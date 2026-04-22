@@ -11228,7 +11228,7 @@ At code write time, same principle:
 
 Pattern 73 itself is a rule about rules. If Pattern 73's guidance is restated in multiple locations (e.g., CLAUDE.md Critical Pattern #8, this guide's Pattern 73, `feedback_pattern_73_recursive_application.md`, and every session ACTUAL that cites it) without canonical-plus-pointer structure, **those copies will drift** — and the drift will be especially damaging because the rule about preventing drift is itself drifting.
 
-The practical consequence: this guide (V1.33) is the canonical home for Pattern 73's mechanics. CLAUDE.md Section 8 is a short invocation + pointer here. Feedback memories are pointers. Session ACTUALs cite the canonical anchor rather than restating the rule.
+The practical consequence: this guide (V1.34) is the canonical home for Pattern 73's mechanics. CLAUDE.md Section 8 is a short invocation + pointer here. Feedback memories are pointers. Session ACTUALs cite the canonical anchor rather than restating the rule.
 
 #### When to flag as an issue
 
@@ -11685,23 +11685,9 @@ Session 67's #933 was the canonical instance. The ESPN game-state poller crashed
 
 ### The Pattern / Rule
 
-Classify every identifier column before constraining it:
+**Canonical definitions live in [ADR-117 § Decision](../foundation/ARCHITECTURE_DECISIONS_V2.36.md)** — the tier table (Tier 1 internal PK, Tier 2 internal business key, Tier 3 external key) and the four operational consequences (no `UNIQUE` on Tier 3; non-unique indexes for Tier-3 lookup performance; `ON CONFLICT` targets must be Tier 1 or Tier 2; pollers tolerate Tier-3 duplicates). Per Pattern 73, this Pattern does not restate the tier definitions or the four rules — it codifies *how to apply them*: the decision checklist, wrong/right examples, exceptions, and Tier-2 nuances below.
 
-| Tier | What | Uniqueness contract | Examples |
-|---|---|---|---|
-| **1 — Internal PK** | Surrogate integer ID assigned by this DB | **100% unique by definition** | `games.id`, `edges.id`, `markets.id` |
-| **2 — Internal business key** | Stable identifier we compose inside this system from trusted source facts | **Case-by-case — evaluate before constraining** | `(sport, game_date, home_team_id, away_team_id)` composite; `game_key = 'GAM-{id}'`; `MKT-{id}`, `POS-{id}` |
-| **3 — External key** | Identifier sourced from a platform/API we don't control | **ASSUMED NOT UNIQUE** until proven otherwise by immutable vendor contract (rare) | `espn_event_id`, `kalshi_ticker`, `polymarket_condition_id`, `cbbd_game_id` |
-
-**Four operational rules follow:**
-
-1. **Tier-3 columns get NO `UNIQUE` constraints.** No partial UNIQUE. No single-column UNIQUE. No composite UNIQUE where any component is a Tier-3 column. The schema cannot assert a property it can't enforce — and vendors routinely re-use, re-assign, or drift identifiers without warning.
-
-2. **Tier-3 columns SHOULD get non-unique indexes** for lookup performance. Partial indexes (`WHERE <col> IS NOT NULL`) are often correct when historical imports intentionally leave the column NULL (e.g., FiveThirtyEight / Kaggle data without ESPN IDs).
-
-3. **`ON CONFLICT` targets must be Tier 1 or Tier 2** — never Tier 3. The conflict-resolution strategy embeds a uniqueness assumption; only tiers that support the assumption are safe.
-
-4. **Pollers that ingest Tier-3 data must tolerate duplicates** — silently retain data on upstream drift. A `UniqueViolation` crash on ingestion is the wrong failure mode for every production-relevant drift scenario (cross-season, cross-league, mid-season code shifts).
+Representative Tier-3 examples from ADR-117: `espn_event_id`, `kalshi_ticker`, `polymarket_condition_id`, `cbbd_game_id`. **Representative — not exhaustive.** See **#937** for the full cross-table external-id inventory and the migration plan that removes the remaining Tier-3 `UNIQUE` constraints across `markets`, `events`, `series`, `market_trades`, `orders`, `external_team_codes`, `account_balance`, and `game_states`.
 
 ### Wrong
 
