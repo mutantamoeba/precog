@@ -635,6 +635,11 @@ def _flush_games_batch(batch: list[tuple[Any, ...]]) -> int:
         # behind by any crashed prior transaction (defensive; should never
         # happen inside a single transaction, but keeps the write surface
         # minimal and auditable).
+        #
+        # NOTE (#933 / Epic #935): batch relies on business-key ON CONFLICT. The
+        # ``external_game_id``/``espn_event_id`` columns are external keys — no
+        # uniqueness enforced post-0066. Historical imports may legitimately write
+        # NULL espn_event_id (non-ESPN provenance).
         query = """
             INSERT INTO games (
                 sport, season, game_date, home_team_code, away_team_code,
