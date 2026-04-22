@@ -94,6 +94,34 @@ ASCII output for console (Windows cp1252). Explicit UTF-8 for file I/O.
 ### 6. Immutable Versioning
 Strategies and models are immutable once created. Create new version, don't modify existing.
 
+### 8. Single Source of Truth (Pattern 73) — canonical rule + pointers, never duplicates
+
+**The rule:** Any rule, value, formula, or logic that appears in more than one location MUST have ONE canonical definition plus pointers/imports from the others. **Never copy the rule text, formula, or logic.** Applies identically to docs and code.
+
+```python
+# CORRECT (code) — canonical constant, imports from elsewhere
+# db/constants.py
+VALID_EDGE_OUTCOMES = ("yes", "no", "void", "unresolved")
+
+# crud_analytics.py
+from precog.database.constants import VALID_EDGE_OUTCOMES
+if actual_outcome not in VALID_EDGE_OUTCOMES: ...
+
+# CORRECT (docs) — canonical rule + pointer
+# protocols.md § Step 7a has the full claude-review parse rule
+# Session-start Step 5a: "apply the canonical parse rule from Step 7a"
+
+# WRONG — duplicated rule text / logic
+# crud_analytics.py
+if actual_outcome not in ("yes", "no", "void", "unresolved"): ...  # copy
+# crud_other.py
+if actual_outcome not in ("yes", "no", "void", "unresolved"): ...  # copy drifts eventually
+```
+
+**Why this is critical:** duplicated rules silently drift when one copy is updated and others aren't. Session 66 found three Pattern 73 violations in one session (claude-review parse rule, slotting checklist, Pipeline Completeness Gate) — all had the same shape: *rule exists somewhere, invocation point doesn't reference it, drift goes undetected until someone asks the right question.* See Pattern 73 in `docs/guides/DEVELOPMENT_PATTERNS_V*.md`.
+
+**Before copying any rule/logic to a second location: either (a) extract to a shared helper/constant and import, or (b) write a pointer that references the canonical location.** Audit triggers S81 + #929 check for compliance periodically.
+
 ### 7. External API Test Mocking — VCR OR live, NEVER hand-written
 
 Tests that exercise code calling **Kalshi, ESPN, or any HTTP client** use one of two approaches — **never** hand-written `MagicMock` response dicts:
@@ -120,7 +148,7 @@ mock_client.get_markets.return_value = {
 
 **Why:** Hand-written mocks freeze a guessed shape that diverges from the real API over time. VCR cassettes (`tests/cassettes/`) record real responses once and replay them — they catch regressions in our code AND surface format drift when the cassette is re-recorded. Live contract tests catch drift in real-time but are gated to nightly runs. See `tests/integration/api_connectors/test_kalshi_client_vcr.py` for the canonical Pattern 22 reference implementation. VCR cassettes live in `tests/cassettes/` (configured per-test via `@pytest.fixture(scope="module")` in each VCR test file, not in a shared conftest).
 
-**Umbrella issue #764** tracks the retrofit of 8 files that historically violated this rule and had been reporting fictional green CI for months. **Trigger S73** (a PM-side agent review that fires Joe Chip on PRs touching external API tests to catch hand-written mocks) enforces this rule on new PRs; **Pattern 22** in `docs/guides/DEVELOPMENT_PATTERNS_V1.32.md` is the authoritative reference.
+**Umbrella issue #764** tracks the retrofit of 8 files that historically violated this rule and had been reporting fictional green CI for months. **Trigger S73** (a PM-side agent review that fires Joe Chip on PRs touching external API tests to catch hand-written mocks) enforces this rule on new PRs; **Pattern 22** in `docs/guides/DEVELOPMENT_PATTERNS_V1.33.md` is the authoritative reference.
 
 ---
 
@@ -162,7 +190,7 @@ precog-repo/
 - `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.1.md` - Phase roadmap (Era 2: current)
 
 **Implementation:**
-- `docs/guides/DEVELOPMENT_PATTERNS_V1.32.md` - 71 development patterns with examples
+- `docs/guides/DEVELOPMENT_PATTERNS_V1.33.md` - 77 development patterns with examples
 - `docs/guides/CONFIGURATION_GUIDE_V3.1.md` - YAML config reference
 - `docs/guides/KALSHI_CLIENT_USER_GUIDE_V1.0.md` - Kalshi API usage
 - `docs/guides/STRATEGY_MANAGER_USER_GUIDE_V1.1.md`
