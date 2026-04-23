@@ -8801,7 +8801,7 @@ last_trading_price = history[-2]['yes_price']  # Second-to-last row = last pre-s
 
 ### Foundation Documents
 - `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` - All requirements
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.36.md` - All ADRs (includes ADR-002, ADR-018-020, ADR-048, ADR-053-054, ADR-074)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.37.md` - All ADRs (includes ADR-002, ADR-018-020, ADR-048, ADR-053-054, ADR-074)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.8.md` - Phase planning
 
 ### Implementation Guides

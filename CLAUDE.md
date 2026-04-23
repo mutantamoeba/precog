@@ -148,7 +148,7 @@ mock_client.get_markets.return_value = {
 
 **Why:** Hand-written mocks freeze a guessed shape that diverges from the real API over time. VCR cassettes (`tests/cassettes/`) record real responses once and replay them — they catch regressions in our code AND surface format drift when the cassette is re-recorded. Live contract tests catch drift in real-time but are gated to nightly runs. See `tests/integration/api_connectors/test_kalshi_client_vcr.py` for the canonical Pattern 22 reference implementation. VCR cassettes live in `tests/cassettes/` (configured per-test via `@pytest.fixture(scope="module")` in each VCR test file, not in a shared conftest).
 
-**Umbrella issue #764** tracks the retrofit of 8 files that historically violated this rule and had been reporting fictional green CI for months. **Trigger S73** (a PM-side agent review that fires Joe Chip on PRs touching external API tests to catch hand-written mocks) enforces this rule on new PRs; **Pattern 22** in `docs/guides/DEVELOPMENT_PATTERNS_V1.34.md` is the authoritative reference.
+**Umbrella issue #764** tracks the retrofit of 8 files that historically violated this rule and had been reporting fictional green CI for months. **Trigger S73** (a PM-side agent review that fires Joe Chip on PRs touching external API tests to catch hand-written mocks) enforces this rule on new PRs; **Pattern 22** in `docs/guides/DEVELOPMENT_PATTERNS_V1.35.md` is the authoritative reference.
 
 ---
 
@@ -186,11 +186,11 @@ precog-repo/
 
 **Architecture & Planning:**
 - `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` - All requirements
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.36.md` - 114 ADRs (count may drift from document head — the V2.x version bumps track document revisions, not ADR count)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.37.md` - 116+ ADRs including ADR-118 + ADR-119 (Canonical Layer Foundation — Epic #972) (count may drift from document head — the V2.x version bumps track document revisions, not ADR count)
 - `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.1.md` - Phase roadmap (Era 2: current)
 
 **Implementation:**
-- `docs/guides/DEVELOPMENT_PATTERNS_V1.34.md` - 79 development patterns with examples
+- `docs/guides/DEVELOPMENT_PATTERNS_V1.35.md` - 80 development patterns with examples (V1.35 adds Pattern 80 SCD-2 Version-Stable Surrogate Identifiers)
 - `docs/guides/CONFIGURATION_GUIDE_V3.1.md` - YAML config reference
 - `docs/guides/KALSHI_CLIENT_USER_GUIDE_V1.0.md` - Kalshi API usage
 - `docs/guides/STRATEGY_MANAGER_USER_GUIDE_V1.1.md`

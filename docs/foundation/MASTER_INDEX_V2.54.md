@@ -1,9 +1,15 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.53
-**Last Updated:** 2025-12-26
+**Version:** 2.54
+**Last Updated:** 2026-04-23
 **Status:** ✅ Current
+**Changes in v2.54:**
+- **CANONICAL LAYER FOUNDATION DOCS PROMOTION** (session 71, Cohort 9 of Epic #972, closes #973):
+  - ARCHITECTURE_DECISIONS V2.36 → V2.37: Added ADR-118 (Canonical Identity, Matching Infrastructure, Event-State Layer) and ADR-119 (Business-Key Cleanup + Weather Phase 1 Foundation Validation); ADR-117 tier-classification amended (`series.series_key` Tier 2 → Tier 3)
+  - ADR_INDEX V1.26 → V1.27: Added ADR-118/119 entries in new Phase B.5 section (Canonical Layer Foundation); 103 → 105 catalogued; highest ADR 117 → 119
+  - DEVELOPMENT_PATTERNS V1.34 → V1.35: Added Pattern 80 (SCD-2 Version-Stable Surrogate Identifiers) — operationalizes ADR-119 Part 1 with `row_current_ind` lint gate distinguishing legitimate SCD-2 surrogate keys from pure formatted-PK decoration
+  - Deleted draft artifacts: `ADR_118_DRAFT_canonical_identity.md`, `ADR_119_DRAFT_business_key_and_weather.md`
 **Changes in v2.53:**
 - **NEIL PAINE DATA SOURCE MIGRATION**: Updated all FiveThirtyEight references to Neil Paine GitHub archives
 - ARCHITECTURE_DECISIONS V2.32 → V2.33: Added ADR-110 (Neil Paine Data Sources), ADR-111 (Sport-Specific Mappings), ADR-112 (team_season_records VIEW)
@@ -448,10 +454,10 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.25.md** | ✅ | v2.25 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.25** (added REQ-ELO-008 for Elo Validation; Neil Paine data sources; 137 total requirements) |
-| **MASTER_INDEX_V2.53.md** | ✅ | v2.53 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.53** (Neil Paine data migration; document version updates: MASTER_REQUIREMENTS V2.25, DEVELOPMENT_PHASES V1.15, REQUIREMENT_INDEX V1.17, ARCHITECTURE_DECISIONS V2.33) |
-| **ARCHITECTURE_DECISIONS_V2.36.md** | ✅ | v2.36 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers - **UPDATED V2.36** (ADR-117: Three-Tier Identity Model for Schema Design; supersedes V2.35) |
+| **MASTER_INDEX_V2.54.md** | ✅ | v2.54 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.54** (Cohort 9 session 71: ADR-118+119 canonical layer docs integration, Pattern 80 promotion; document version updates: ARCHITECTURE_DECISIONS V2.37, ADR_INDEX V1.27, DEVELOPMENT_PATTERNS V1.35; closes #973) |
+| **ARCHITECTURE_DECISIONS_V2.37.md** | ✅ | v2.37 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers - **UPDATED V2.37** (ADR-118 Canonical Identity, Matching Infrastructure, and Event-State Layer — Epic #972; ADR-119 Business-Key Cleanup + Weather Phase 1; ADR-117 amendment reclassifies `series.series_key` Tier 2 → Tier 3; supersedes V2.36) |
 | **REQUIREMENT_INDEX_V1.17.md** | ✅ | v1.17 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 137 requirements - **UPDATED V1.17** (added REQ-ELO-008 for Elo Validation; 136 → 137 total requirements) |
-| **ADR_INDEX_V1.26.md** | ✅ | v1.26 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of architecture decisions - **UPDATED V1.26** (added ADR-110 through ADR-117; Three-Tier Identity Model from Epic #935 Phase 2; 3 stale TBD placeholders overwritten; 98 → 103 catalogued, closes #959) |
+| **ADR_INDEX_V1.27.md** | ✅ | v1.27 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of architecture decisions - **UPDATED V1.27** (added ADR-118 + ADR-119 in new Phase B.5 section Canonical Layer Foundation; 103 → 105 catalogued; highest ADR 117 → 119; closes #973) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.15.md** | ✅ | v1.15 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **UPDATED V1.15** (Neil Paine data migration, NHL Elo validation complete, Phase 2C progress) |
 | **TESTING_STRATEGY_V3.9.md** | ✅ | v3.8 | `/docs/foundation/` | 2 | Phases 1-10 | 🔴 Critical | **UPDATED V3.8** - Property Tests with DB Access pattern: `@pytest.mark.database` for DB-dependent property tests (~25 tests) enabling parallel execution with unit tests (~43s savings); Mypy incremental caching (~27s savings); V3.7: Three-Layer E2E Testing Gap Pattern; V3.6: Fast Chaos Tests; V3.5: Test Failure Response; V3.4: CI-Safe Stress Testing; V3.3: Test Isolation; V3.2: All 8 test types MANDATORY |
@@ -565,7 +571,7 @@ Phase-specific implementation guides created in Phase 0.5.
 | **ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 6-9 | Phases 6-9 | 🔴 Critical | **NEW** - End-to-end analytics architecture: 4-layer design (Collection→Storage→Aggregation→Presentation), dual processing (real-time <200ms + batch), 6 materialized views |
 | **AB_TESTING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 8 | Phase 8 | 🟡 High | **NEW** - Statistical methodology for strategy/model evaluation: Welch's t-test, Chi-square, sample size calculation (64 trades/variant), Bayesian analysis, experiment lifecycle |
 | **DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 9 | Phase 9 | 🟡 High | **NEW** - React 18 + Next.js 14 trading dashboard: component library (MetricCard, PositionCard), Socket.IO real-time (<200ms), SWR data fetching, Plotly.js charts, deployment |
-| **DEVELOPMENT_PATTERNS_V1.27.md** | ✅ | v1.22 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.22** - Added Pattern 34 (Historical Data Caching - unified cache paths, data source adapters); 34 total patterns |
+| **DEVELOPMENT_PATTERNS_V1.35.md** | ✅ | v1.35 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.35** (session 71, closes #973) - Added Pattern 80 (SCD-2 Version-Stable Surrogate Identifiers) — `row_current_ind` lint gate distinguishes legitimate SCD-2 surrogate keys (`position_key`, `game_state_key`, `edge_key`) from pure formatted-PK decoration; operationalizes ADR-119 Part 1; 80 total patterns. Prior V1.34 (session 67): added Pattern 79 (Three-Tier Identity Model) from Epic #935. V1.22 entry was stale since session 42+. |
 | **SENTRY_INTEGRATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 2 | Phase 2 | 🟡 High | **NEW** - 3-layer hybrid observability architecture: logger.py (audit trail) + Sentry (real-time) + alerts table (permanent record); implementation guide with code examples, testing procedures, troubleshooting |
 | **MANAGER_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Comprehensive architecture guide for 4 core managers (Model, Strategy, Position, Config); database schemas with field-by-field explanations; status lifecycle diagrams; immutable vs SCD Type 2 versioning patterns; design principles (pure psycopg2, decimal precision, two-level configs); ~900 lines; addresses user request to document manager architecture summary |
 | **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
