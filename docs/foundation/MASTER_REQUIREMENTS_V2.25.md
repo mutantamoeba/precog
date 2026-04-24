@@ -330,10 +330,10 @@ precog/
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
   2. `MASTER_REQUIREMENTS_V2.25.md` - This document (requirements through Phase 10)
-  3. `MASTER_INDEX_V2.53.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.36.md` - All ADRs with design rationale (Phase 0-4.5, ADR-117 adds three-tier identity model)
+  3. `MASTER_INDEX_V2.54.md` - Complete document inventory
+  4. `ARCHITECTURE_DECISIONS_V2.37.md` - All ADRs with design rationale (Phase 0-4.5, ADR-118 Canonical Identity/Matching/Event-State Layer + ADR-119 Business-Key Cleanup + Weather Phase 1; ADR-117 amended for series.series_key Tier-3 reclassification)
   5. `REQUIREMENT_INDEX_V1.17.md` - Systematic requirement catalog
-  6. `ADR_INDEX_V1.26.md` - Architecture decision index (ADR-110 through ADR-117 added v1.26; includes Three-Tier Identity Model)
+  6. `ADR_INDEX_V1.27.md` - Architecture decision index (ADR-118 + ADR-119 added v1.27 in new Phase B.5 Canonical Layer Foundation section; 103 → 105 catalogued; highest ADR 117 → 119)
   7. `TESTING_STRATEGY_V3.9.md` - Test cases, coverage requirements, test isolation patterns
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
