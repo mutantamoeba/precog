@@ -185,9 +185,9 @@ precog-repo/
 ## Key Documents
 
 **Architecture & Planning:**
-- `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` - All requirements
+- `docs/foundation/MASTER_REQUIREMENTS_V2.26.md` - All requirements
 - `docs/foundation/ARCHITECTURE_DECISIONS_V2.37.md` - 116+ ADRs including ADR-118 + ADR-119 (Canonical Layer Foundation — Epic #972) (count may drift from document head — the V2.x version bumps track document revisions, not ADR count)
-- `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.1.md` - Phase roadmap (Era 2: current)
+- `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.2.md` - Phase roadmap (Era 2: current)
 
 **Implementation:**
 - `docs/guides/DEVELOPMENT_PATTERNS_V1.35.md` - 80 development patterns with examples (V1.35 adds Pattern 80 SCD-2 Version-Stable Surrogate Identifiers)

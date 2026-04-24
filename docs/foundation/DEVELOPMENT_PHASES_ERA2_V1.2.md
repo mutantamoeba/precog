@@ -1,8 +1,9 @@
-# Era 2: Development Phases (V1.1)
+# Era 2: Development Phases (V1.2)
 
 **Created:** 2026-04-05 (Session 41)
-**Last Updated:** 2026-04-06 (Session 42c — Phase 3/4 reframe + Claude Review fixes)
-**Replaces:** DEVELOPMENT_PHASES_V1.15.md (archived, Era 1 phases 0-1.5)
+**Last Updated:** 2026-04-23 (Session 71 — Phase 5 LLM/MCP Integration section added via Task 9)
+**Replaces:** DEVELOPMENT_PHASES_ERA2_V1.1.md (superseded-and-deleted per R098 convention)
+**Also replaces:** DEVELOPMENT_PHASES_V1.15.md (archived, Era 1 phases 0-1.5)
 **Freshness:** Update at each phase gate and after scope changes.
 
 ---
@@ -11,7 +12,7 @@
 
 **Era 1** (Phases 0-1.5) established the data collection foundation: fetch, validate, and store market + game data from Kalshi and ESPN across 4 sports (NFL, NCAAF, NBA, NHL).
 
-**Era 2** (Phases 2-5) builds the trading platform — from full manual trading through ML-driven autonomous execution.
+**Era 2** (Phases 2-5) builds the trading platform — from full manual trading through ML-driven autonomous execution, with LLM/MCP integration in Phase 5 via a shared service layer.
 
 ### Phase Summary
 
@@ -20,7 +21,7 @@
 | **2** | Full Manual Trading Platform | 38 | `phase-2` |
 | **3** | Operations, Expansion & Signal Sources | 20 + 6 TBD | `phase-3` |
 | **4** | Probability Estimation (ML + Ensembles) | 7 + 9 TBD | `phase-4` |
-| **5** | Strategy & Autonomous Trading | 16 | `phase-5` |
+| **5** | Strategy, Autonomous Trading, & LLM/MCP Integration | 16 + 8 (Epic #990) | `phase-5` |
 
 > **TBD items** are signal source / engine work items not yet ticketed — they'll be filed during Phase 3 entry once Strategy Research Epic #602 produces requirements. Defined counts reflect issues already filed in GitHub.
 
@@ -30,7 +31,7 @@
 Phase 1 (COMPLETE) ──> Phase 2 ──> Phase 3 ──────────> Phase 4 ──────────> Phase 5
   Data Collection        Trading     Operations          Probability          Strategy
                          + Web UI    + Expansion         Estimation           + Autonomous
-                                     + Signal Sources    (ML + Ensembles)
+                                     + Signal Sources    (ML + Ensembles)     + LLM/MCP
 ```
 
 ```
@@ -38,6 +39,17 @@ Phase 1 (COMPLETE) ──> Phase 2 ──> Phase 3 ─────────�
 Phase 3 Signal Sources ─┤                         ├──> Phase 4 Ensemble Engines
                         ├── Weather forecast APIs ─┤
                         └── Polymarket data ───────┘
+```
+
+```
+Phase 2 Service Foundation ──> Phase 5 Service Layer ──> Read-Only MCP
+                                       │                       │
+                                       ├──> Analytics MCP ─────┤
+                                       │                       │
+                                       └──> Trade-Placement ───┴──> MCP Deployment
+                                                                         │
+                                                          (conditional)  │
+                                                           OpenAI-Compat Adapter
 ```
 
 Each phase builds on the previous. Phase gates enforce entry/exit criteria.
@@ -248,14 +260,15 @@ Each phase builds on the previous. Phase gates enforce entry/exit criteria.
 
 ---
 
-## Phase 5: Strategy & Autonomous Trading
+## Phase 5: Strategy, Autonomous Trading, & LLM/MCP Integration
 
-**Goal:** Automated execution — strategies designed, backtested, paper-traded, and deployed with full safety infrastructure.
+**Goal:** Automated execution plus LLM-assisted operation — strategies designed, backtested, paper-traded, and deployed with full safety infrastructure, and a shared service layer that exposes market data, analytics, and (eventually) trade placement to LLM clients via MCP.
 
 ### Entry Criteria
 - Phase 4 complete
 - At least one validated model producing edge signals
 - Risk management framework reviewed (Scorpius + Armitage council)
+- FastAPI service foundation from Phase 2 available (web UI backend) — service layer extension piggybacks on this
 
 ### Exit Criteria
 - [ ] At least one strategy backtested, paper-traded, and live-traded
@@ -263,6 +276,12 @@ Each phase builds on the previous. Phase gates enforce entry/exit criteria.
 - [ ] Strategy performance dashboard operational
 - [ ] Kill switch + circuit breakers tested under autonomous operation
 - [ ] Strategy retirement criteria defined and automated
+- [ ] Service layer (FastAPI + shared Pydantic contracts) extracted; MCP + web UI both consume it
+- [ ] At least one MCP server (read-only) deployed and discoverable
+- [ ] Analytics MCP operational (backtesting, EV, calibration queries)
+- [ ] Trade-placement MCP operational on demo with full audit trail and rate-limit enforcement
+- [ ] MCP deployment pattern codified (stdio + SSE; process isolation; credential handoff)
+- [ ] Anthropic-MCP vs self-hosted-LLM decision ADR merged
 
 ### Scope
 
@@ -274,8 +293,34 @@ Each phase builds on the previous. Phase gates enforce entry/exit criteria.
 - #546 — Pre-game entry / in-game management strategy
 - #547 — NBA strong-favorite underpricing signal
 
-#### Infrastructure
+#### Infrastructure (Strategy side)
 - #497 — KalshiAuth PEM content for cloud deployment
+
+#### LLM / MCP Integration (NEW — Path B via shared service layer)
+
+**Path B commitment (session 69):** A shared FastAPI service layer with Pydantic contracts is consumed by MCP tools and web UI via the same backend routes. LLM actions ride on the same primitives as user actions — single audit trail, single validation layer, single rate-limit enforcement. Anthropic-MCP-vs-self-hosted-LLM decision is **deferred** until the service layer ships.
+
+- **Epic #990** — MCP/LLM Integration via Shared Service Layer (Path B)
+- **#982** — ADR-tracker: Service Layer Architecture (FastAPI + Pydantic contracts)
+- **#983** — ADR-tracker: Anthropic MCP vs Self-Hosted LLM (deferred; unblocked when service layer ships)
+- **#984** — Capability surface: Service Layer (**backbone — ships first**)
+- **#985** — Capability surface: Read-Only MCP (first MCP; reference pattern for the MCP-over-service-layer shape)
+- **#986** — Capability surface: Analytics MCP (backtesting, EV, calibration; read-heavy + computational)
+- **#987** — Capability surface: Trade-Placement MCP (state-mutating; blocked until Phase 2 trade execution stabilizes on demo; full audit trail + confirmation-token + rate-limit)
+- **#988** — Capability surface: MCP Deployment (stdio + SSE; process isolation; credential handoff)
+- **#989** — Capability surface: OpenAI-Compat Adapter (conditional on #983 decision)
+
+Sequence within Phase 5:
+1. Service Layer (#984) extracts from Phase 2 FastAPI foundation.
+2. Read-Only MCP (#985) ships as reference implementation.
+3. MCP Deployment (#988) codifies the pattern.
+4. Analytics MCP (#986) extends computationally.
+5. ADR-tracker #982 authored before or alongside the first service-layer PRs.
+6. After Phase 2 trade-execution demo soak: Trade-Placement MCP (#987).
+7. ADR-tracker #983 decision after service layer is stable in production.
+8. OpenAI-Compat Adapter (#989) conditional on #983 decision.
+
+Status: **Planning** (until Epic #990 gains traction in a session cohort).
 
 ---
 
@@ -290,6 +335,7 @@ These items are prerequisites for specific phases but are tracked separately:
 | FastAPI ADR | Phase 2 | Frontend technology decisions |
 | EnvironmentConfig polymarket_mode | Phase 3 | Multi-platform env configuration |
 | Strategy Development Lifecycle (SDL) | Phase 5 | Formal strategy pipeline |
+| Shared Pydantic Contracts module | Phase 5 | SSOT contract types consumed by service, MCP, web UI |
 
 ---
 
@@ -297,5 +343,6 @@ These items are prerequisites for specific phases but are tracked separately:
 
 | Version | Date | Session | Changes |
 |---------|------|---------|---------|
+| 1.2 | 2026-04-23 | 71 | Phase 5 LLM/MCP Integration section added (Task 9). References Epic #990 + 8 child issues (#982-#989). Path B service-layer architecture recorded. Anthropic-vs-self-hosted decision explicitly deferred. Shared Pydantic Contracts added to cross-phase architecture prerequisites. |
 | 1.1 | 2026-04-06 | 42c | Phase 3 expanded: signal sources (sportsbook odds, weather forecasts). Phase 4 reframed: "Probability Estimation" (ML + consensus + weather ensembles). Strategy Research epic #602 runs parallel. Claude Review fixes: issue counts, Elo gate visibility, ASCII alignment, "Informed by" convention, V1.0→V1.1 filename. |
 | 1.0 | 2026-04-05 | 41 | Initial Era 2 roadmap. 4 phases, 80 issues across phases. |
