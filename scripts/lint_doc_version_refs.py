@@ -4,7 +4,7 @@
 Blocks a commit that renames a versioned documentation file (pattern:
 ``_V<major>.<minor>.md``) while leaving references to the old filename
 elsewhere in the repo. The common failure this prevents: promoting
-``DEVELOPMENT_PATTERNS_V1.35.md`` to ``_V1.36.md`` while other guides,
+``DEVELOPMENT_PATTERNS_V1.36.md`` to ``_V1.37.md`` while other guides,
 CLAUDE.md, or cross-references still hardcode the old version suffix.
 
 Exit codes:
