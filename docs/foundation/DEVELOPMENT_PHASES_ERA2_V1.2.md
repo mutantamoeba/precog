@@ -309,6 +309,9 @@ Each phase builds on the previous. Phase gates enforce entry/exit criteria.
 - **#987** — Capability surface: Trade-Placement MCP (state-mutating; blocked until Phase 2 trade execution stabilizes on demo; full audit trail + confirmation-token + rate-limit)
 - **#988** — Capability surface: MCP Deployment (stdio + SSE; process isolation; credential handoff)
 - **#989** — Capability surface: OpenAI-Compat Adapter (conditional on #983 decision)
+- **#991** — Capability surface: Observability & Tracing Infrastructure (**P1 — ships before #987 enters demo soak**; per REQ-LLM-011)
+- **#992** — Capability surface: Review Dashboard for LLM-Initiated Actions (surfaces REQ-LLM-009 audit trail to operators)
+- **#993** — Capability surface: Adversarial / Red-Team Test Harness for MCPs (**pre-live-trading gate**; proves safety guards engage under attack)
 
 Sequence within Phase 5:
 1. Service Layer (#984) extracts from Phase 2 FastAPI foundation.
@@ -316,9 +319,12 @@ Sequence within Phase 5:
 3. MCP Deployment (#988) codifies the pattern.
 4. Analytics MCP (#986) extends computationally.
 5. ADR-tracker #982 authored before or alongside the first service-layer PRs.
-6. After Phase 2 trade-execution demo soak: Trade-Placement MCP (#987).
-7. ADR-tracker #983 decision after service layer is stable in production.
-8. OpenAI-Compat Adapter (#989) conditional on #983 decision.
+6. Observability & Tracing Infrastructure (#991) — **P1, must be in place before Trade-Placement MCP enters demo soak** so safety-guard regressions are visible in production (per REQ-LLM-011).
+7. After Phase 2 trade-execution demo soak: Trade-Placement MCP (#987).
+8. Review Dashboard for LLM Actions (#992) — alongside or immediately after #987 (audit trail operational UI).
+9. ADR-tracker #983 decision after service layer is stable in production.
+10. OpenAI-Compat Adapter (#989) conditional on #983 decision.
+11. Red-Team Test Harness (#993) — **pre-live-trading gate** — proves safety guards engage under adversarial prompts before any live-trading MCP ships.
 
 Status: **Planning** (until Epic #990 gains traction in a session cohort).
 
