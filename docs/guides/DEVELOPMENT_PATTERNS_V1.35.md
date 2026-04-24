@@ -8849,7 +8849,7 @@ last_trading_price = history[-2]['yes_price']  # Second-to-last row = last pre-s
 
 ### Foundation Documents
 - `docs/foundation/MASTER_REQUIREMENTS_V2.26.md` - All requirements
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.37.md` - All ADRs (includes ADR-002, ADR-018-020, ADR-048, ADR-053-054, ADR-074, ADR-117, ADR-118, ADR-119)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.38.md` - All ADRs (includes ADR-002, ADR-018-020, ADR-048, ADR-053-054, ADR-074, ADR-117, ADR-118, ADR-119)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.8.md` - Phase planning
 
 ### Implementation Guides
@@ -11691,7 +11691,7 @@ Session 67's #933 was the canonical instance. The ESPN game-state poller crashed
 
 ### The Pattern / Rule
 
-**Canonical definitions live in [ADR-117 § Decision](../foundation/ARCHITECTURE_DECISIONS_V2.37.md)** — the tier table (Tier 1 internal PK, Tier 2 internal business key, Tier 3 external key) and the four operational consequences (no `UNIQUE` on Tier 3; non-unique indexes for Tier-3 lookup performance; `ON CONFLICT` targets must be Tier 1 or Tier 2; pollers tolerate Tier-3 duplicates). Per Pattern 73, this Pattern does not restate the tier definitions or the four rules — it codifies *how to apply them*: the decision checklist, wrong/right examples, exceptions, and Tier-2 nuances below.
+**Canonical definitions live in [ADR-117 § Decision](../foundation/ARCHITECTURE_DECISIONS_V2.38.md)** — the tier table (Tier 1 internal PK, Tier 2 internal business key, Tier 3 external key) and the four operational consequences (no `UNIQUE` on Tier 3; non-unique indexes for Tier-3 lookup performance; `ON CONFLICT` targets must be Tier 1 or Tier 2; pollers tolerate Tier-3 duplicates). Per Pattern 73, this Pattern does not restate the tier definitions or the four rules — it codifies *how to apply them*: the decision checklist, wrong/right examples, exceptions, and Tier-2 nuances below.
 
 Representative Tier-3 examples from ADR-117: `espn_event_id`, `kalshi_ticker`, `polymarket_condition_id`, `cbbd_game_id`. **Representative — not exhaustive.** See **#937** for the full cross-table external-id inventory and the migration plan that removes the remaining Tier-3 `UNIQUE` constraints across `markets`, `events`, `series`, `market_trades`, `orders`, `external_team_codes`, `account_balance`, and `game_states`.
 
@@ -11805,7 +11805,7 @@ This was exactly the failure mode Isidore's Round 2A audit (session 70 Task 5) s
 
 ### The Pattern / Rule
 
-**Canonical definition lives in [ADR-119 Part 1](../foundation/ARCHITECTURE_DECISIONS_V2.37.md#part-1--business-key-cleanup)** — the per-column classification table and the "SCD-2 version-stable surrogate pattern (documented exception)" subsection are authoritative. Per Pattern 73, this pattern does not restate the per-column decisions — it codifies the *gate that distinguishes the two classes*:
+**Canonical definition lives in [ADR-119 Part 1](../foundation/ARCHITECTURE_DECISIONS_V2.38.md#part-1--business-key-cleanup)** — the per-column classification table and the "SCD-2 version-stable surrogate pattern (documented exception)" subsection are authoritative. Per Pattern 73, this pattern does not restate the per-column decisions — it codifies the *gate that distinguishes the two classes*:
 
 > **The `row_current_ind` gate.** Any automated lint or audit deciding whether a `{PREFIX}-{id}` business-key column is formatted-PK decoration (deletable) or a load-bearing SCD-2 version-stable surrogate (KEEP) MUST read the schema for the column's owning table. If the table has a `row_current_ind` column (the SCD-2 current-row marker), the `{PREFIX}-{id}` column is presumed load-bearing and survives the audit. If it does not, the column is presumed decoration and is a deletion candidate.
 

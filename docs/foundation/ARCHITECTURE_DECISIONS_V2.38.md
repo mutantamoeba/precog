@@ -1,9 +1,17 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.37
-**Last Updated:** April 23, 2026
+**Version:** 2.38
+**Last Updated:** April 24, 2026
 **Status:** ✅ Current
+**Changes in v2.38:**
+- **ADR-118 COHORT 1 AMENDMENT (Issue #996, session 72):** Encoded 8 user-adjudicated design decisions from the Holden + Galadriel 2-agent council-variant validation (session 71). Cohort 1 expands from 3 main tables → **7 tables across 2 migrations (0067 + 0068)**.
+  - **4 new lookup tables** replace proposed CHECK constraints (Pattern 81 candidate — "Open canonical enum → lookup table over CHECK"): `canonical_event_domains`, `canonical_event_types` (composite `(domain_id, event_type)` UNIQUE), `canonical_entity_kinds`, `canonical_participant_roles` (composite `(domain_id, role)` UNIQUE with nullable `domain_id` for cross-domain roles).
+  - **Typed back-reference:** `canonical_entity.ref_team_id INTEGER NULL REFERENCES teams(team_id)` with CONSTRAINT TRIGGER resolving Level A ↔ Level B (platform-dim `teams` ↔ canonical-identity `canonical_entity`) relationship. Cheap now (1 nullable col + 1 trigger); expensive later (backfill). PostgreSQL CHECK cannot contain subqueries, so the integrity rule ("team-kind rows MUST carry ref_team_id") is enforced via a deferrable-immediate CONSTRAINT TRIGGER. This is the **canonical pattern template** for Cohort 2+ polymorphic typed back-refs (ref_fighter_id, ref_candidate_id, ref_storm_id, etc.) — each gets its own trigger rather than a brittle literal-ID CHECK. Unlocks clean Pydantic sum-type projection for MCP #985.
+  - **`canonical_event_participants.sequence_number INTEGER NOT NULL`** — replaces `UNIQUE (canonical_event_id, role)` with `UNIQUE (canonical_event_id, role_id, sequence_number)`. Resolves multi-candidate-election case (10 candidates share `role='candidate'` with distinct sequence_numbers; no `candidate_1`..`candidate_10` ugliness).
+  - **canonical_markets.natural_key_hash derivation rule deferred to Cohort 5** — ship Cohort 1 with column-declaration-only DDL (BYTEA NOT NULL + UNIQUE); derivation rule is application-layer (hash input list, normalization, tie-breaker) and is the subject of a Cohort 5 / migration 0085 seed amendment. DDL is agnostic to derivation.
+  - **Migration sequencing corrected:** Cohort 1 = 2 migrations (0067 + 0068), NOT 3. 0067 = `canonical_event_domains` + `canonical_event_types` + `canonical_events`. 0068 = `canonical_entity_kinds` + `canonical_entity` (+ `ref_team_id` + CONSTRAINT TRIGGER) + `canonical_participant_roles` + `canonical_event_participants` (+ `sequence_number`). `canonical_markets` is Cohort 2 (migration 0069).
+  - Cross-references: Issue #996 (amendment tracking issue), Epic #972 (Canonical Layer Foundation parent), session 71 Holden + Galadriel validation memos.
 **Changes in v2.37:**
 - **CANONICAL IDENTITY + MATCHING INFRASTRUCTURE + EVENT-STATE LAYER:** Added ADR-118 (Epic #972 Canonical Layer Foundation — cross-platform canonical identity, first-class matching ledger, three-layer event-state construct with three-timestamp ML causal-correctness commitment, dim+fact canonical linkage with reconciliation, `v_temporal_alignment` stable consumer contract, LLM `trust_tier` surface).
 - **BUSINESS-KEY CLEANUP + WEATHER PHASE 1 NON-SPORT FOUNDATION VALIDATION:** Added ADR-119 (sister to ADR-118 — DELETE three formatted-PK decoration columns (`games.game_key`, `markets.market_key`, `events.event_key`); RENAME + RECLASSIFY `series.series_key` → `external_series_ticker` (Tier-3); ship `weather_observations` Phase 1 with NOAA adapter + weather_poller to validate canonical-layer foundations against non-sport domain BEFORE 20+ canonical migrations land; codify SCD-2 version-stable surrogate exception via Pattern 80).
@@ -16874,7 +16882,7 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 **Purpose:** Record and rationale for all major architectural decisions with systematic ADR numbering
 
-**For complete ADR catalog, see:** ADR_INDEX_V1.27.md
+**For complete ADR catalog, see:** ADR_INDEX_V1.28.md
 
 ## Decision #115/ADR-115: Database Domain Module Architecture
 
@@ -17272,21 +17280,63 @@ The monoculture audit (Round 2B, Mulder) landed an equal-and-opposite caution: 1
 
 9. **LLM `trust_tier` is first-class schema surface.** Derived view collapses `(min active-link confidence, review_state, domain)` into `{high, medium, provisional}`. LLM never sees raw confidence.
 
+10. **Open canonical enums are lookup tables, not CHECK constraints.** (Added v2.38, Cohort 1 amendment.) `canonical_events.domain`, `canonical_events.event_type`, `canonical_entity.entity_kind`, and `canonical_event_participants.role` all become FK references into small lookup tables (`canonical_event_domains`, `canonical_event_types`, `canonical_entity_kinds`, `canonical_participant_roles`). Extending the canonical ontology is an INSERT, not an ALTER TABLE. Consistent with existing lookup-table precedent (`match_algorithm`, `observation_source`). MCP Read-Only (#985) exposes `list_canonical_entity_kinds`, `list_canonical_event_domains`, etc. as tools. Pattern 81 promotion candidate.
+
+11. **`canonical_entity.ref_team_id` typed back-reference.** (Added v2.38.) Resolves Level A (platform-dim `teams`) ↔ Level B (canonical-identity `canonical_entity`) for the sports domain at Phase 1 cost (1 nullable col + 1 CONSTRAINT TRIGGER) rather than at Phase 3 backfill cost. Integrity rule ("team-kind rows MUST carry ref_team_id") enforced via trigger because PostgreSQL CHECK cannot contain the required subquery. Canonical pattern template for Cohort 2+ polymorphic typed back-refs. Unlocks clean Pydantic sum-type projection for MCP.
+
+12. **`canonical_event_participants.sequence_number`** is part of the row identity. (Added v2.38.) Uniqueness is `(canonical_event_id, role_id, sequence_number)`, not `(canonical_event_id, role)`. Handles 10-candidate-election cleanly (all share `role='candidate'`, sequence_number disambiguates).
+
 ---
 
 ### Key components
 
 #### Canonical identity tier
 
+**Cohort 1 amendment (v2.38, session 72):** the original CHECK-based shape for `canonical_events.domain`, `canonical_events.event_type`, `canonical_entity.entity_kind`, and `canonical_event_participants.role` was replaced with four lookup tables per Decision summary #10. DDL below is the canonical specification; migrations 0067 + 0068 implement it.
+
 ```sql
+-- Lookup tables (Cohort 1, migrations 0067/0068). Seed rows live in migration seed blocks; see "Seed data" section below for values.
+CREATE TABLE canonical_event_domains (
+  id           SERIAL PRIMARY KEY,
+  domain       TEXT   UNIQUE NOT NULL,                    -- 'sports'|'politics'|'weather'|'econ'|'news'|'entertainment'
+  description  TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE canonical_event_types (
+  id           SERIAL PRIMARY KEY,
+  domain_id    INTEGER NOT NULL REFERENCES canonical_event_domains(id) ON DELETE RESTRICT,
+  event_type   TEXT    NOT NULL,                          -- per-domain scoped (e.g. sports.game, politics.election)
+  description  TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT uq_canonical_event_types_domain_type UNIQUE (domain_id, event_type)
+);
+
+CREATE TABLE canonical_entity_kinds (
+  id           SERIAL PRIMARY KEY,
+  entity_kind  TEXT    UNIQUE NOT NULL,                   -- 'team'|'fighter'|'candidate'|'storm'|'company'|'location'|'person'|'product'|'country'|'organization'|'commodity'|'media'
+  description  TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE canonical_participant_roles (
+  id           SERIAL PRIMARY KEY,
+  domain_id    INTEGER NULL REFERENCES canonical_event_domains(id) ON DELETE RESTRICT,  -- NULL = cross-domain role
+  role         TEXT    NOT NULL,                          -- e.g. 'home'|'away'|'fighter_a'|'fighter_b'|'candidate'|'moderator'|'affected_location'
+  description  TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT uq_canonical_participant_roles UNIQUE (domain_id, role)
+);
+
+-- Main canonical tables (Cohort 1, migrations 0067/0068; Cohort 2 for canonical_markets in migration 0069).
 CREATE TABLE canonical_events (
   id                 BIGSERIAL PRIMARY KEY,
-  domain             VARCHAR(32)  NOT NULL,             -- 'sports'|'politics'|'weather'|'econ'|'news'|'entertainment'
-  event_type         VARCHAR(64)  NOT NULL,
+  domain_id          INTEGER      NOT NULL REFERENCES canonical_event_domains(id) ON DELETE RESTRICT,  -- v2.38: FK replaces CHECK
+  event_type_id      INTEGER      NOT NULL REFERENCES canonical_event_types(id)   ON DELETE RESTRICT,  -- v2.38: FK replaces inline string
   entities_sorted    INTEGER[]    NOT NULL,             -- sorted FKs into canonical_entity
   resolution_window  TSTZRANGE    NOT NULL,
   resolution_rule_fp BYTEA        NULL,                 -- sha256 of normalized resolution criteria; #935-ghost mitigation
-  natural_key_hash   BYTEA        NOT NULL,             -- sha256(domain||event_type||entities||window||rule_fp)
+  natural_key_hash   BYTEA        NOT NULL,             -- sha256(domain||event_type||entities||window||rule_fp); derivation is application-layer
   title              VARCHAR      NOT NULL,
   description        TEXT,
   game_id            INTEGER      NULL REFERENCES games(id),    -- sports path; NULL for non-sport. NEVER SET NOT NULL.
@@ -17302,30 +17352,98 @@ CREATE TABLE canonical_markets (
   canonical_event_id    BIGINT NOT NULL REFERENCES canonical_events(id) ON DELETE RESTRICT,
   market_type_general   VARCHAR(32) NOT NULL,           -- 'binary'|'categorical'|'scalar' (pmxt #964 shape)
   outcome_label         VARCHAR(255),
-  natural_key_hash      BYTEA NOT NULL,
+  natural_key_hash      BYTEA NOT NULL,                 -- v2.38: derivation rule is APPLICATION-LAYER, NOT DDL. See "natural_key_hash derivation rule (deferral note)" below.
   metadata JSONB, created_at, retired_at,
   CONSTRAINT uq_canonical_markets_nk UNIQUE (natural_key_hash)
 );
 
 CREATE TABLE canonical_entity (
-  id BIGSERIAL PK,
-  entity_kind VARCHAR(32) NOT NULL,    -- 'team'|'fighter'|'candidate'|'storm'|'company'|'location'
-  entity_key VARCHAR NOT NULL,
-  display_name VARCHAR NOT NULL,
-  metadata JSONB,
-  CONSTRAINT uq_canonical_entity_kind_key UNIQUE (entity_kind, entity_key)
+  id               BIGSERIAL PRIMARY KEY,
+  entity_kind_id   INTEGER NOT NULL REFERENCES canonical_entity_kinds(id) ON DELETE RESTRICT,  -- v2.38: FK replaces CHECK
+  entity_key       VARCHAR NOT NULL,
+  display_name     VARCHAR NOT NULL,
+  ref_team_id      INTEGER NULL REFERENCES teams(team_id) ON DELETE RESTRICT,                  -- v2.38: typed back-reference for Level A ↔ Level B sports linkage
+  metadata         JSONB,
+  -- Polymorphic back-ref integrity enforced via CONSTRAINT TRIGGER (see below)
+  CONSTRAINT uq_canonical_entity_kind_key UNIQUE (entity_kind_id, entity_key)
 );
 
+-- Polymorphic back-ref enforcement (Cohort 1 pattern)
+-- Enforces: when entity_kind = 'team', ref_team_id must be NOT NULL.
+-- When entity_kind != 'team', ref_team_id can be anything (NULL is typical but not required
+-- in case a future design chooses to overload ref_team_id for related kinds).
+-- Deferrable-immediate so bulk INSERTs can stage before constraint fires at statement end.
+CREATE OR REPLACE FUNCTION enforce_canonical_entity_team_backref()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_entity_kind TEXT;
+BEGIN
+    SELECT entity_kind INTO v_entity_kind
+      FROM canonical_entity_kinds
+     WHERE id = NEW.entity_kind_id;
+
+    IF v_entity_kind = 'team' AND NEW.ref_team_id IS NULL THEN
+        RAISE EXCEPTION
+          'canonical_entity: entity_kind=team requires ref_team_id NOT NULL (canonical_entity.id=%)',
+          NEW.id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER trg_canonical_entity_team_backref
+    AFTER INSERT OR UPDATE OF entity_kind_id, ref_team_id ON canonical_entity
+    DEFERRABLE INITIALLY IMMEDIATE
+    FOR EACH ROW
+    EXECUTE FUNCTION enforce_canonical_entity_team_backref();
+-- Behavioral spec: when entity_kind='team', ref_team_id MUST be set. For any other kind, ref_team_id is NULL or ignored.
+
 CREATE TABLE canonical_event_participants (
-  id BIGSERIAL PK,
+  id                 BIGSERIAL PRIMARY KEY,
   canonical_event_id BIGINT NOT NULL REFERENCES canonical_events(id) ON DELETE CASCADE,
-  entity_id BIGINT NOT NULL REFERENCES canonical_entity(id) ON DELETE RESTRICT,
-  role VARCHAR(32) NOT NULL,           -- 'home'|'away'|'fighter_a'|'fighter_b'|'yes_side'|future
-  CONSTRAINT uq_cep_event_role UNIQUE (canonical_event_id, role)
+  entity_id          BIGINT NOT NULL REFERENCES canonical_entity(id) ON DELETE RESTRICT,
+  role_id            INTEGER NOT NULL REFERENCES canonical_participant_roles(id) ON DELETE RESTRICT,  -- v2.38: FK replaces inline VARCHAR
+  sequence_number    INTEGER NOT NULL,                                                                 -- v2.38: disambiguates same-role participants (10-candidate election)
+  CONSTRAINT uq_cep_event_role_seq UNIQUE (canonical_event_id, role_id, sequence_number)
 );
 ```
 
 `entities_sorted` denormalizes participant set for natural-key hashing; `canonical_event_participants` is the typed relation. Both ship.
+
+##### natural_key_hash derivation rule (deferral note, v2.38)
+
+`canonical_markets.natural_key_hash` is declared `BYTEA NOT NULL UNIQUE`. The **derivation rule** — which fields compose the hash input, normalization of those fields, and tie-breakers across platforms — is **application-layer**, not DDL, and is intentionally deferred to Cohort 5 (migration 0085 seed context). Cohort 1 ships the column declaration agnostic to derivation. Attempting to encode the rule in DDL (CHECK or generated column) is rejected because the rule depends on cross-platform normalization logic that belongs in `src/precog/matching/`, not the database. This is the same reason `canonical_events.natural_key_hash` ships without a generated-column definition: identity resolution is a resolver responsibility.
+
+##### Seed data (v2.38 Cohort 1 amendment)
+
+Seed rows for the four lookup tables are embedded in the Cohort 1 migrations (0067 seeds `canonical_event_domains` + `canonical_event_types`; 0068 seeds `canonical_entity_kinds` + `canonical_participant_roles`). Pattern 73 discipline: seed values live in migrations, **not duplicated here**. Authoritative seed values per #996:
+
+- `canonical_event_domains`: `sports`, `politics`, `weather`, `econ`, `news`, `entertainment`, `fighting` (7 base domains; `fighting` added last as the extension case, providing FK target for `canonical_participant_roles` entries `(fighting, fighter_a)` and `(fighting, fighter_b)` below)
+- `canonical_event_types` (per-domain): sports → `game`, `match`; politics → `election`, `debate`, `referendum`; weather → `storm_track`, `temperature_range`; econ → `earnings_release`, `rate_decision`; news → `pandemic_case`, `conflict_outcome`; entertainment → `award_winner`, `box_office_result`
+- `canonical_entity_kinds`: `team`, `fighter`, `candidate`, `storm`, `company`, `location`, `person`, `product`, `country`, `organization`, `commodity`, `media`
+- `canonical_participant_roles` (domain-scoped where meaningful): (sports, home), (sports, away), (fighting, fighter_a), (fighting, fighter_b), (politics, candidate), (politics, moderator), (weather, affected_location), (entertainment, nominee), (entertainment, winner), (entertainment, host). The `(fighting, *)` rows FK into `canonical_event_domains` via the `fighting` domain seeded above — no ALTER TABLE needed to introduce the fighting domain later, exactly the Pattern 81 discipline.
+
+New canonical kinds, domains, event_types, or roles land as INSERT rows in a migration (typically a seed-only migration), not as DDL changes. This is the Pattern 81 candidate — "Open canonical enum → lookup table over CHECK constraint" — promoted when Cohort 1 ships.
+
+##### Cohort 1 amendment rationale (v2.38, session 72 capture)
+
+This subsection exists so future readers of ADR-118 understand WHY the four lookup tables exist without reverse-engineering intent from DDL. The 8 user-adjudicated decisions from issue #996:
+
+1. **`canonical_entity_kinds` lookup replaces CHECK on `canonical_entity.entity_kind`.** Reason: the set is open-ended (sports teams today, future fighters, candidates, storms, companies, locations, etc.). Every new entity kind should be an INSERT row, not an ALTER TABLE + code deploy. Consistent with existing `match_algorithm` and `observation_source` lookup-table precedent.
+
+2. **`canonical_event_domains` lookup replaces CHECK on `canonical_events.domain`.** Seed values: `sports, politics, weather, econ, news, entertainment, fighting` — the 7 base domains for Phase 1. Additional domains (e.g. `gaming`, meta-markets) added via INSERT into `canonical_event_domains`, not via ALTER TABLE. This is the INSERT-not-ALTER discipline that makes the lookup table worth having.
+
+3. **`canonical_event_types` composite lookup `(domain_id, event_type)`.** Event types are domain-scoped (sports.game vs politics.election are different universes). Composite UNIQUE captures the scoping; FKing `canonical_events.event_type_id` onto this table makes invalid (domain, event_type) pairs unrepresentable.
+
+4. **`canonical_participant_roles` composite lookup with nullable `domain_id`.** Most roles are domain-scoped (`sports.home`, `politics.candidate`), but some are cross-domain (e.g. `yes_side` in binary markets). Nullable `domain_id` admits both shapes in one table.
+
+5. **`canonical_entity.ref_team_id INTEGER NULL REFERENCES teams(team_id)` enforced via CONSTRAINT TRIGGER.** Level A (`teams` as platform-dimension) and Level B (`canonical_entity` as cross-platform identity) both exist; without a typed FK, the only way to map `canonical_entity.entity_kind='team', entity_key='KC'` to its platform-level `teams` row is a brittle string join. Typed FK is cheap at Phase 1 (1 nullable column + 1 trigger); expensive at Phase 3 (backfill of all historical team entities). The integrity rule — "team-kind rows MUST carry ref_team_id; other kinds MAY carry it" — is enforced via CONSTRAINT TRIGGER. Pattern precedent for future typed back-refs: `ref_fighter_id` (canonical_entity where entity_kind='fighter'), `ref_candidate_id`, `ref_storm_id`, etc. Each polymorphic back-ref column gets its own trigger; the lookup through `canonical_entity_kinds` keeps the enforcement dynamic (seed-order agnostic — no hard-coded entity_kind_id literals). PostgreSQL CHECK constraints cannot contain subqueries, so a trigger is the correct encoding; literal-ID CHECKs would be brittle across a dozen future columns and bind schema to seed order. This is the **canonical pattern template** for Cohort 2+ polymorphic back-refs, not a one-off solution. Unlocks Pydantic sum-type projection for MCP #985 ("give me the canonical team for KC" returns a typed row, not a join query).
+
+6. **`canonical_event_participants.sequence_number` column + `UNIQUE (canonical_event_id, role_id, sequence_number)`.** The original `UNIQUE (canonical_event_id, role)` fails for multi-candidate elections: 10 candidates cannot all have `role='candidate'`. The ugly workaround ("role='candidate_1'..'candidate_10'") breaks the role taxonomy. The clean fix is to let `sequence_number` disambiguate same-role participants within an event; all 10 candidates share `role_id` for `candidate`, with `sequence_number` 1..10. For 2-participant sports games, `sequence_number = 1` always (roles `home` and `away` differ).
+
+7. **`canonical_markets.natural_key_hash` derivation rule deferred to Cohort 5.** The column ships Cohort 1; the rule (hash input list, normalization, tie-breaker) is an application-layer resolver concern and will be specified as a seed-migration amendment when Cohort 5 lands. Shipping DDL without the derivation is defensible because the DDL makes no claim about the rule; migrations are the rule's home, not the ADR or schema.
+
+8. **Migration sequencing: 0067 + 0068 (two migrations, seven tables).** Original mission brief said "3 tables across 3 migrations"; correct encoding is 7 tables across 2 migrations because lookup tables must land with the columns that FK into them (lookup → referring table in same migration, so FK can exist at migration boundary). 0067 bundles `canonical_event_domains` + `canonical_event_types` + `canonical_events`. 0068 bundles `canonical_entity_kinds` + `canonical_entity` (with `ref_team_id` + CONSTRAINT TRIGGER) + `canonical_participant_roles` + `canonical_event_participants` (with `sequence_number`). `canonical_markets` is Cohort 2 (migration 0069).
 
 #### Matching infrastructure
 
@@ -17650,9 +17768,9 @@ Phase 4 backtest filters on `source_published_at <= feature_cutoff` for causal c
 
 | # | Intent |
 |---|---|
-| 0067 | canonical_events + natural_key_hash unique |
-| 0068 | canonical_entity + canonical_event_participants |
-| 0069 | canonical_markets + natural_key_hash unique |
+| 0067 | **Cohort 1A (v2.38 amendment):** `canonical_event_domains` + `canonical_event_types` (composite `(domain_id, event_type)` UNIQUE) + `canonical_events` (with `domain_id` / `event_type_id` FKs replacing CHECK; `natural_key_hash` unique). Seed `canonical_event_domains` (sports/politics/weather/econ/news/entertainment/fighting — 7 domains) and `canonical_event_types` per-domain seed values. |
+| 0068 | **Cohort 1B (v2.38 amendment):** `canonical_entity_kinds` + `canonical_entity` (with `entity_kind_id` FK replacing CHECK; `ref_team_id` nullable FK into `teams` + CONSTRAINT TRIGGER enforcing team-kind rows carry ref_team_id) + `canonical_participant_roles` (composite `(domain_id, role)` UNIQUE, `domain_id` nullable) + `canonical_event_participants` (with `role_id` FK + `sequence_number` NOT NULL; `UNIQUE (canonical_event_id, role_id, sequence_number)`). Seed `canonical_entity_kinds` (team/fighter/candidate/storm/company/location/person/product/country/organization/commodity/media) and `canonical_participant_roles` per #996 (7 domains including `fighting`). |
+| 0069 | **Cohort 2:** `canonical_markets` + `natural_key_hash` unique (derivation rule is application-layer; DDL agnostic, rule specified at Cohort 5 / migration 0085 seed) |
 | 0070 | match_algorithm; seed manual_v1 |
 | 0071 | canonical_market_links, canonical_event_links with EXCLUDE |
 | 0072 | canonical_match_log (append-only enforcement deferred to 0090) |
@@ -17700,12 +17818,16 @@ One-way-door inventory: **Option B** for `temporal_alignment` is the only Phase-
 - ADR-120 (future) — Level A vs Level B entity abstraction axis codification
 - Pattern 79 — Tier-3 demotion idiom reused in 0086-0089
 - Pattern 80 (promoted in `DEVELOPMENT_PATTERNS_V1.35.md`) — SCD-2 Version-Stable Surrogate Identifiers (ADR-119 Part 1 origin)
+- Pattern 81 (v1.36 promotion candidate, v2.38 origin) — "Open canonical enum → lookup table over CHECK constraint" (Cohort 1 amendment origin; 4 lookup tables at ADR-118)
+- Issue #996 — ADR-118 Cohort 1 amendment tracking issue (8 user-adjudicated decisions; encoded in v2.38)
 
 ---
 
 ### Origin
 
 **Session 70 Task 5**, three rounds of architect council + Mulder's Round 2B skeptical audit + @Whatsonyourmind's #496 production experience.
+
+**Session 71 Cohort 1 amendment (v2.38):** 2-agent council-variant (Holden + Galadriel) design validation on Cohort 1 scope surfaced 8 decisions that expanded the table set. User adjudicated each; issue #996 captures. The 2-agent compressed-council pattern is a Pattern 82 promotion candidate for settled-ADR validations (alternative to full S25 Triple Compass for new architectural choices). Additionally, the CONSTRAINT TRIGGER encoding for `canonical_entity.ref_team_id` introduced in this amendment (decision #5) is itself a candidate for a new DEVELOPMENT_PATTERNS entry — "Polymorphic typed back-refs enforced via CONSTRAINT TRIGGER, not CHECK" — because PostgreSQL CHECK constraints cannot contain subqueries, making the trigger the only correct encoding for dynamic kind-based integrity rules. This CONSTRAINT TRIGGER pattern is a candidate for promotion to DEVELOPMENT_PATTERNS V1.36 alongside Pattern 81 (open canonical enum → lookup table) when Cohort 1 ships.
 
 - **Round 1:** canonical-tier architecture (Holden + Galadriel + Vader; PM synthesis)
 - **Round 2B:** matching-schema cardinality; M:N via link table (+ Mulder)
@@ -17968,4 +18090,4 @@ Session 70 Task 5 Round 2A (Isidore postgres-dev MCP audit) surfaced Part 1. Use
 
 ---
 
-**END OF ARCHITECTURE DECISIONS V2.37**
+**END OF ARCHITECTURE DECISIONS V2.38**

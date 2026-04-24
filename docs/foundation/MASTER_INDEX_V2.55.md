@@ -1,9 +1,13 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.54
-**Last Updated:** 2026-04-23
+**Version:** 2.55
+**Last Updated:** 2026-04-24
 **Status:** ✅ Current
+**Changes in v2.55:**
+- **ADR-118 COHORT 1 AMENDMENT** (session 72, closes #996):
+  - ARCHITECTURE_DECISIONS V2.37 → V2.38: Encoded 8 user-adjudicated Cohort 1 design decisions — 4 new lookup tables (`canonical_event_domains`, `canonical_event_types`, `canonical_entity_kinds`, `canonical_participant_roles`) replace proposed CHECK constraints; `canonical_entity.ref_team_id` typed back-reference with partial CHECK; `canonical_event_participants.sequence_number` with `UNIQUE (canonical_event_id, role_id, sequence_number)`; migration sequence corrected (0067 + 0068 for Cohort 1, 7 tables total); `canonical_markets.natural_key_hash` derivation rule deferral to Cohort 5 documented.
+  - ADR_INDEX V1.27 → V1.28: ADR-118 row amended to note Cohort 1 v2.38 expansion (7 tables, 2 migrations).
 **Changes in v2.54:**
 - **CANONICAL LAYER FOUNDATION DOCS PROMOTION** (session 71, Cohort 9 of Epic #972, closes #973):
   - ARCHITECTURE_DECISIONS V2.36 → V2.37: Added ADR-118 (Canonical Identity, Matching Infrastructure, Event-State Layer) and ADR-119 (Business-Key Cleanup + Weather Phase 1 Foundation Validation); ADR-117 tier-classification amended (`series.series_key` Tier 2 → Tier 3)
@@ -454,10 +458,10 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.26.md** | ✅ | v2.26 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.26** (Task 9 session 71: Section 4.18 LLM/MCP Integration Requirements — REQ-LLM-001..016 covering shared service layer, MCP surfaces, deployment, observability, fallback, error taxonomy, contract versioning/parity/credentials; Epic #990) |
-| **MASTER_INDEX_V2.54.md** | ✅ | v2.54 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.54** (Cohort 9 session 71: ADR-118+119 canonical layer docs integration, Pattern 80 promotion; document version updates: ARCHITECTURE_DECISIONS V2.37, ADR_INDEX V1.27, DEVELOPMENT_PATTERNS V1.35; closes #973) |
-| **ARCHITECTURE_DECISIONS_V2.37.md** | ✅ | v2.37 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers - **UPDATED V2.37** (ADR-118 Canonical Identity, Matching Infrastructure, and Event-State Layer — Epic #972; ADR-119 Business-Key Cleanup + Weather Phase 1; ADR-117 amendment reclassifies `series.series_key` Tier 2 → Tier 3; supersedes V2.36) |
+| **MASTER_INDEX_V2.55.md** | ✅ | v2.55 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.55** (Cohort 1 amendment session 72: ARCHITECTURE_DECISIONS V2.37 → V2.38 with 4 lookup tables + `ref_team_id` + `sequence_number`; ADR_INDEX V1.27 → V1.28 with amended ADR-118 row; closes #996) |
+| **ARCHITECTURE_DECISIONS_V2.38.md** | ✅ | v2.38 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers - **UPDATED V2.38** (ADR-118 Cohort 1 amendment per #996: 4 new lookup tables `canonical_event_domains`/`canonical_event_types`/`canonical_entity_kinds`/`canonical_participant_roles` replace CHECKs; `canonical_entity.ref_team_id` typed back-ref with partial CHECK; `canonical_event_participants.sequence_number` with `UNIQUE (canonical_event_id, role_id, sequence_number)`; Cohort 1 sequencing corrected to 2 migrations 0067+0068 / 7 tables; `canonical_markets.natural_key_hash` derivation rule deferred to Cohort 5; supersedes V2.37) |
 | **REQUIREMENT_INDEX_V1.17.md** | ✅ | v1.17 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 137 requirements - **UPDATED V1.17** (added REQ-ELO-008 for Elo Validation; 136 → 137 total requirements) |
-| **ADR_INDEX_V1.27.md** | ✅ | v1.27 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of architecture decisions - **UPDATED V1.27** (added ADR-118 + ADR-119 in new Phase B.5 section Canonical Layer Foundation; 103 → 105 catalogued; highest ADR 117 → 119; closes #973) |
+| **ADR_INDEX_V1.28.md** | ✅ | v1.28 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of architecture decisions - **UPDATED V1.28** (ADR-118 row amended per #996 Cohort 1 amendment: Cohort 1 expanded to 7 tables / 2 migrations with 4 lookup tables + typed back-refs + sequence_number; supersedes V1.27) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.15.md** | ✅ | v1.15 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **UPDATED V1.15** (Neil Paine data migration, NHL Elo validation complete, Phase 2C progress) |
 | **TESTING_STRATEGY_V3.9.md** | ✅ | v3.8 | `/docs/foundation/` | 2 | Phases 1-10 | 🔴 Critical | **UPDATED V3.8** - Property Tests with DB Access pattern: `@pytest.mark.database` for DB-dependent property tests (~25 tests) enabling parallel execution with unit tests (~43s savings); Mypy incremental caching (~27s savings); V3.7: Three-Layer E2E Testing Gap Pattern; V3.6: Fast Chaos Tests; V3.5: Test Failure Response; V3.4: CI-Safe Stress Testing; V3.3: Test Isolation; V3.2: All 8 test types MANDATORY |
