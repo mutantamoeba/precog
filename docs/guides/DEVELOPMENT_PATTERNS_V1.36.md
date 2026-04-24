@@ -1,13 +1,19 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.35
+**Version:** 1.36
 **Created:** 2025-11-13
-**Last Updated:** 2026-04-23
+**Last Updated:** 2026-04-24
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.36:**
+- **Added Pattern 81: Open Canonical Enum → Lookup Table Over CHECK Constraint (ALWAYS for Open Enums Likely to Grow)**
+- **Added Pattern 82: CONSTRAINT TRIGGER for Polymorphic Typed Back-Reference (ALWAYS for Discriminator-Gated Back-Ref Integrity)**
+- Both patterns operationalize ADR-118 v2.38 Cohort 1 amendment (#996). Pattern 81 codifies the rule behind the 4 lookup tables landed in Migrations 0067 + 0068 (`canonical_event_domains`, `canonical_event_types`, `canonical_entity_kinds`, `canonical_participant_roles`). Pattern 82 codifies the CONSTRAINT TRIGGER encoding (`enforce_canonical_entity_team_backref`) used because PostgreSQL CHECK constraints cannot contain subqueries — making the trigger the only correct encoding for dynamic discriminator-gated integrity rules.
+- Origin: Session 71 Cohort 1 design-validation (Holden + Galadriel 2-agent council); 8 user-adjudicated decisions captured in #996; session 72 Migrations 0067 (PR #1005) + 0068 (PR #1008) landed the first concrete instances. Promoted per the Pattern 80 / V1.35 precedent established in #979 (Cohort 9, session 71).
+- Pair-with: Patterns 81 + 82 are complementary — the discriminator FK's lookup table is a Pattern 81 instance; the typed back-ref column whose nullability depends on that discriminator is a Pattern 82 instance.
 **Changes in V1.35:**
 - **Added Pattern 80: SCD-2 Version-Stable Surrogate Identifiers (ALWAYS When Deciding Whether a `{PREFIX}-{id}` Business-Key Column Is Decoration or Load-Bearing)**
 - The `row_current_ind` lint gate — the test that distinguishes legitimate SCD-2 version-stable surrogates (`position_key`, `game_state_key`, `edge_key`) from pure formatted-PK decoration (`game_key`, `market_key`, `event_key`). Gate: *does this table have a `row_current_ind` column?* If yes, a `{PREFIX}-{id}` business-key column is load-bearing (row-stable identity across version chain). If no, it is decoration and a candidate for deletion.
@@ -388,14 +394,16 @@
 38. [Pattern 78: Two-Gate Audit Discipline — Bug Presence + Fix Validity (ALWAYS for Retrospective Claude-Review Audits)](#pattern-78-two-gate-audit-discipline--bug-presence--fix-validity-always-for-retrospective-claude-review-audits)
 39. [Pattern 79: Three-Tier Identity Model for Schema Design (ALWAYS for New Tables, Migrations, and Constraint Additions)](#pattern-79-three-tier-identity-model-for-schema-design-always-for-new-tables-migrations-and-constraint-additions)
 40. [Pattern 80: SCD-2 Version-Stable Surrogate Identifiers (ALWAYS When Deciding Whether a {PREFIX}-{id} Business-Key Column Is Decoration or Load-Bearing)](#pattern-80-scd-2-version-stable-surrogate-identifiers-always-when-deciding-whether-a-prefix-id-business-key-column-is-decoration-or-load-bearing)
-41. [Pattern Quick Reference](#pattern-quick-reference)
-42. [Related Documentation](#related-documentation)
+41. [Pattern 81: Open Canonical Enum → Lookup Table Over CHECK Constraint (ALWAYS for Open Enums Likely to Grow)](#pattern-81-open-canonical-enum--lookup-table-over-check-constraint-always-for-open-enums-likely-to-grow)
+42. [Pattern 82: CONSTRAINT TRIGGER for Polymorphic Typed Back-Reference (ALWAYS for Discriminator-Gated Back-Ref Integrity)](#pattern-82-constraint-trigger-for-polymorphic-typed-back-reference-always-for-discriminator-gated-back-ref-integrity)
+43. [Pattern Quick Reference](#pattern-quick-reference)
+44. [Related Documentation](#related-documentation)
 
 ---
 
 ## Introduction
 
-This guide contains **79 development patterns** that must be followed throughout the Precog project. (The V1.0 baseline was 10 patterns; the count has grown organically via the S80 periodic promotion sweep as the project hits new failure modes.) These patterns address:
+This guide contains **82 development patterns** that must be followed throughout the Precog project. (The V1.0 baseline was 10 patterns; the count has grown organically via the S80 periodic promotion sweep as the project hits new failure modes.) These patterns address:
 
 - **Financial Precision:** Decimal-only arithmetic for sub-penny pricing
 - **Data Versioning:** Dual versioning system for mutable vs. immutable data
@@ -11910,6 +11918,363 @@ Pattern 79 (Three-Tier Identity Model) classifies `_key`-suffixed columns as *us
 - Migrations 0091-0094 (ADR-119 Part 1 implementation) — the three DELETEs + one RENAME that exercised this gate against live schema
 - User directive (session 70): introduce weather Phase 1 / canonical layer — forced the audit that surfaced this class
 - Pattern 79 (sibling) — Tier-3 UNIQUE rule; Pattern 80 covers the Tier-2 SCD-2 nuance Pattern 79 defers
+
+---
+
+## Pattern 81: Open Canonical Enum → Lookup Table Over CHECK Constraint (ALWAYS for Open Enums Likely to Grow)
+
+**Severity:** HIGH — encoding an open enum as `CHECK (col IN (...))` forces an `ALTER TABLE` + code deploy every time a new value is needed. Every new value lands as ALTER + DROP + ADD CONSTRAINT, racing with live writes, in code review for trivial additions, and breaking the "extending the canonical ontology = INSERT" promise. The lookup-table form turns each new value into a single seed row in a migration.
+
+### Problem / Trigger
+
+Canonical-layer enums (entity kinds, event domains, event types, participant roles, etc.) are intentionally open: Phase 2+ will add fighters, candidates, storms, companies, locations, and more. Encoding the value set as `CHECK (col IN (...))` forces an `ALTER TABLE` + DROP/ADD CONSTRAINT + code deploy every time the ontology extends — racing with live writes for a trivial seed addition. The lookup-table form turns each new value into a single seed `INSERT` row in a migration: extending the canonical ontology = INSERT, never ALTER.
+
+The `match_algorithm` and `observation_source` lookup tables are the precedents in `main` — extending them is an INSERT, never an ALTER. ADR-118 v2.38 (Cohort 1 amendment, decision #10) canonicalized the rule against the original CHECK-constraint proposal; Migrations 0067 + 0068 landed the four concrete lookup-table instances.
+
+### The Pattern / Rule
+
+**Canonical decision context lives in [ADR-118 v2.38](../foundation/ARCHITECTURE_DECISIONS_V2.38.md) decision #10 (Open canonical enums are lookup tables, not CHECK constraints)**. Per Pattern 73, this pattern does not restate the per-table decisions — it codifies the *general rule*:
+
+> Any enum whose value set is expected to grow (domains, event types, entity kinds, participant roles, platform names, observation sources, match algorithms, etc.) MUST be encoded as a **lookup table** with FK + seed data, NOT as a `CHECK (value IN (...))` constraint on a text column. New values land as `INSERT` rows in a (typically seed-only) migration; never as `ALTER TABLE`.
+
+### Canonical Shape
+
+```sql
+-- Lookup table per canonical-layer convention (Cohort 1 instances in 0067/0068):
+CREATE TABLE <canonical_domain>_<enum_name> (
+    id           SERIAL PRIMARY KEY,
+    <enum_name>  TEXT NOT NULL UNIQUE,
+    description  TEXT,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Main table column: FK replaces the original CHECK.
+-- WAS: entity_kind TEXT NOT NULL CHECK (entity_kind IN ('team', 'fighter', ...))
+-- NOW: entity_kind_id INTEGER NOT NULL REFERENCES canonical_entity_kinds(id) ON DELETE RESTRICT
+
+-- Seeding pattern (idempotent on re-runs):
+INSERT INTO <lookup_table> (<enum_name>, description) VALUES
+  ('value1', 'description1'),
+  ('value2', 'description2')
+ON CONFLICT (<enum_name>) DO NOTHING;
+```
+
+### Wrong
+
+```sql
+-- CHECK constraint encoding the open enum inline:
+CREATE TABLE canonical_entity (
+    id            SERIAL PRIMARY KEY,
+    entity_kind   TEXT NOT NULL
+                  CHECK (entity_kind IN ('team', 'fighter', 'candidate', 'storm')),
+    entity_key    TEXT NOT NULL,
+    ...
+);
+
+-- Adding 'company' to support business-news markets requires:
+--   ALTER TABLE canonical_entity DROP CONSTRAINT canonical_entity_entity_kind_check;
+--   ALTER TABLE canonical_entity ADD CONSTRAINT canonical_entity_entity_kind_check
+--       CHECK (entity_kind IN ('team', 'fighter', 'candidate', 'storm', 'company'));
+-- Locks the table, races with live writes, requires migration + code deploy
+-- every time the ontology extends.
+```
+
+### Right
+
+```sql
+-- Lookup table:
+CREATE TABLE canonical_entity_kinds (
+    id           SERIAL PRIMARY KEY,
+    entity_kind  TEXT NOT NULL UNIQUE,
+    description  TEXT,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO canonical_entity_kinds (entity_kind, description) VALUES
+  ('team',         'Sports team participating in games'),
+  ('fighter',      'Combat-sports athlete (boxing/MMA)'),
+  ('candidate',    'Political candidate'),
+  ('storm',        'Named tropical cyclone'),
+  ('company',      'Business entity'),
+  ('location',     'Geographic location (weather, etc.)'),
+  ('person',       'Named individual (entertainment, etc.)'),
+  ('product',      'Branded product / model'),
+  ('country',      'Sovereign state'),
+  ('organization', 'Generic non-team organization'),
+  ('commodity',    'Tradable good (oil, gold, etc.)'),
+  ('media',        'Film/show/song/book')
+ON CONFLICT (entity_kind) DO NOTHING;
+
+-- Main table FK:
+CREATE TABLE canonical_entity (
+    id              SERIAL PRIMARY KEY,
+    entity_kind_id  INTEGER NOT NULL REFERENCES canonical_entity_kinds(id) ON DELETE RESTRICT,
+    entity_key      TEXT NOT NULL,
+    ...
+);
+
+-- Adding 'cryptocurrency' to support crypto markets is a one-row INSERT.
+-- No ALTER TABLE; no DROP CONSTRAINT; no code deploy if the consumer
+-- looks values up dynamically (MCP `list_canonical_entity_kinds` tool).
+```
+
+### Composite-Scoped Enums (Parent-Scoped Values)
+
+When an enum has a parent scope (e.g., `event_type` is meaningful only within a `domain`), use a composite UNIQUE on the lookup table:
+
+```sql
+CREATE TABLE canonical_event_types (
+    id          SERIAL PRIMARY KEY,
+    domain_id   INTEGER NOT NULL REFERENCES canonical_event_domains(id) ON DELETE RESTRICT,
+    event_type  TEXT NOT NULL,
+    description TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (domain_id, event_type)
+);
+
+-- Same event_type string ('regular_season') can exist under multiple domains
+-- (sports.regular_season, politics.regular_season-doesn't-make-sense, etc.)
+-- The composite UNIQUE keeps each (domain, event_type) pair canonical.
+```
+
+### Nullable Parent Scope (Cross-Domain Values)
+
+Some lookup values are cross-domain — e.g., `yes_side` / `no_side` participant roles in binary markets are not domain-scoped. Make the parent FK NULLABLE:
+
+```sql
+CREATE TABLE canonical_participant_roles (
+    id          SERIAL PRIMARY KEY,
+    domain_id   INTEGER NULL REFERENCES canonical_event_domains(id) ON DELETE RESTRICT,  -- NULL = cross-domain
+    role        TEXT NOT NULL,
+    description TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (domain_id, role)  -- NULL semantics: NULL ≠ NULL in PG UNIQUE, so multiple
+                              -- NULL-domain rows with the same role would conflict.
+                              -- See Cohort 1 migration 0068 for handling (single
+                              -- cross-domain row per role; no ambiguity in seed set).
+);
+```
+
+### When to Use
+
+- Enum is open / likely to grow (Phase 2+ adds new values from new platforms or new domains)
+- Values benefit from descriptions / metadata
+- Cross-platform alignment (multiple platforms contribute values)
+- A reader needs to list valid values programmatically (e.g., MCP `list_canonical_entity_kinds` / `list_canonical_event_domains` tools per #985)
+- Values are referenced from many tables (one canonical source beats parallel CHECK lists drifting)
+
+### When NOT to Apply (Keep CHECK)
+
+- **Closed enum, fixed business meaning.** `order side IN ('buy', 'sell')` is binary and encoded into trading logic; a third value would be nonsensical, not a missing seed row.
+- **Bool-like flags.** `row_current_ind BOOLEAN` (or `CHECK IN ('Y', 'N')`); not an open enum.
+- **Values tied to code branches.** If `if status == 'pending': ...` exists in many places, adding a new status is a code change, not just a data change. CHECK is fine and self-documenting.
+- **No foreseeable extension.** Schema is internal-only and the enum is fully enumerated by spec. (Caveat: this assertion ages poorly; default to lookup-table when unsure.)
+
+### Decision Checklist Before Adding a Multi-Valued Constrained Column
+
+1. **Is the value set fully enumerable today AND for the foreseeable lifetime of the column?** If no → lookup table.
+2. **Will adding a new value require code changes anyway?** If yes → CHECK is acceptable; the deploy is happening regardless. If no → lookup table preserves the data-only extension promise.
+3. **Do consumers need to enumerate the valid values dynamically (MCP tool, dropdown, dashboard)?** If yes → lookup table (one query); CHECK requires reading `pg_constraint`.
+4. **Is there a parent scope (e.g., event_type within domain)?** If yes → composite UNIQUE `(parent_id, value)`; consider nullable parent for cross-scope values.
+5. **Are there existing precedents in the schema?** Check `match_algorithm`, `observation_source`, and the four canonical-layer lookups (`canonical_event_domains`, `canonical_event_types`, `canonical_entity_kinds`, `canonical_participant_roles`) — if the existing siblings are lookup tables, follow the convention.
+
+### Concrete Instances in `main` (as of V1.36)
+
+| Lookup Table | Migration | Seed Count | Composite UNIQUE | Nullable Parent | Notes |
+|---|---|---|---|---|---|
+| `canonical_event_domains` | 0067 | 7 | (sports, politics, weather, econ, news, entertainment, fighting) | n/a | Top-level scope |
+| `canonical_event_types` | 0067 | 13 | `(domain_id, event_type)` UNIQUE | NO | 6 of 7 domains seeded; `fighting` intentionally empty (INSERT-not-ALTER discipline — Cohort 2+ adds fight types as INSERT rows) |
+| `canonical_entity_kinds` | 0068 | 12 | `entity_kind` UNIQUE | n/a | Cross-domain (entities span domains) |
+| `canonical_participant_roles` | 0068 | 10 | `(domain_id, role)` UNIQUE | YES | Most rows are domain-scoped; cross-domain rows like `yes_side`/`no_side` use NULL `domain_id` |
+
+### Pair With Pattern 82 (Polymorphic Typed Back-Ref)
+
+Pattern 81 covers the discriminator column (the FK into the lookup table). Pattern 82 covers the typed back-ref column whose nullability *depends* on that discriminator (e.g., `ref_team_id` is required when `entity_kind_id = 'team'`). The two together encode an open polymorphic schema: Pattern 81 keeps the discriminator extension cost at one INSERT; Pattern 82 keeps the back-ref integrity rule dynamic (no hard-coded entity_kind_id literals; survives seed reorders).
+
+### Source
+
+- ADR-118 v2.38 (Cohort 1 amendment, decision #10) — canonical decision context; 4 lookup-table instances enumerated
+- Issue #996 Q2 — user adjudication: "every new entity kind/domain/event_type/role should be an INSERT row, not an ALTER TABLE + code deploy"
+- Migration 0067 (`src/precog/database/alembic/versions/0067_canonical_events_foundation.py`) — `canonical_event_domains` + `canonical_event_types` (PR #1005)
+- Migration 0068 (`src/precog/database/alembic/versions/0068_canonical_entity_foundation.py`) — `canonical_entity_kinds` + `canonical_participant_roles` (PR #1008)
+- Pre-Cohort precedents: `match_algorithm` (manual_v1, ...), `observation_source` (kalshi, espn, ...) — same pattern, predating its codification
+- Session 71 Holden + Galadriel 2-agent council — design-validation surface that flagged the original CHECK proposal as wrong shape
+- Pattern 82 (sibling) — polymorphic typed back-ref; Pattern 81's lookup table is the discriminator that gates Pattern 82's NULL/NOT-NULL rule
+
+---
+
+## Pattern 82: CONSTRAINT TRIGGER for Polymorphic Typed Back-Reference (ALWAYS for Discriminator-Gated Back-Ref Integrity)
+
+**Severity:** HIGH — encoding a discriminator-gated back-ref rule the wrong way fails silently. Inline `CHECK` cannot work (PostgreSQL forbids subqueries in CHECK), and a literal-ID `CHECK` (e.g., `CHECK (entity_kind_id != 1 OR ref_team_id IS NOT NULL)`) is brittle: it binds the schema to seed-table row order. Reorder the `canonical_entity_kinds` seed and the literal `1` no longer means `team`. The `CONSTRAINT TRIGGER` form looks the discriminator up dynamically and survives any reorder.
+
+### Problem / Trigger
+
+A polymorphic main table (`canonical_entity`) carries one typed back-ref column per child type — e.g., `ref_team_id INTEGER NULL REFERENCES teams(team_id)`. The integrity rule "rows where `entity_kind = 'team'` MUST carry `ref_team_id` NOT NULL; other kinds MAY carry it" cannot be encoded with PostgreSQL `CHECK` (CHECK forbids subqueries). The brittle alternative is a literal-ID CHECK such as `CHECK (entity_kind_id != 1 OR ref_team_id IS NOT NULL)` — but that requires `entity_kind_id = 1` to permanently mean `team`, hard-coding seed order into schema. Reorder the seed and the constraint silently enforces the rule against the wrong kind.
+
+The `CONSTRAINT TRIGGER` form looks the discriminator up by name through the lookup table on every fire and survives any seed reorder. ADR-118 v2.38 (Cohort 1, decision #5) canonicalized this encoding; Migration 0068's `enforce_canonical_entity_team_backref` is the first concrete instance, and Cohort 2+ adds sibling triggers (`ref_fighter_id`, `ref_candidate_id`, `ref_storm_id`) per the same template.
+
+### The Pattern / Rule
+
+> When a polymorphic main table (e.g., `canonical_entity`) has a typed back-reference column whose requirement depends on the row's discriminator (e.g., `ref_team_id` is NOT NULL when `entity_kind = 'team'` but not otherwise), enforce the integrity via **`CREATE CONSTRAINT TRIGGER`**, NOT via inline `CHECK` (PG forbids subqueries in CHECK) NOR via literal-ID CHECK (brittle under seed reorders). The trigger looks the discriminator value up through the lookup table by name; this keeps enforcement seed-order-agnostic.
+
+### Canonical Template
+
+**Placeholder convention:** `<parent>` is the parent table's stem after `canonical_` (e.g., `entity` for `canonical_entity`); `<parent_table>` is the full table name (`canonical_<parent>`). `<child>` is the typed child's stem (e.g., `team`).
+
+```sql
+-- Trigger function: looks discriminator up by name (NOT by literal id).
+CREATE OR REPLACE FUNCTION enforce_canonical_<parent>_<child>_backref()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_discriminator TEXT;
+BEGIN
+    SELECT <discriminator_name> INTO v_discriminator
+      FROM <discriminator_lookup_table>
+     WHERE id = NEW.<discriminator_fk>;
+
+    IF v_discriminator = '<required_value>' AND NEW.<ref_fk> IS NULL THEN
+        RAISE EXCEPTION
+          '<parent_table>: <discriminator_name>=<required_value> requires <ref_fk> NOT NULL (<parent_table>.id=%)',
+          NEW.id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- CONSTRAINT TRIGGER: narrow UPDATE OF clause; deferrable.
+CREATE CONSTRAINT TRIGGER trg_canonical_<parent>_<child>_backref
+    AFTER INSERT OR UPDATE OF <discriminator_fk>, <ref_fk> ON <parent_table>
+    DEFERRABLE INITIALLY IMMEDIATE
+    FOR EACH ROW
+    EXECUTE FUNCTION enforce_canonical_<parent>_<child>_backref();
+
+-- Downgrade requires explicit DROP — there is no CREATE OR REPLACE
+-- CONSTRAINT TRIGGER form in PostgreSQL.
+-- DROP TRIGGER IF EXISTS trg_canonical_<parent>_<child>_backref ON <parent_table>;
+-- DROP FUNCTION IF EXISTS enforce_canonical_<parent>_<child>_backref();
+```
+
+### Why Each Property Matters
+
+1. **Dynamic discriminator lookup.** `SELECT entity_kind FROM canonical_entity_kinds WHERE id = NEW.entity_kind_id` resolves the discriminator value by name on every fire. Reorder the seed (e.g., insert a new kind ahead of `team`) and `team`'s id changes — the trigger still works because it looks up by name. A literal-ID CHECK (`CHECK (entity_kind_id != 1 OR ref_team_id IS NOT NULL)`) breaks silently in this case: the constraint is now enforcing the rule on whichever kind happens to have `id = 1`, not on `team`.
+2. **Narrow `UPDATE OF` clause.** `AFTER INSERT OR UPDATE OF entity_kind_id, ref_team_id` fires only when one of the two interacting columns changes. Updating an unrelated column (description, metadata) does NOT fire the trigger — a measurable savings on hot-path updates.
+3. **`DEFERRABLE INITIALLY IMMEDIATE`.** Default behavior fires at end of statement (immediate). The caller can opt into bulk-load semantics by `SET CONSTRAINTS ALL DEFERRED` to stage many inserts before validation fires at transaction end. Useful for seed migrations.
+4. **`CONSTRAINT TRIGGER` not regular trigger.** Only constraint triggers participate in `SET CONSTRAINTS` machinery. A regular trigger fires per-row at statement end and cannot be deferred. Constraint triggers also have correct transactional semantics (rollback on RAISE EXCEPTION rolls back the offending statement).
+5. **Explicit DROP in downgrade.** PostgreSQL has no `CREATE OR REPLACE CONSTRAINT TRIGGER`. Re-run idempotence on the upgrade side requires the downgrade side to use `DROP TRIGGER IF EXISTS` + `DROP FUNCTION IF EXISTS` (the function name and the trigger name are separate objects).
+
+### Wrong
+
+```sql
+-- Inline CHECK — PostgreSQL syntax error.
+-- ERROR: cannot use subquery in check constraint
+CREATE TABLE canonical_entity (
+    id              SERIAL PRIMARY KEY,
+    entity_kind_id  INTEGER NOT NULL REFERENCES canonical_entity_kinds(id),
+    ref_team_id     INTEGER NULL REFERENCES teams(team_id),
+    CHECK (
+        ref_team_id IS NOT NULL
+        OR (SELECT entity_kind FROM canonical_entity_kinds WHERE id = entity_kind_id) != 'team'
+    )
+);
+```
+
+```sql
+-- Literal-ID CHECK — works initially, breaks silently on seed reorder.
+-- The literal `1` permanently means whatever kind happens to be the first
+-- seed row inserted. Reorder the seed to add a new kind ahead of 'team'
+-- and the constraint now enforces the rule against the wrong kind.
+CREATE TABLE canonical_entity (
+    id              SERIAL PRIMARY KEY,
+    entity_kind_id  INTEGER NOT NULL REFERENCES canonical_entity_kinds(id),
+    ref_team_id     INTEGER NULL REFERENCES teams(team_id),
+    CHECK (entity_kind_id != 1 OR ref_team_id IS NOT NULL)  -- WRONG: brittle to seed reorder
+);
+```
+
+### Right
+
+```sql
+-- Migration 0068 actual instance — verbatim from
+-- src/precog/database/alembic/versions/0068_canonical_entity_foundation.py
+CREATE OR REPLACE FUNCTION enforce_canonical_entity_team_backref()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_kind TEXT;
+BEGIN
+    SELECT entity_kind INTO v_kind
+      FROM canonical_entity_kinds
+     WHERE id = NEW.entity_kind_id;
+
+    IF v_kind = 'team' AND NEW.ref_team_id IS NULL THEN
+        RAISE EXCEPTION
+          'canonical_entity: entity_kind=team requires ref_team_id NOT NULL (canonical_entity.id=%)',
+          NEW.id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER trg_canonical_entity_team_backref
+    AFTER INSERT OR UPDATE OF entity_kind_id, ref_team_id ON canonical_entity
+    DEFERRABLE INITIALLY IMMEDIATE
+    FOR EACH ROW
+    EXECUTE FUNCTION enforce_canonical_entity_team_backref();
+
+-- Downgrade (in the same migration's downgrade() block):
+-- DROP TRIGGER IF EXISTS trg_canonical_entity_team_backref ON canonical_entity;
+-- DROP FUNCTION IF EXISTS enforce_canonical_entity_team_backref();
+```
+
+### When to Use
+
+- Polymorphic parent table with one or more typed back-ref columns (one column per child type)
+- Integrity rule: a back-ref column is NOT NULL when the discriminator equals a specific value, and is NULLABLE otherwise
+- Open-enum discriminator (Pattern 81 territory) where literal-ID CHECKs would scale to N brittle constraints across N typed back-refs
+- Need for deferrable validation in bulk-load migrations (`SET CONSTRAINTS ALL DEFERRED`)
+
+### When NOT to Apply (Keep CHECK or App-Layer)
+
+- **Closed-enum discriminator with 2-3 stable values.** A literal-ID CHECK is acceptable — the seed is fixed, the values never change, and the brittleness risk is low.
+- **Non-mandatory integrity (best-effort).** App-layer validation in the writer code is sufficient; a missing back-ref does not corrupt downstream consumers.
+- **Performance-critical hot-path.** Trigger overhead is small but nonzero; for very-high-write-rate tables where the back-ref is checked in app code anyway, the trigger may be redundant. (This is rare in the canonical layer; mentioned for completeness.)
+- **Discriminator is itself a literal CHECK.** If Pattern 81 was deliberately not applied (closed enum, kept as CHECK), the discriminator IDs do not exist; the literal-ID CHECK approach for the back-ref is then internally consistent.
+
+### Concrete Instances in `main` (as of V1.36)
+
+| Trigger | Parent Table | Discriminator | Required Value | Back-Ref Column | Migration |
+|---|---|---|---|---|---|
+| `trg_canonical_entity_team_backref` | `canonical_entity` | `entity_kind_id` | `'team'` | `ref_team_id` | 0068 |
+
+### Template Candidates for Future Cohorts
+
+ADR-118 v2.38 commits to Pattern 82 as the **canonical template** for Cohort 2+ polymorphic typed back-refs. Each new typed back-ref gets its own trigger (no monolithic dispatcher trigger), keeping the rules independent and reviewable in isolation:
+
+| Future Trigger (placeholder) | Required Value | Back-Ref Column | Likely Cohort |
+|---|---|---|---|
+| `trg_canonical_entity_fighter_backref` | `'fighter'` | `ref_fighter_id` | Cohort 2+ (UFC) |
+| `trg_canonical_entity_candidate_backref` | `'candidate'` | `ref_candidate_id` | Cohort 2+ (politics) |
+| `trg_canonical_entity_storm_backref` | `'storm'` | `ref_storm_id` | Cohort 2+ (weather) |
+| `trg_canonical_entity_company_backref` | `'company'` | `ref_company_id` | Phase 3+ (business) |
+
+### Decision Checklist Before Adding a Polymorphic Typed Back-Reference
+
+1. **Is the discriminator a Pattern 81 lookup table (open enum)?** If yes → Pattern 82 is the right encoding. If no → consider whether a literal-ID CHECK is acceptable given the closed-enum context.
+2. **Is the back-ref strictly required for the discriminator value, or merely encouraged?** If strictly required → Pattern 82 (RAISE EXCEPTION). If best-effort → app-layer validation may be enough.
+3. **Will multiple typed back-refs accumulate over time?** If yes → Pattern 82's per-trigger discipline keeps the rules independently reviewable. A single dispatcher trigger that handles all back-refs becomes a coordination liability quickly.
+4. **Does any bulk-load migration need to stage rows before validation fires?** If yes → `DEFERRABLE INITIALLY IMMEDIATE` is correct (immediate by default; opt into deferred via `SET CONSTRAINTS ALL DEFERRED`). If no, the same form is still correct — there is no harm in being deferrable.
+5. **Does the downgrade explicitly DROP both the trigger and the function?** Verify before merge — there is no `CREATE OR REPLACE CONSTRAINT TRIGGER`.
+
+### Pair With Pattern 81 (Open Canonical Enum → Lookup Table)
+
+Pattern 81 keeps the discriminator extension cost at one INSERT (no ALTER TABLE on adding a new entity_kind). Pattern 82 keeps the back-ref integrity rule dynamic (no hard-coded entity_kind_id literals; survives seed reorders). The two together encode open polymorphic schema: as new entity_kinds land via Pattern 81, sibling Pattern 82 triggers can be added per migration as the canonical template.
+
+### Source
+
+- ADR-118 v2.38 (Cohort 1 amendment, decision #5) — canonical decision context; CONSTRAINT TRIGGER chosen over literal-ID CHECK
+- Issue #996 Q1 — user adjudication: Option B (CONSTRAINT TRIGGER) over Option A (literal-ID CHECK) and Option C (app-layer-only validation)
+- Migration 0068 (`src/precog/database/alembic/versions/0068_canonical_entity_foundation.py`, lines 273-301) — first concrete instance; verbatim template
+- PostgreSQL documentation: CHECK constraints cannot contain subqueries; CONSTRAINT TRIGGER is the correct mechanism for cross-table integrity rules
+- Pattern 81 (sibling) — open canonical enum → lookup table; Pattern 82's discriminator FK is a Pattern 81 instance
 
 ---
 

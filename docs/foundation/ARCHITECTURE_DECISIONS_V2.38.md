@@ -6,7 +6,7 @@
 **Status:** ✅ Current
 **Changes in v2.38:**
 - **ADR-118 COHORT 1 AMENDMENT (Issue #996, session 72):** Encoded 8 user-adjudicated design decisions from the Holden + Galadriel 2-agent council-variant validation (session 71). Cohort 1 expands from 3 main tables → **7 tables across 2 migrations (0067 + 0068)**.
-  - **4 new lookup tables** replace proposed CHECK constraints (Pattern 81 candidate — "Open canonical enum → lookup table over CHECK"): `canonical_event_domains`, `canonical_event_types` (composite `(domain_id, event_type)` UNIQUE), `canonical_entity_kinds`, `canonical_participant_roles` (composite `(domain_id, role)` UNIQUE with nullable `domain_id` for cross-domain roles).
+  - **4 new lookup tables** replace proposed CHECK constraints (Pattern 81 — "Open canonical enum → lookup table over CHECK", canonical in DEVELOPMENT_PATTERNS V1.36): `canonical_event_domains`, `canonical_event_types` (composite `(domain_id, event_type)` UNIQUE), `canonical_entity_kinds`, `canonical_participant_roles` (composite `(domain_id, role)` UNIQUE with nullable `domain_id` for cross-domain roles).
   - **Typed back-reference:** `canonical_entity.ref_team_id INTEGER NULL REFERENCES teams(team_id)` with CONSTRAINT TRIGGER resolving Level A ↔ Level B (platform-dim `teams` ↔ canonical-identity `canonical_entity`) relationship. Cheap now (1 nullable col + 1 trigger); expensive later (backfill). PostgreSQL CHECK cannot contain subqueries, so the integrity rule ("team-kind rows MUST carry ref_team_id") is enforced via a deferrable-immediate CONSTRAINT TRIGGER. This is the **canonical pattern template** for Cohort 2+ polymorphic typed back-refs (ref_fighter_id, ref_candidate_id, ref_storm_id, etc.) — each gets its own trigger rather than a brittle literal-ID CHECK. Unlocks clean Pydantic sum-type projection for MCP #985.
   - **`canonical_event_participants.sequence_number INTEGER NOT NULL`** — replaces `UNIQUE (canonical_event_id, role)` with `UNIQUE (canonical_event_id, role_id, sequence_number)`. Resolves multi-candidate-election case (10 candidates share `role='candidate'` with distinct sequence_numbers; no `candidate_1`..`candidate_10` ugliness).
   - **canonical_markets.natural_key_hash derivation rule deferred to Cohort 5** — ship Cohort 1 with column-declaration-only DDL (BYTEA NOT NULL + UNIQUE); derivation rule is application-layer (hash input list, normalization, tie-breaker) and is the subject of a Cohort 5 / migration 0085 seed amendment. DDL is agnostic to derivation.
@@ -16,14 +16,14 @@
 - **CANONICAL IDENTITY + MATCHING INFRASTRUCTURE + EVENT-STATE LAYER:** Added ADR-118 (Epic #972 Canonical Layer Foundation — cross-platform canonical identity, first-class matching ledger, three-layer event-state construct with three-timestamp ML causal-correctness commitment, dim+fact canonical linkage with reconciliation, `v_temporal_alignment` stable consumer contract, LLM `trust_tier` surface).
 - **BUSINESS-KEY CLEANUP + WEATHER PHASE 1 NON-SPORT FOUNDATION VALIDATION:** Added ADR-119 (sister to ADR-118 — DELETE three formatted-PK decoration columns (`games.game_key`, `markets.market_key`, `events.event_key`); RENAME + RECLASSIFY `series.series_key` → `external_series_ticker` (Tier-3); ship `weather_observations` Phase 1 with NOAA adapter + weather_poller to validate canonical-layer foundations against non-sport domain BEFORE 20+ canonical migrations land; codify SCD-2 version-stable surrogate exception via Pattern 80).
 - **ADR-117 AMENDMENT:** Tier-classification examples updated — `series.series_key` reclassified from Tier 2 → Tier 3 (per ADR-119 Part 1 audit finding; column actually stores Kalshi `series_ticker`, is externally-sourced).
-- Operational how-to companion: Pattern 80 (SCD-2 Version-Stable Surrogate Identifiers) in `DEVELOPMENT_PATTERNS_V1.35.md` — the `row_current_ind` lint gate that distinguishes legitimate SCD-2 surrogate keys (`position_key`, `game_state_key`, `edge_key`) from pure formatted-PK decoration.
+- Operational how-to companion: Pattern 80 (SCD-2 Version-Stable Surrogate Identifiers) in `DEVELOPMENT_PATTERNS_V1.36.md` — the `row_current_ind` lint gate that distinguishes legitimate SCD-2 surrogate keys (`position_key`, `game_state_key`, `edge_key`) from pure formatted-PK decoration.
 - Cross-references: Epic #972 (Canonical Layer Foundation), #496 (@Whatsonyourmind production matching experience), #935 (parent Epic — subsumed via ADR-118 migrations 0086-0089), #937 (folded into ADR-118 UNIQUE demotions), #964 (pmxt NormalizedMarket shape), ADR-089, ADR-116, ADR-117.
 **Changes in v2.36:**
 - **THREE-TIER IDENTITY MODEL:** Added ADR-117 codifying Epic #935's identity taxonomy for schema design
   - ADR-117: Every identifier column is Tier 1 (internal PK, 100% unique), Tier 2 (internal business key, case-by-case), or Tier 3 (external key, ASSUMED NOT UNIQUE)
   - No `UNIQUE` on Tier 3 columns; `ON CONFLICT` targets must be Tier 1 or 2; pollers tolerate duplicate external keys silently
   - Shipped in response to session 67 #933 `UniqueViolation` incident — Option D fix (demote `idx_games_espn_event` UNIQUE → non-unique) via migration 0066 (PR #938)
-  - Operational how-to companion: Pattern 79 in `DEVELOPMENT_PATTERNS_V1.35.md`
+  - Operational how-to companion: Pattern 79 in `DEVELOPMENT_PATTERNS_V1.36.md`
   - Unblocks cross-table audit in #937
   - Cross-references: Epic #935, #933, #936 (this ADR's tracking issue), #937, #938, ADR-116 (naming convention), ADR-089 (dual-key foundation), migration 0066
 **Changes in v2.35:**
@@ -17189,12 +17189,12 @@ The tier is recorded in the migration docstring that creates or demotes the colu
 ### Implementation
 
 - **Migration 0066** (shipped PR #938, session 67): demote `idx_games_espn_event` from partial `UNIQUE` → non-unique partial index. Docstring records `espn_event_id` as Tier 3 and embeds the Epic #935 cross-reference.
-- **Pattern 79** (DEVELOPMENT_PATTERNS_V1.35) — operational how-to companion to this ADR. Includes the wrong/right code examples, the 5-step pre-migration decision checklist, and the Tier-3 UNIQUE exception rule (requires documented vendor contract).
+- **Pattern 79** (DEVELOPMENT_PATTERNS_V1.36) — operational how-to companion to this ADR. Includes the wrong/right code examples, the 5-step pre-migration decision checklist, and the Tier-3 UNIQUE exception rule (requires documented vendor contract).
 - **Cross-table audit (#937)** — blocked on this ADR landing. Will systematically enumerate every `UNIQUE` / composite UNIQUE / `ON CONFLICT` in the schema and classify each component column by tier. Any Tier-3 UNIQUE not backed by a documented vendor contract becomes a demotion-migration candidate.
 
 ### Cross-References
 
-- **Pattern 79** (`DEVELOPMENT_PATTERNS_V1.35.md`): operational how-to — the decision checklist, wrong/right examples, the Tier-3 UNIQUE exception rule
+- **Pattern 79** (`DEVELOPMENT_PATTERNS_V1.36.md`): operational how-to — the decision checklist, wrong/right examples, the Tier-3 UNIQUE exception rule
 - **ADR-116:** ODS Schema Conventions — the `_key` / external-`_id` naming convention that makes Tier 2 vs Tier 3 grep-able
 - **ADR-089:** Dual-Key Schema Pattern — foundational (two-layer surrogate + business key); this ADR extends to a three-layer taxonomy by separating internal business keys from external keys
 - **Migration 0066:** `src/precog/database/alembic/versions/0066_demote_games_espn_event_unique.py` — the canonical Option D implementation; docstring embeds the three-tier framing
@@ -17280,7 +17280,7 @@ The monoculture audit (Round 2B, Mulder) landed an equal-and-opposite caution: 1
 
 9. **LLM `trust_tier` is first-class schema surface.** Derived view collapses `(min active-link confidence, review_state, domain)` into `{high, medium, provisional}`. LLM never sees raw confidence.
 
-10. **Open canonical enums are lookup tables, not CHECK constraints.** (Added v2.38, Cohort 1 amendment.) `canonical_events.domain`, `canonical_events.event_type`, `canonical_entity.entity_kind`, and `canonical_event_participants.role` all become FK references into small lookup tables (`canonical_event_domains`, `canonical_event_types`, `canonical_entity_kinds`, `canonical_participant_roles`). Extending the canonical ontology is an INSERT, not an ALTER TABLE. Consistent with existing lookup-table precedent (`match_algorithm`, `observation_source`). MCP Read-Only (#985) exposes `list_canonical_entity_kinds`, `list_canonical_event_domains`, etc. as tools. Pattern 81 promotion candidate.
+10. **Open canonical enums are lookup tables, not CHECK constraints.** (Added v2.38, Cohort 1 amendment.) `canonical_events.domain`, `canonical_events.event_type`, `canonical_entity.entity_kind`, and `canonical_event_participants.role` all become FK references into small lookup tables (`canonical_event_domains`, `canonical_event_types`, `canonical_entity_kinds`, `canonical_participant_roles`). Extending the canonical ontology is an INSERT, not an ALTER TABLE. Consistent with existing lookup-table precedent (`match_algorithm`, `observation_source`). MCP Read-Only (#985) exposes `list_canonical_entity_kinds`, `list_canonical_event_domains`, etc. as tools. Canonicalized as Pattern 81 in DEVELOPMENT_PATTERNS V1.36.
 
 11. **`canonical_entity.ref_team_id` typed back-reference.** (Added v2.38.) Resolves Level A (platform-dim `teams`) ↔ Level B (canonical-identity `canonical_entity`) for the sports domain at Phase 1 cost (1 nullable col + 1 CONSTRAINT TRIGGER) rather than at Phase 3 backfill cost. Integrity rule ("team-kind rows MUST carry ref_team_id") enforced via trigger because PostgreSQL CHECK cannot contain the required subquery. Canonical pattern template for Cohort 2+ polymorphic typed back-refs. Unlocks clean Pydantic sum-type projection for MCP.
 
@@ -17423,7 +17423,7 @@ Seed rows for the four lookup tables are embedded in the Cohort 1 migrations (00
 - `canonical_entity_kinds`: `team`, `fighter`, `candidate`, `storm`, `company`, `location`, `person`, `product`, `country`, `organization`, `commodity`, `media`
 - `canonical_participant_roles` (domain-scoped where meaningful): (sports, home), (sports, away), (fighting, fighter_a), (fighting, fighter_b), (politics, candidate), (politics, moderator), (weather, affected_location), (entertainment, nominee), (entertainment, winner), (entertainment, host). The `(fighting, *)` rows FK into `canonical_event_domains` via the `fighting` domain seeded above — no ALTER TABLE needed to introduce the fighting domain later, exactly the Pattern 81 discipline.
 
-New canonical kinds, domains, event_types, or roles land as INSERT rows in a migration (typically a seed-only migration), not as DDL changes. This is the Pattern 81 candidate — "Open canonical enum → lookup table over CHECK constraint" — promoted when Cohort 1 ships.
+New canonical kinds, domains, event_types, or roles land as INSERT rows in a migration (typically a seed-only migration), not as DDL changes. This is Pattern 81 — "Open canonical enum → lookup table over CHECK constraint" — canonical in DEVELOPMENT_PATTERNS V1.36 (promoted alongside Cohort 1 shipping).
 
 ##### Cohort 1 amendment rationale (v2.38, session 72 capture)
 
@@ -17817,8 +17817,9 @@ One-way-door inventory: **Option B** for `temporal_alignment` is the only Phase-
 - ADR-119 — sibling (business-key cleanup + weather Phase 1)
 - ADR-120 (future) — Level A vs Level B entity abstraction axis codification
 - Pattern 79 — Tier-3 demotion idiom reused in 0086-0089
-- Pattern 80 (promoted in `DEVELOPMENT_PATTERNS_V1.35.md`) — SCD-2 Version-Stable Surrogate Identifiers (ADR-119 Part 1 origin)
-- Pattern 81 (v1.36 promotion candidate, v2.38 origin) — "Open canonical enum → lookup table over CHECK constraint" (Cohort 1 amendment origin; 4 lookup tables at ADR-118)
+- Pattern 80 (promoted in `DEVELOPMENT_PATTERNS_V1.36.md`) — SCD-2 Version-Stable Surrogate Identifiers (ADR-119 Part 1 origin)
+- Pattern 81 (canonical in DEVELOPMENT_PATTERNS V1.36; v2.38 origin) — "Open canonical enum → lookup table over CHECK constraint" (Cohort 1 amendment origin; 4 lookup tables at ADR-118)
+- Pattern 82 (canonical in DEVELOPMENT_PATTERNS V1.36; v2.38 origin) — "CONSTRAINT TRIGGER for Polymorphic Typed Back-Reference" (Cohort 1 amendment origin; `enforce_canonical_entity_team_backref` template at Migration 0068; canonical template for Cohort 2+ polymorphic back-refs)
 - Issue #996 — ADR-118 Cohort 1 amendment tracking issue (8 user-adjudicated decisions; encoded in v2.38)
 
 ---
@@ -17827,7 +17828,7 @@ One-way-door inventory: **Option B** for `temporal_alignment` is the only Phase-
 
 **Session 70 Task 5**, three rounds of architect council + Mulder's Round 2B skeptical audit + @Whatsonyourmind's #496 production experience.
 
-**Session 71 Cohort 1 amendment (v2.38):** 2-agent council-variant (Holden + Galadriel) design validation on Cohort 1 scope surfaced 8 decisions that expanded the table set. User adjudicated each; issue #996 captures. The 2-agent compressed-council pattern is a Pattern 82 promotion candidate for settled-ADR validations (alternative to full S25 Triple Compass for new architectural choices). Additionally, the CONSTRAINT TRIGGER encoding for `canonical_entity.ref_team_id` introduced in this amendment (decision #5) is itself a candidate for a new DEVELOPMENT_PATTERNS entry — "Polymorphic typed back-refs enforced via CONSTRAINT TRIGGER, not CHECK" — because PostgreSQL CHECK constraints cannot contain subqueries, making the trigger the only correct encoding for dynamic kind-based integrity rules. This CONSTRAINT TRIGGER pattern is a candidate for promotion to DEVELOPMENT_PATTERNS V1.36 alongside Pattern 81 (open canonical enum → lookup table) when Cohort 1 ships.
+**Session 71 Cohort 1 amendment (v2.38):** 2-agent council-variant (Holden + Galadriel) design validation on Cohort 1 scope surfaced 8 decisions that expanded the table set. User adjudicated each; issue #996 captures. The 2-agent compressed-council process pattern remains a candidate for codification in `roster_triggers.md` as a settled-ADR validation alternative to full S25 Triple Compass; that codification is independent of the schema-pattern promotions in DEVELOPMENT_PATTERNS V1.36. The CONSTRAINT TRIGGER encoding for `canonical_entity.ref_team_id` introduced in this amendment (decision #5) — "Polymorphic typed back-refs enforced via CONSTRAINT TRIGGER, not CHECK" — was promoted as **Pattern 82** in DEVELOPMENT_PATTERNS V1.36 alongside **Pattern 81** (open canonical enum → lookup table). PostgreSQL CHECK constraints cannot contain subqueries, making the trigger the only correct encoding for dynamic kind-based integrity rules.
 
 - **Round 1:** canonical-tier architecture (Holden + Galadriel + Vader; PM synthesis)
 - **Round 2B:** matching-schema cardinality; M:N via link table (+ Mulder)
@@ -17909,7 +17910,7 @@ Each independently reversible. Test-fixture updates accompany migration (not fol
 
 `game_state_key`, `position_key`, `edge_key` follow `{PREFIX}-{id}` but serve different architectural purpose: SCD-2 tables represent logical entity as chain of rows (one per version), each with distinct `id`. External reference to "position 4821" must resolve to same logical position across version chain — changing `id` cannot provide. `_key` column supplies version-stable identity.
 
-**Any automated lint must gate on `row_current_ind` column presence.** Tables without SCD-2 markers have no legitimate need for version-stable-over-PK identifier; SCD-2 tables do. This is Pattern 80 (promoted to `DEVELOPMENT_PATTERNS_V1.35.md` alongside this ADR).
+**Any automated lint must gate on `row_current_ind` column presence.** Tables without SCD-2 markers have no legitimate need for version-stable-over-PK identifier; SCD-2 tables do. This is Pattern 80 (promoted to `DEVELOPMENT_PATTERNS_V1.36.md` alongside this ADR).
 
 Future Phase 2+ migration will rename these to `version_stable_id` for self-documenting naming; semantics preserved; no blast-radius work blocked.
 
@@ -18075,7 +18076,7 @@ User corrected an earlier misunderstanding: **Kalshi has comprehensive weather m
 - ADR-117 — series_key reclassification updates Tier taxonomy
 - ADR-116 — Part 1 implements Rule 2; SCD-2 exception amends Rule 2
 - ADR-089 — Dual-key pattern; SCD-2 surrogate is extension not contradiction
-- Pattern 80 (promoted in `DEVELOPMENT_PATTERNS_V1.35.md`) — SCD-2 Version-Stable Surrogate Identifiers; lint gate on `row_current_ind`
+- Pattern 80 (promoted in `DEVELOPMENT_PATTERNS_V1.36.md`) — SCD-2 Version-Stable Surrogate Identifiers; lint gate on `row_current_ind`
 - Isidore memo (session 70 design review) — audit origin
 - Round 3 synthesis (session 70 design review) — event-state architecture
 - Issue #496 — `_key` suffix history
