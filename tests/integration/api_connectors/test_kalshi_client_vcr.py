@@ -33,7 +33,7 @@ Related Requirements:
     - REQ-TEST-002: Integration tests use real API fixtures (Pattern 22)
 
 Reference:
-    - Pattern 22 (CLAUDE.md Critical Pattern #7 + DEVELOPMENT_PATTERNS_V1.31.md)
+    - Pattern 22 (CLAUDE.md Critical Pattern #7 + DEVELOPMENT_PATTERNS_V1.35.md)
     - GitHub Issue #124: Fix integration test mocks
     - Phase 1.5 Test Audit: 77% false positive rate from mocks
 """
