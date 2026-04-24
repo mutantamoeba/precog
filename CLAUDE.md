@@ -186,7 +186,7 @@ precog-repo/
 
 **Architecture & Planning:**
 - `docs/foundation/MASTER_REQUIREMENTS_V2.26.md` - All requirements
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.37.md` - 116+ ADRs including ADR-118 + ADR-119 (Canonical Layer Foundation — Epic #972) (count may drift from document head — the V2.x version bumps track document revisions, not ADR count)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.38.md` - 116+ ADRs including ADR-118 + ADR-119 (Canonical Layer Foundation — Epic #972; ADR-118 Cohort 1 amendment per #996 encoded in V2.38) (count may drift from document head — the V2.x version bumps track document revisions, not ADR count)
 - `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.2.md` - Phase roadmap (Era 2: current)
 
 **Implementation:**
