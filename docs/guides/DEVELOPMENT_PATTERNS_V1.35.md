@@ -11817,7 +11817,7 @@ This was exactly the failure mode Isidore's Round 2A audit (session 70 Task 5) s
 # initially conceived, this would delete game_states.game_state_key /
 # positions.position_key / edges.edge_key — destroying external-reference
 # stability across SCD-2 version chains.
-def find_formatted_pk_decoration(inspector):
+def find_formatted_pk_decoration(inspector, connection):
     candidates = []
     for table in inspector.get_table_names():
         for col in inspector.get_columns(table):
@@ -11846,7 +11846,7 @@ def find_formatted_pk_decoration(inspector):
 # With the `row_current_ind` gate — legitimate SCD-2 surrogates survive.
 SCD2_MARKER_COLUMN = "row_current_ind"
 
-def find_formatted_pk_decoration(inspector):
+def find_formatted_pk_decoration(inspector, connection):
     """Return {PREFIX}-{id} business-key columns that are decoration,
     NOT load-bearing SCD-2 version-stable surrogates."""
     decoration = []
