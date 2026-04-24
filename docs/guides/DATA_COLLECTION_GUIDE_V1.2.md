@@ -11,7 +11,7 @@
 **Related Documents:**
 - `docs/guides/MODEL_MANAGER_USER_GUIDE_V1.1.md` (Future Enhancements - Data Collection Pipelines)
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md` (ESPN, Kalshi, Balldontlie APIs)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` (REQ-DATA-001 through REQ-DATA-008, REQ-ELO-*)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.26.md` (REQ-DATA-001 through REQ-DATA-008, REQ-ELO-*)
 - `docs/foundation/ARCHITECTURE_DECISIONS_V2.37.md` (ADR-002: Decimal Precision, ADR-053: Data Validation, ADR-076: Sports Data Source Tiering, ADR-109: Elo Computation)
 - `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md` ⭐ **NEW** (Comprehensive 8-source specification)
 - `docs/guides/ELO_COMPUTATION_GUIDE_V1.0.md` 🔵 **PLANNED** (Elo methodology and implementation)

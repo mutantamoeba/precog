@@ -1,9 +1,20 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.25
-**Last Updated:** 2025-12-26
+**Version:** 2.26
+**Last Updated:** 2026-04-23
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.26 (Session 71, 2026-04-23):**
+- **LLM/MCP INTEGRATION REQUIREMENTS:** Added Section 4.18 with REQ-LLM-001 through REQ-LLM-016
+- **PATH B SERVICE-LAYER ARCHITECTURE:** FastAPI + shared Pydantic contracts as SSOT; MCP and web UI are parallel consumers
+- **REQ-LLM-001 through REQ-LLM-006:** Capability surfaces (service layer, read-only MCP, analytics MCP, trade-placement MCP, MCP deployment, OpenAI-compat adapter)
+- **REQ-LLM-007 through REQ-LLM-010:** Cross-cutting contracts (shared Pydantic), auth/authorization, audit trail, rate limiting
+- **REQ-LLM-011 through REQ-LLM-013:** Operational correctness (observability/tracing, fallback/degraded-mode, error-code taxonomy) — MUST ship before #987 Trade-Placement MCP enters demo soak
+- **REQ-LLM-014 through REQ-LLM-016:** Cross-cutting operational policy (contract versioning, contract-parity testing, LLM-scoped credentials)
+- **CROSS-REFERENCES:** Epic #990, Child issues #982-#989 + new #991/#992/#993 (observability, review dashboard, red-team harness), DEVELOPMENT_PHASES_ERA2_V1.2 (Phase 5 LLM section)
+- **DEFERRED DECISION:** Anthropic-MCP vs self-hosted-LLM explicitly deferred until service layer ships (ADR-tracker #983)
+- Total requirements: 137 -> 153
+
 **Changes in v2.25:**
 - **NEIL PAINE DATA SOURCE MIGRATION:** Updated all FiveThirtyEight references to Neil Paine GitHub archives
 - **REQ-ELO-008:** Added Elo Validation Against Reference Data requirement (NHL validated: 11.2 avg diff)
@@ -329,7 +340,7 @@ precog/
 - **This Document**: Master requirements (overview, phases, objectives)
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
-  2. `MASTER_REQUIREMENTS_V2.25.md` - This document (requirements through Phase 10)
+  2. `MASTER_REQUIREMENTS_V2.26.md` - This document (requirements through Phase 10)
   3. `MASTER_INDEX_V2.54.md` - Complete document inventory
   4. `ARCHITECTURE_DECISIONS_V2.37.md` - All ADRs with design rationale (Phase 0-4.5, ADR-118 Canonical Identity/Matching/Event-State Layer + ADR-119 Business-Key Cleanup + Weather Phase 1; ADR-117 amended for series.series_key Tier-3 reclassification)
   5. `REQUIREMENT_INDEX_V1.17.md` - Systematic requirement catalog
@@ -1465,7 +1476,7 @@ Complements live data polling (REQ-DATA-001-005) with batch import capabilities.
 ### 4.14 Trade Execution Requirements (Era 2, Phase 2)
 
 > **Added:** V2.26 (Session 41, 2026-04-05). Formalizes C4 Phase Gate finding B1.
-> **Reference:** DEVELOPMENT_PHASES_ERA2_V1.1.md, Epic #504
+> **Reference:** DEVELOPMENT_PHASES_ERA2_V1.2.md, Epic #504
 
 #### REQ-TRADE-001: Order Placement Pipeline
 - Submit orders to Kalshi API through validated pipeline
@@ -1671,10 +1682,152 @@ Before any real-money trading is enabled:
 
 ---
 
+### 4.18 LLM / MCP Integration Requirements (Era 2, Phase 5)
+
+> **Added:** V2.26 (Session 71, 2026-04-23) — Task 9 deferred from session 70.
+> **Parent Epic:** #990 (MCP/LLM Integration via Shared Service Layer — Path B)
+> **Architecture commitment (session 69):** Path B — a shared FastAPI service layer with Pydantic contracts is consumed by MCP tools and web UI via the same backend routes. LLM-initiated actions ride on the same primitives as user-initiated actions: single audit trail, single validation layer, single rate-limit enforcement point.
+> **Deferred decision:** Anthropic-MCP vs self-hosted-LLM-with-OpenAI-tool-calling is explicitly deferred until the service layer ships (ADR-tracker #983).
+
+#### REQ-LLM-001: Service Layer (FastAPI + Shared Pydantic Contracts)
+- FastAPI application scaffolded under `src/precog/service/`
+- Shared Pydantic contracts module (`src/precog/contracts/`) — SSOT types consumed by service routes, MCP tools, and web UI
+- Business logic lives in service modules (`service/*_service.py`); routers are thin
+- Dependency injection (FastAPI `Depends`) for DB sessions, config, auth context
+- Health + readiness endpoints
+- Read routes over canonical_markets, canonical_events, positions, edges, history (Epic #972 canonical views)
+- Consumption contract: MCP tools and web UI do **not** bypass the service layer to reach the database directly
+- Related: #984
+
+#### REQ-LLM-002: Read-Only MCP Server
+- MCP server exposing market data, positions, edges, game states, historical queries
+- Tools: `get_markets`, `get_market_by_id`, `get_positions`, `get_edges`, `get_game_states`, `query_history`, `get_canonical_event`
+- All tools are thin wrappers over FastAPI service routes (no direct DB access from MCP)
+- Input validation via shared Pydantic contracts (REQ-LLM-007)
+- Read-only assertion enforced by test gate: no tool invokes a state-mutating service route
+- Transport: stdio (SSE deferred to REQ-LLM-005)
+- Related: #985
+
+#### REQ-LLM-003: Analytics MCP Server
+- MCP tools for backtesting, EV calculations, strategy performance, model calibration
+- Tools: `run_backtest`, `calculate_ev`, `strategy_performance_report`, `model_calibration_check`, `compare_strategies`, `edge_distribution_analysis`
+- Tools delegate to FastAPI service routes, which delegate to analytics modules
+- Computation-limit guards: maximum backtest window, maximum rows returned
+- Pydantic contracts for parameters (time ranges, strategy IDs, model IDs)
+- Related: #986
+
+#### REQ-LLM-004: Trade-Placement MCP Server
+- MCP tools for state-mutating trade placement via Kalshi demo (and eventually live)
+- Tools: `place_market_order`, `place_limit_order`, `place_stop_loss`, `place_take_profit`, `cancel_order`, `close_position`
+- Every tool routes through FastAPI state-mutating service endpoints (REQ-TRADE-001 through REQ-TRADE-006)
+- Confirmation-token pattern: LLM must supply a signed token (from a prior read/analysis call) to execute a state-mutating tool
+- Kill-switch integration (REQ-TRADE-006 + #329) — every MCP tool call checks the kill-switch state
+- Live trading requires explicit user approval gate; demo-only until an ADR decision says otherwise
+- Related: #987
+
+#### REQ-LLM-005: MCP Deployment (stdio + SSE; Process Isolation; Credential Handoff)
+- stdio transport for local clients (Claude Desktop equivalent); SSE transport for remote / multi-client deployments
+- Each MCP server runs as a separate process with scoped credentials
+- Credentials handed off via environment variables at spawn (no disk write outside `_keys/`)
+- Config handoff via standard precog config loader (YAML + env)
+- Health endpoint / heartbeat per MCP server
+- Log aggregation via standard precog logging
+- Graceful shutdown reuses Pattern 79 + ADR-117 scheduler shutdown discipline
+- Related: #988
+
+#### REQ-LLM-006: OpenAI-Compat Adapter (Conditional)
+- If the Anthropic-MCP-vs-self-hosted decision (ADR-tracker #983) chooses self-hosted or BOTH, an OpenAI tool-calling adapter exposes the same service layer
+- Adapter scaffold under `src/precog/llm_adapters/openai_compat/`
+- OpenAI tool-calling shape: `/v1/chat/completions` with `tools=[...]` derived from shared Pydantic contracts
+- Parity: tool outcomes match across MCP and OpenAI-compat paths (verified by parity tests)
+- Auth, rate-limit, audit trail reused from Phase 5 security infra
+- **Blocked by ADR decision (#983)**
+- Related: #989
+
+#### REQ-LLM-007: Shared Pydantic Contracts (Single Source of Truth)
+- All contract types (request/response shapes for service routes, MCP tools, web UI) live in one module: `src/precog/contracts/`
+- No duplication of contract types across consumers (enforces Pattern 73 at the type-system level)
+- Contract changes trigger a single cross-consumer review (not N parallel updates)
+- Each contract is versioned; breaking contract changes require an ADR
+
+#### REQ-LLM-008: Authentication & Authorization for LLM-Initiated Actions
+- Every LLM-initiated action (MCP tool call, OpenAI-compat adapter invocation) is gated by caller identity
+- Caller identity is a principal string (user or service account) scoped to a tenant
+- Authorization checks are declared per route in the service layer (not in individual MCP tools)
+- State-mutating routes require an additional confirmation scope (confirmation-token or interactive user consent)
+- Authentication bypass is impossible at the MCP protocol layer — the service layer is the sole enforcement point
+
+#### REQ-LLM-009: Audit Trail for LLM-Initiated State-Mutating Actions
+- Every state-mutating LLM-initiated action is logged with: caller identity, originating prompt hash, MCP tool name, tool arguments (redacted of secrets), service route invoked, result status, timestamp, and kill-switch state at the time of call
+- Audit table is append-only (Pattern 79-adjacent: append-only facts, no UPDATE)
+- Audit trail is queryable independently of application state (separate persistence target acceptable; in-DB audit table is the MVP)
+- Audit events are also streamed to the standard precog log aggregation path for real-time alerting
+
+#### REQ-LLM-010: Rate Limiting for LLM-Initiated Actions
+- Per-caller rate limits: maximum N calls per minute, maximum M concurrent in-flight calls
+- Per-MCP-tool rate limits: state-mutating tools have stricter limits than read tools
+- Per-market rate limits: maximum trades per market per time window (prevents runaway-agent strategies)
+- Rate-limit rejections return structured error codes that the LLM client can parse and respect
+- Rate-limit state is observable (dashboard / queryable endpoint) for operational monitoring
+
+#### REQ-LLM-011: Observability (Metrics & Distributed Tracing)
+- Every MCP tool call, service route invocation, and LLM-initiated action MUST emit structured observability signals
+- Request latency histograms per-tool and per-route
+- Error-rate time-series by error domain (per REQ-LLM-013 taxonomy)
+- Distributed trace spans propagated from MCP tool entry → service route → data layer
+- Standard SLI/SLO dashboards showing service-layer + MCP-server health
+- Observability is INDEPENDENT of the REQ-LLM-009 audit trail: audit trail is compliance-oriented and append-only; observability is operations-oriented and time-windowed
+- MUST be in place BEFORE Trade-Placement MCP (#987) enters demo soak (safety-guard regressions must be visible in production)
+- Related: #991 (Observability & Tracing Infrastructure capability issue)
+
+#### REQ-LLM-012: Fallback and Degraded-Mode Behavior
+- Every LLM-initiated action MUST have a defined degraded-mode contract when its dependency is unavailable
+- If service layer unreachable: MCP tools return structured unavailability errors (not generic 500s)
+- If MCP server crashes: clients receive a structured disconnection signal
+- If database is read-only (canonical-layer maintenance): state-mutating tools return structured temporarily-unavailable errors with retry guidance
+- LLM clients self-recover on structured errors but loop on generic errors — making this explicit is a correctness requirement for autonomous-agent safety
+- Related: REQ-LLM-013 (error-code taxonomy these structured errors must use)
+
+#### REQ-LLM-013: Error-Code Taxonomy for LLM Clients
+- A canonical, versioned error-code taxonomy MUST be defined across domains:
+  - `auth_failure`, `authorization_denied`, `rate_limit_exceeded`, `validation_failed`
+  - `contract_version_mismatch`, `kill_switch_active`, `state_conflict`, `dependency_unavailable`
+  - `computation_limit_exceeded`, `confirmation_token_invalid`
+- Every error response from service routes (and therefore every MCP tool error) carries: `domain` + `code` + `retryable_hint` (bool) + human-readable `message`
+- LLM client consumes `domain` + `retryable_hint` to decide recovery strategy
+- Unstructured errors cause LLM loop-and-retry behavior that wastes tokens and hits rate limits (anti-pattern)
+- Related: REQ-LLM-012 (fallback behavior depends on this taxonomy)
+
+#### REQ-LLM-014: Pydantic Contract Versioning and Evolution
+- Each shared Pydantic contract carries an explicit `schema_version` field
+- Breaking contract changes require a new version and a deprecation window
+- MCP servers declare minimum + maximum compatible contract versions in their capability manifest
+- Service layer rejects requests carrying contract versions outside its support window with a structured `contract_version_mismatch` error (per REQ-LLM-013)
+- Contract-version evolution policy and deprecation timelines MUST be documented in an ADR (candidate for ADR-tracker #982 scope)
+- Related: REQ-LLM-007 (shared contracts SSOT), REQ-LLM-015 (parity testing enforces consistency)
+
+#### REQ-LLM-015: Contract Parity Testing (Producer-Consumer Drift Guard)
+- Test gate asserts every capability exposed by a service route has a matching MCP tool contract AND (when OpenAI-compat adapter #989 ships) a matching tool-schema in the adapter
+- Contract shapes (input/output field names, types, optionality) MUST be identical across consumers
+- Violation fails the pre-push gate
+- Without this, Pattern 73 SSOT is theoretical — contracts drift the moment a producer adds a field that one consumer does not surface
+- Related: REQ-LLM-007, REQ-LLM-014
+
+#### REQ-LLM-016: LLM-Scoped Credential Scoping Policy
+- LLM-initiated actions MUST execute under a distinct principal from the user's own principal
+- Scoped per-tenant, per-tool-category (read/analytics/trade), and per-environment (demo/live/dev)
+- User credentials are NEVER directly exposed to the LLM or MCP process
+- The LLM is issued a derived principal with a subset of the user's authorizations
+- Credential rotation, revocation, and expiry are independent of user-credential lifecycle
+- The policy definition itself is an ADR candidate (ADR-tracker #983 scope, or a new ADR-tracker if it warrants its own)
+- Related: REQ-LLM-008 (auth/authorization the scoped principal authenticates against)
+
+---
+
 ## 5. Development Phases
 
 > **Note:** Phases 0-1.5 below are Era 1 definitions (historical). For Era 2 phases (2-5),
-> see `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.1.md`.
+> see `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.2.md`.
 
 ### Phase 0: Foundation & Documentation (COMPLETED)
 
@@ -4655,7 +4808,7 @@ For questions or issues:
 | 2.4 | 2025-10-19 | **MAJOR UPDATE**: Added Phase 0.5 (Foundation Enhancement); added versioning requirements (strategies, probability_models with immutable pattern); added trailing stop loss requirements; updated database overview to V1.4; added Phase 1.5 (Foundation Validation); updated all phase descriptions to reflect versioning enhancements |
 | 2.5 | 2025-10-21 | **CRITICAL UPDATE**: Added Phase 5 monitoring and exit management requirements; Added REQ-MON-*, REQ-EXIT-*, REQ-EXEC-* requirements; Updated database to V1.5 (position_exits, exit_attempts tables); Added 10 exit conditions with priority hierarchy |
 | 2.6 | 2025-10-22 | **STANDARDIZATION**: Added systematic REQ IDs to all requirements; Added REQUIREMENT_INDEX.md and ADR_INDEX.md references; Improved requirement traceability |
-| 2.26 | 2026-04-05 | **ERA 2 REQUIREMENTS**: Added sections 4.14-4.17 (REQ-TRADE, REQ-ORDER, REQ-SAFE, REQ-WEB). Formalizes C4 Phase Gate finding B1. 22 new requirements covering trade execution, 5 order types, safety guards, and web UI across Phases 2-4. |
+| 2.26 (planned 2026-04-05, shipped 2026-04-23) | 2026-04-23 | **ERA 2 REQUIREMENTS + LLM/MCP (Session 41 + Session 71 merged):** Sections 4.14-4.17 (REQ-TRADE, REQ-ORDER, REQ-SAFE, REQ-WEB) formalizes C4 Phase Gate finding B1 — 22 new requirements covering trade execution, 5 order types, safety guards, and web UI across Phases 2-4 (originally planned for v2.26 at session 41 but never-shipped as a version bump; rolled into the session-71 v2.26). Session 71 Task 9: added Section 4.18 with REQ-LLM-001 through REQ-LLM-016 — Path B shared-service-layer architecture, read-only/analytics/trade-placement MCP surfaces, MCP deployment, OpenAI-compat adapter (conditional), shared Pydantic contracts, auth, audit trail, rate limiting, observability/tracing, fallback/degraded-mode, error-code taxonomy, contract versioning/parity, LLM-scoped credentials. Anthropic-MCP-vs-self-hosted decision deferred to ADR-tracker #983. Parent Epic #990; child issues #982-#989 + #991 (observability) + #992 (review dashboard) + #993 (red-team harness). |
 
 ---
 
@@ -4663,4 +4816,4 @@ For questions or issues:
 
 ---
 
-**END OF MASTER REQUIREMENTS V2.20**
+**END OF MASTER REQUIREMENTS V2.26**
