@@ -214,19 +214,8 @@ def test_market_type_general_check_blocks_invalid_value(db_pool: Any) -> None:
             (nk_hash,),
         )
 
-    # The INSERT requires a valid canonical_event_id; canonical_events is
-    # empty in dev, so this test cannot proceed past FK without seeding an
-    # event.  We rely on the SAVEPOINT + ROLLBACK pattern: attempt the INSERT
-    # with an obviously invalid market_type_general AND a likely-NULL FK; the
-    # CheckViolation should fire BEFORE the FK check (CHECK is row-local;
-    # FK is referential, evaluated after).  In practice PG evaluates CHECK
-    # first.  If not, FK violation also surfaces a constraint error and the
-    # test would still need redesign -- but our expectation matches PG semantics.
-    #
-    # Cleaner approach: seed a temporary canonical_event so the FK passes,
-    # then exercise CHECK.  We do that explicitly.
+    # Seed a real canonical_event so FK passes; CHECK fires on row-local validation.
     try:
-        # Seed a canonical_event we can reference, then attempt CHECK violation.
         seeded_event_id = _seed_canonical_event(suffix)
         try:
             with pytest.raises(psycopg2.errors.CheckViolation):

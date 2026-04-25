@@ -240,6 +240,10 @@ def test_canonical_entity_kinds_has_all_seed_rows(db_pool: Any) -> None:
     actual = [r["entity_kind"] for r in rows]
     for expected_kind in _EXPECTED_ENTITY_KINDS:
         assert expected_kind in actual, f"entity_kind {expected_kind!r} missing; got {actual!r}"
+    assert len(actual) == len(_EXPECTED_ENTITY_KINDS), (
+        f"canonical_entity_kinds row count drifted; expected {len(_EXPECTED_ENTITY_KINDS)}, "
+        f"got {len(actual)}: {actual!r}"
+    )
 
 
 def test_canonical_participant_roles_has_all_seed_rows(db_pool: Any) -> None:
@@ -259,6 +263,10 @@ def test_canonical_participant_roles_has_all_seed_rows(db_pool: Any) -> None:
         assert expected_pair in actual, (
             f"participant_role pair {expected_pair!r} missing; got {actual!r}"
         )
+    assert len(actual) == len(_EXPECTED_PARTICIPANT_ROLES), (
+        f"canonical_participant_roles row count drifted; expected {len(_EXPECTED_PARTICIPANT_ROLES)}, "
+        f"got {len(actual)}: {actual!r}"
+    )
 
 
 def test_participant_role_fk_resolves_to_correct_domain(db_pool: Any) -> None:

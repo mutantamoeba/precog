@@ -213,6 +213,10 @@ def test_canonical_event_domains_has_all_seed_rows(db_pool: Any) -> None:
         assert expected_domain in actual, (
             f"domain {expected_domain!r} missing from canonical_event_domains; got {actual!r}"
         )
+    assert len(actual) == len(_EXPECTED_DOMAINS), (
+        f"canonical_event_domains row count drifted; expected {len(_EXPECTED_DOMAINS)}, "
+        f"got {len(actual)}: {actual!r}"
+    )
 
 
 def test_canonical_event_types_has_all_seed_rows(db_pool: Any) -> None:
@@ -238,6 +242,10 @@ def test_canonical_event_types_has_all_seed_rows(db_pool: Any) -> None:
         assert expected_pair in actual, (
             f"event_type pair {expected_pair!r} missing from canonical_event_types; got {actual!r}"
         )
+    assert len(actual) == len(_EXPECTED_EVENT_TYPES), (
+        f"canonical_event_types row count drifted; expected {len(_EXPECTED_EVENT_TYPES)}, "
+        f"got {len(actual)}: {actual!r}"
+    )
 
     # Carry-forward verification: zero fighting event_types seeded (per migration docstring).
     fighting_types = [pair for pair in actual if pair[0] == "fighting"]
