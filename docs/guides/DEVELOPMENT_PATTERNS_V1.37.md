@@ -1,13 +1,18 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.36
+**Version:** 1.37
 **Created:** 2025-11-13
-**Last Updated:** 2026-04-24
+**Last Updated:** 2026-04-25
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.37:**
+- **Amended Pattern 82:** added new "**V2: Forward-Only Direction Policy**" subsection — Pattern 82 triggers MUST encode only the forward direction (require typed back-ref when discriminator matches); the reverse direction (forbid back-ref when discriminator does not match) is intentionally NOT enforced at the trigger level, preserving polymorphic-overloading future-extensibility per ADR-118 V2.38 decision #5 (ratified in V2.40 amendment). Mandatory compensating mechanism: every Pattern 82 application MUST be paired with a load-bearing regression test. Decision Checklist gains a "Direction" item + "Compensating test" item.
+- **Added Pattern 83: Seed-Time Foreign-Key Subquery Guard for Cross-Migration Lookups (ALWAYS for Cross-Migration Seed Inserts)** — codifies the inline guard pattern that resolves a parent lookup id BEFORE the dependent INSERT and raises on NULL. Closes the silent-failure path where `INSERT ... VALUES ((SELECT id FROM parent WHERE key=:key), ...)` lands a NULL-bearing row when the parent key fails to resolve. Includes explicit `ON CONFLICT` NULL-distinctness warning and append-only retrofit principle (do NOT retrofit shipped migrations 0067 + 0068; apply going forward).
+- Origin: Session 74 #1011 carry-forward design council (Holden + Galadriel + Joe Chip — unanimous on Pattern 83 promotion; council ratified one-direction Pattern 82 + load-bearing compensating test). Session 75 PM adjudication. ADR-118 V2.40 ratifies (PR 1 of 3-PR bundle).
+- Pair-with: Pattern 83 protects the seed integrity of Pattern 81 instances (lookup tables) and Pattern 82 instances (typed back-ref triggers, whose discriminator FK seed completeness is the prerequisite the trigger looks up by name).
 **Changes in V1.36:**
 - **Added Pattern 81: Open Canonical Enum → Lookup Table Over CHECK Constraint (ALWAYS for Open Enums Likely to Grow)**
 - **Added Pattern 82: CONSTRAINT TRIGGER for Polymorphic Typed Back-Reference (ALWAYS for Discriminator-Gated Back-Ref Integrity)**
@@ -396,14 +401,15 @@
 40. [Pattern 80: SCD-2 Version-Stable Surrogate Identifiers (ALWAYS When Deciding Whether a {PREFIX}-{id} Business-Key Column Is Decoration or Load-Bearing)](#pattern-80-scd-2-version-stable-surrogate-identifiers-always-when-deciding-whether-a-prefix-id-business-key-column-is-decoration-or-load-bearing)
 41. [Pattern 81: Open Canonical Enum → Lookup Table Over CHECK Constraint (ALWAYS for Open Enums Likely to Grow)](#pattern-81-open-canonical-enum--lookup-table-over-check-constraint-always-for-open-enums-likely-to-grow)
 42. [Pattern 82: CONSTRAINT TRIGGER for Polymorphic Typed Back-Reference (ALWAYS for Discriminator-Gated Back-Ref Integrity)](#pattern-82-constraint-trigger-for-polymorphic-typed-back-reference-always-for-discriminator-gated-back-ref-integrity)
-43. [Pattern Quick Reference](#pattern-quick-reference)
-44. [Related Documentation](#related-documentation)
+43. [Pattern 83: Seed-Time Foreign-Key Subquery Guard for Cross-Migration Lookups (ALWAYS for Cross-Migration Seed Inserts)](#pattern-83-seed-time-foreign-key-subquery-guard-for-cross-migration-lookups-always-for-cross-migration-seed-inserts)
+44. [Pattern Quick Reference](#pattern-quick-reference)
+45. [Related Documentation](#related-documentation)
 
 ---
 
 ## Introduction
 
-This guide contains **82 development patterns** that must be followed throughout the Precog project. (The V1.0 baseline was 10 patterns; the count has grown organically via the S80 periodic promotion sweep as the project hits new failure modes.) These patterns address:
+This guide contains **83 development patterns** that must be followed throughout the Precog project. (The V1.0 baseline was 10 patterns; the count has grown organically via the S80 periodic promotion sweep as the project hits new failure modes.) These patterns address:
 
 - **Financial Precision:** Decimal-only arithmetic for sub-penny pricing
 - **Data Versioning:** Dual versioning system for mutable vs. immutable data
@@ -12226,6 +12232,14 @@ CREATE CONSTRAINT TRIGGER trg_canonical_entity_team_backref
 -- DROP FUNCTION IF EXISTS enforce_canonical_entity_team_backref();
 ```
 
+### V2: Forward-Only Direction Policy (Session 75)
+
+All Pattern 82 triggers MUST encode only the **forward direction**: when the discriminator value matches kind X, the typed back-ref column `ref_X_id` MUST be NOT NULL. The reverse direction (FORBID `ref_X_id IS NOT NULL` when discriminator value is non-X) is **intentionally NOT enforced** at the trigger level — preserves polymorphic-overloading future-extensibility per ADR-118 V2.38 decision #5 (ratified in V2.40 amendment).
+
+**Mandatory compensating mechanism:** every Pattern 82 application MUST be paired with a regression test that asserts no row carries a `ref_*_id` for a non-matching discriminator value. The test is **load-bearing** — it MUST NOT be skipped, retired, or admitted to any audit bypass set. For the canonical_entity instance, the test lives at `tests/database/test_canonical_entity_polymorphic_invariants.py` (folded into #1021 scope).
+
+**Why one-direction-only AND why mandatory test:** without the load-bearing regression test, future cohorts copy-paste the trigger pattern verbatim and create an N×N matrix of silent overload paths where each trigger says "I don't apply to your kind" and a malformed row passes all of them. The test is the load-bearing compensating mechanism. (See `memory/design_review_1011_joechip_memo.md` § Item 4 STRONGEST CONCERN for the full decay-vector analysis.)
+
 ### When to Use
 
 - Polymorphic parent table with one or more typed back-ref columns (one column per child type)
@@ -12264,6 +12278,8 @@ ADR-118 v2.38 commits to Pattern 82 as the **canonical template** for Cohort 2+ 
 3. **Will multiple typed back-refs accumulate over time?** If yes → Pattern 82's per-trigger discipline keeps the rules independently reviewable. A single dispatcher trigger that handles all back-refs becomes a coordination liability quickly.
 4. **Does any bulk-load migration need to stage rows before validation fires?** If yes → `DEFERRABLE INITIALLY IMMEDIATE` is correct (immediate by default; opt into deferred via `SET CONSTRAINTS ALL DEFERRED`). If no, the same form is still correct — there is no harm in being deferrable.
 5. **Does the downgrade explicitly DROP both the trigger and the function?** Verify before merge — there is no `CREATE OR REPLACE CONSTRAINT TRIGGER`.
+6. **Direction:** forward only. Do NOT add the reverse-direction check (forbidding non-target-kind rows from carrying the back-ref). The polymorphic surface keeps the option open for future overloaded use.
+7. **Compensating test:** every Pattern 82 application MUST be paired with a regression test asserting `(discriminator, ref_*_id)` cross-product consistency. Test is load-bearing — not skippable.
 
 ### Pair With Pattern 81 (Open Canonical Enum → Lookup Table)
 
@@ -12276,6 +12292,79 @@ Pattern 81 keeps the discriminator extension cost at one INSERT (no ALTER TABLE 
 - Migration 0068 (`src/precog/database/alembic/versions/0068_canonical_entity_foundation.py`, lines 273-301) — first concrete instance; verbatim template
 - PostgreSQL documentation: CHECK constraints cannot contain subqueries; CONSTRAINT TRIGGER is the correct mechanism for cross-table integrity rules
 - Pattern 81 (sibling) — open canonical enum → lookup table; Pattern 82's discriminator FK is a Pattern 81 instance
+
+---
+
+## Pattern 83: Seed-Time Foreign-Key Subquery Guard for Cross-Migration Lookups (ALWAYS for Cross-Migration Seed Inserts)
+
+### When to apply
+
+ALWAYS when a seed migration's INSERT subqueries a lookup table populated by an earlier migration. The triggering shape:
+
+```python
+conn.execute(sa.text(
+    "INSERT INTO child_table (parent_id, ...) "
+    "VALUES ((SELECT id FROM parent_table WHERE key = :key), ...)"
+), {"key": parent_key, ...})
+```
+
+### The hazard (silent-failure mode)
+
+If `:key` does not resolve in `parent_table`, the subquery returns NULL. The INSERT succeeds with `parent_id = NULL`, silently writing a row that masquerades as cross-domain / cross-tier / orphan. The migration completes "successfully." The defect surfaces weeks or months later as silent data drift — the worst class of defect.
+
+### The rule
+
+Resolve the parent key to an explicit value BEFORE the INSERT. Raise on NULL.
+
+```python
+def _resolve_lookup_id_or_raise(
+    conn: sa.engine.Connection,
+    table: str,
+    key_col: str,
+    key_val: str,
+) -> int:
+    sql = f"SELECT id FROM {table} WHERE {key_col} = :key_val"
+    result = conn.execute(sa.text(sql), {"key_val": key_val}).scalar()
+    if result is None:
+        raise RuntimeError(
+            f"Pattern 83: seed lookup miss — {table}.{key_col}={key_val!r} "
+            f"not found. Is the parent seed migration applied?"
+        )
+    return result
+```
+
+Then refactor the INSERT to two steps: resolve, then INSERT.
+
+### Why
+
+Alembic's revision graph enforces *ordering*, not *seed completeness*. A partial parent-seed (DDL applied + seed loop crashed mid-way + migration patched and rerun on a forked branch) leaves the dependency dangling. Pattern 83 is the smallest enforcement surface that closes the gap.
+
+### Critical interaction with `ON CONFLICT`
+
+`ON CONFLICT (col_a, col_b) DO NOTHING` does NOT idempotently handle NULL `col_a` values — PostgreSQL treats NULL as distinct in conflict matching. A guard that prevents NULL from being produced in the first place is the only correct form. Two NULL-bearing rows that should idempotently dedupe will both insert successfully.
+
+### Append-only retrofit principle
+
+Do NOT retrofit Pattern 83 into shipped migrations (the precedent is migrations 0067 + 0068, which both have the silent-NULL pattern). Migrations are append-only post-merge. Apply Pattern 83 to all NEW cross-lookup seed migrations starting at the next Cohort 2+ migration.
+
+### Concrete instances (forward-pointers)
+
+| Migration | Seed table | Parent lookup | Pattern 83 applied? |
+|---|---|---|---|
+| 0067 | canonical_event_types | canonical_event_domains | NO (shipped pre-pattern) |
+| 0068 | canonical_participant_roles | canonical_event_domains | NO (shipped pre-pattern) |
+| 0070+ (Cohort 2+) | canonical_market_links / observation_source / weather seeds | various | YES (going forward) |
+| 0085 | canonical_events (seeded 1:1 from games + series) | games + series | YES |
+
+### Source
+
+- Session 74 #1011 carry-forward design council (Holden + Galadriel + Joe Chip — unanimous on Pattern 83 promotion; 2-vs-1 split on retrofit favoring "no retrofit" per append-only principle)
+- Session 75 PM adjudication
+- ADR-118 v2.40 ratifies
+
+### Pair with
+
+Pattern 81 (lookup table — Pattern 83 protects the seed integrity of Pattern 81 instances) and Pattern 82 (typed back-ref — Pattern 83 protects the seed integrity of the discriminator FKs that Pattern 82 depends on).
 
 ---
 
