@@ -3,12 +3,27 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+    # Skip claude-code-review on docs-only and memory-only PRs.
+    # Reasoning (session 73 GHA-minutes reduction):
+    # - Doc-only PRs (e.g., ADR amendments, README fixes, version bumps) get
+    #   minimal signal from claude-review — most findings are cosmetic nitpicks
+    #   already caught by pre-commit doc-version + ADR-drift gates.
+    # - For mixed PRs (docs + code), the review still runs because the path
+    #   filter only excludes when EVERY changed file matches paths-ignore.
+    # - Per-PR savings: ~2 min per docs-only PR. Across a doc-heavy week
+    #   (e.g., session 73 had 4 doc-only PRs), this is ~10 min/week.
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'memory/**'
+      - '_archive/**'
+
+# Concurrency: cancel in-progress claude-review when a new PR push lands.
+# Latest push wins; stale reviews (which would post against an outdated diff)
+# never complete. Saves ~2 min per cancelled run on rapid-iteration PRs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   claude-review:
