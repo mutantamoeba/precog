@@ -7,6 +7,23 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
 
+# Concurrency: cancel in-progress runs when a new push lands on the same ref.
+# This is the single biggest GHA-minutes saver — PRs typically receive multiple
+# pushes (rebases, fixups), and each push currently restarts the matrix from
+# scratch while the previous run continues to consume runners. Cancel-in-progress
+# kills the stale work; only the latest push's CI counts. Per-PR savings: ~60-80%
+# on PRs with 3+ pushes.
+#
+# `github.head_ref || github.ref` keys on the PR's source branch when on a PR
+# event, falling back to the push ref. PR pushes group together by branch
+# (cancel each other on the same PR). Main-branch pushes also group together
+# (cancel each other on `refs/heads/main`) — acceptable because the latest
+# main commit gets a clean run, and pre-merge CI on the PR already validated
+# the code; main-push CI is a fresh-environment safety net, not the gate.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 # Required permissions for mikepenz/action-junit-report to create check runs
 permissions:
   contents: read
@@ -152,22 +169,25 @@ jobs:
     if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
-        # Linux-only PR matrix as of #685: 3.14 (production target) + 3.12
-        # (backward compat). Windows is NOT in the PR matrix because the
-        # pre-push hook (scripts/pre-push-validation.sh) already runs the
-        # medium gate on the developer's Windows machine before any push
-        # reaches CI. Windows still runs in the test-windows-main job
-        # below, which is gated to push events on main only -- that
-        # preserves the fresh-environment-runner safety net at zero PR
-        # cost (Claude Review feedback on #697 escalated this from full
-        # removal to "Windows on main only" to address concern #3).
-        # Windows on PR accounted for ~43% of billable CI minutes (2x
-        # multiplier x ~5min job = ~10 billable min per run).
+        # Linux-only, Python 3.14 only as of session 73 GHA-minutes reduction.
+        # History:
+        # - Pre-#685: Linux + Windows on PR (Windows = ~43% of PR billable minutes
+        #   via 2x multiplier). #685 dropped Windows from PR matrix → kept on
+        #   push-to-main only via test-windows-main job (line 240+ below).
+        # - Pre-session 73: Linux 3.14 + Linux 3.12 (backward-compat target).
+        # - Session 73 (this change): Dropped 3.12 from the PR matrix.
+        #   Production deploys to Python 3.14 only; 3.12 backward-compat is no
+        #   longer a real deployment target. Pre-push hook
+        #   (scripts/pre-push-validation.sh) still runs against the developer's
+        #   local Python (typically 3.14), and the push-to-main path runs
+        #   test-windows-main on a fresh runner — both safety nets remain.
+        #   Per-PR savings: ~50% of test-job billable minutes (was 2 jobs, now 1).
+        # If multi-version backward compat becomes a real target again, restore
+        # the matrix entry below and consider a separate "test-py312-main-only"
+        # job following the test-windows-main pattern (gated to push-on-main).
         include:
           - os: ubuntu-latest
             python-version: '3.14'
-          - os: ubuntu-latest
-            python-version: '3.12'
       fail-fast: false
 
     # Environment safety (Issue #161): Explicitly set test environment
