@@ -12048,10 +12048,11 @@ CREATE TABLE canonical_participant_roles (
     role        TEXT NOT NULL,
     description TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (domain_id, role)  -- NULL semantics: NULL ≠ NULL in PG UNIQUE, so multiple
-                              -- NULL-domain rows with the same role would conflict.
-                              -- See Cohort 1 migration 0068 for handling (single
-                              -- cross-domain row per role; no ambiguity in seed set).
+    UNIQUE (domain_id, role)  -- NULL semantics: PostgreSQL treats NULL as distinct in UNIQUE,
+                              -- so two (NULL, 'role_x') rows would NOT conflict on this
+                              -- constraint. Cross-domain uniqueness is enforced by seed
+                              -- discipline (single cross-domain row per role), not by this
+                              -- UNIQUE index. See Cohort 1 migration 0068 for the seed pattern.
 );
 ```
 
@@ -12082,7 +12083,7 @@ CREATE TABLE canonical_participant_roles (
 
 | Lookup Table | Migration | Seed Count | Composite UNIQUE | Nullable Parent | Notes |
 |---|---|---|---|---|---|
-| `canonical_event_domains` | 0067 | 7 | (sports, politics, weather, econ, news, entertainment, fighting) | n/a | Top-level scope |
+| `canonical_event_domains` | 0067 | 7 | `domain` UNIQUE | n/a | Top-level scope; 7 seeds: sports, politics, weather, econ, news, entertainment, fighting |
 | `canonical_event_types` | 0067 | 13 | `(domain_id, event_type)` UNIQUE | NO | 6 of 7 domains seeded; `fighting` intentionally empty (INSERT-not-ALTER discipline — Cohort 2+ adds fight types as INSERT rows) |
 | `canonical_entity_kinds` | 0068 | 12 | `entity_kind` UNIQUE | n/a | Cross-domain (entities span domains) |
 | `canonical_participant_roles` | 0068 | 10 | `(domain_id, role)` UNIQUE | YES | Most rows are domain-scoped; cross-domain rows like `yes_side`/`no_side` use NULL `domain_id` |
