@@ -18,6 +18,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Concurrency: cancel in-progress branch-updates when a new push to main lands.
+# Each run is idempotent (gh pr update-branch is safe to re-run), but cancelling
+# the stale run avoids racing two updaters against the same set of BEHIND PRs.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
 permissions:
   pull-requests: write
   contents: write
