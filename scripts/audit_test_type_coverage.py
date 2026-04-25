@@ -115,6 +115,7 @@ MODULE_TIERS = {
     "database/crud_elo": "experimental",
     "database/crud_system": "experimental",
     "database/crud_analytics": "experimental",
+    "database/crud_canonical_markets": "experimental",
     "database/seeding/seeding_manager": "business",
     "database/seeding/historical_elo_loader": "business",
     # Batch Result Types (Issue #255) - Experimental until full test suite built
