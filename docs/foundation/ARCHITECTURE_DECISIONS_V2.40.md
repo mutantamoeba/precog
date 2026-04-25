@@ -1,11 +1,20 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.39
+**Version:** 2.40
 **Last Updated:** April 24, 2026
 **Status:** ✅ Current
-**Supersedes:** V2.38 (deleted per supersede-and-delete convention; PR #979 / PR #1009 precedent)
-**Session:** 73
+**Supersedes:** V2.39 (deleted per supersede-and-delete convention; PR #979 / PR #1009 / PR #1018 precedent)
+**Session:** 75
+**Changes in v2.40:**
+- **ADR-118 COHORT 1 CARRY-FORWARD AMENDMENT (Issue #1011, session 75):** Encoded 5 PM-adjudicated decisions from the 3-agent design council (Holden + Galadriel + Joe Chip, session 74) bundling design clarifications surfaced via session 72 S68 audit on Cohort 1 PRs #1003 + #1005 + #1008. Amendment is narrative + DDL-tightening only; no new tables; closes #1011.
+  - **Item 1 — `canonical_participant_roles` cross-domain singleton enforcement:** Add a partial unique index `(role) WHERE domain_id IS NULL`, ADDITIVE to the existing `uq_canonical_participant_roles_domain_role` composite UNIQUE. Closes the NULL-uniqueness gap that today is enforced only by seed discipline (Pattern 81 §"Nullable Parent Scope" load-bearing comment).
+  - **Item 2 — `canonical_event_participants.sequence_number` NO DEFAULT ratified.** v2.38 ships `INTEGER NOT NULL` with no DB default; v2.40 ratifies that choice in narrative form. Forces caller-side reasoning about ordering (correct for the 10-candidate-election case; the friction is the right friction).
+  - **Item 3 — `canonical_events.lifecycle_phase` CHECK constraint NOW; mirror requirement on Migration 0077 `canonical_event_phase_log.phase`.** 8-value closed state-machine vocabulary is encoded as inline CHECK on `canonical_events.lifecycle_phase`; the same CHECK MUST land on `canonical_event_phase_log.phase` when Migration 0077 ships, otherwise the audit log can carry phase values the dim table forbids.
+  - **Item 4 — Pattern 82 V2 Forward-Only Direction Policy + load-bearing regression test.** Codifies that all Pattern 82 triggers enforce ONLY the forward direction ("when discriminator = X, back-ref MUST be NOT NULL"); the reverse direction is intentionally NOT enforced at the trigger level (preserves polymorphic-overloading future-extensibility per ADR-118 v2.38 decision #5). REQUIRES a mandatory compensating regression test at `tests/database/test_canonical_entity_polymorphic_invariants.py`, identified as load-bearing — MUST NOT be skipped, retired, or admitted to any audit bypass set. Test scope folded into Issue #1021 (Cohort 1 Pattern 14 retro).
+  - **Item 5 — Seed-subquery NULL guard promoted to Pattern 83 (DEVELOPMENT_PATTERNS V1.37).** Apply inline to all FUTURE cross-lookup seed migrations starting with Cohort 2+ carry-forward; do NOT retrofit Migrations 0067/0068 (append-only principle). Closes the silent-failure path where a missing parent-seed lookup yields NULL `domain_id` on a participant role, masquerading as a cross-domain role.
+  - **Future-Cohort consideration (NEW FINDING):** `canonical_events.(game_id, series_id)` is itself a Pattern 82 instance whose discriminator is `event_type_id` ("single-game event_types → game_id NOT NULL; series event_types → series_id NOT NULL"). NOT enforced today; flagged for the Cohort 6 seeder migration (Migration 0085 territory) when canonical_events gets seeded from `games` + `series`. Filed as forward reference, not actioned in v2.40.
+  - Cross-references: session 74 design memos (`memory/design_review_1011_holden_memo.md`, `memory/design_review_1011_galadriel_memo.md`, `memory/design_review_1011_joechip_memo.md`); Issue #1011 (this amendment's tracking issue); Issues #1004 + #1007 + #1021 (sister Cohort 1 retros); DEVELOPMENT_PATTERNS V1.37 (Pattern 82 V2 + Pattern 83 — ships in parallel PR).
 **Changes in v2.39:**
 - **ADR-118 COHORT 2 AMENDMENT (session 73):** Encoded 5 user-adjudicated design decisions from the Holden + Galadriel 2-agent compressed council-variant validation (session 73) for the Cohort 2 `canonical_markets` table (Migration 0069). Amendment is narrative + DDL-tightening only; no new tables.
   - **DDL audit-column shorthand expanded** on `canonical_markets` to match the Cohort 1 (Migrations 0067/0068) full convention (`TIMESTAMPTZ NOT NULL DEFAULT now()` for `created_at` and `updated_at`; `TIMESTAMPTZ` nullable for `retired_at`). Closes Holden Finding 1.
@@ -17539,6 +17548,76 @@ Four Holden findings received N/A or confirm-only dispositions during PM adjudic
 - **Finding 9 (Pattern 18 SCD-2 verification):** **CONFIRMED** — `canonical_markets` is NOT SCD-2 (no `row_current_ind`, no version chain). Canonical-tier model is append-then-retire (`retired_at`), not version-tracked. Pattern 18 / Pattern 80 SCD-2 surrogate-key idioms do not apply at this tier.
 - **Finding 10 (`uq_canonical_markets_nk` UNIQUE constraint naming):** **CONFIRMED** — naming consistent with Cohort 1 precedent (`uq_canonical_events_nk` at Migration 0067; `uq_canonical_event_participants` etc.).
 - **Finding 11 (Pattern 14 5-step bundle discipline):** **Cohort 2 = 5 atomic shipments**, not just Migration 0069: (1) Migration 0069 (this amendment + the migration itself), (2) `CanonicalMarket` ORM model in `src/precog/database/models.py`, (3) `crud_canonical_markets` module — including `get_canonical_for_platform_market()` helper (Galadriel Finding 5; encodes the `canonical_markets ↔ canonical_market_links ↔ markets` JOIN + `link_state = 'active'` filter once per Pattern 73), (4) CRUD unit tests, (5) integration tests (paired with #1012 for 0067/0068 + 0069). **Cohort 2 is NOT "done" until all 5 land.**
+
+##### Cohort 1 carry-forward amendment rationale (v2.40, session 75 capture)
+
+This subsection exists so future readers of ADR-118 understand WHY five Cohort 1 design clarifications were resolved post-Cohort-1-ship in this carry-forward amendment, without reverse-engineering intent from later migrations or test files. The 5 PM-adjudicated decisions from session 75 (sourced from the Holden + Galadriel + Joe Chip 3-agent design council, session 74; full memos live at `memory/design_review_1011_holden_memo.md`, `memory/design_review_1011_galadriel_memo.md`, `memory/design_review_1011_joechip_memo.md`):
+
+1. **`canonical_participant_roles` cross-domain singleton enforcement (#1011 item 1).** Cohort 1 (Migration 0068) shipped `UNIQUE (domain_id, role)` plus a Pattern 81 §"Nullable Parent Scope" comment acknowledging that "cross-domain uniqueness is enforced by seed discipline (single cross-domain row per role), **not by this UNIQUE index**." That comment is load-bearing — and load-bearing comments decay. PostgreSQL treats `NULL != NULL` in unique constraints, so two rows `(NULL, ' + chr(39) + 'yes_side' + chr(39) + ')` are both admissible today. The PM adjudication is **partial unique index** on `(role) WHERE domain_id IS NULL`, ADDITIVE to the existing `uq_canonical_participant_roles_domain_role` (no rename, no rewrite of the existing constraint name that is grepped in CRUD docstrings):
+
+   ```sql
+   CREATE UNIQUE INDEX uq_canonical_participant_roles_role_when_cross_domain
+       ON canonical_participant_roles (role)
+       WHERE domain_id IS NULL;
+   ```
+
+   Rejected alternatives: (a) `UNIQUE NULLS NOT DISTINCT (domain_id, role)` (PG 15+, dev DB at PG 18) — cleaner but requires dropping/recreating the existing named constraint (`uq_canonical_participant_roles_domain_role` is referenced in CRUD docstrings and migration source, so a rename would force a Pattern 73 propagation sweep), which Pattern 73 SSOT discipline disfavors when the additive form preserves the existing name; (b) document NULL duplicates as accepted — there is no documented use case for two-versions-of-same-cross-domain-role. Migration slot for the index DDL is **Migration 0070** (the Cohort 1 carry-forward migration shipping in parallel with this amendment). **Source memo: Holden item 1 + Galadriel item 1 + Joe Chip item 1 (council convergent on partial-index recommendation; Joe Chip preferred `NULLS NOT DISTINCT`, PM adjudicated against on SSOT-of-constraint-name grounds).**
+
+2. **`canonical_event_participants.sequence_number` NO DEFAULT ratified (#1011 item 2).** Migration 0068 ships `INTEGER NOT NULL` with no DB default; this amendment ratifies the choice. Glokta's original reasoning ("forces caller to reason about sequence") is correct; v2.40 codifies it so a future migration author who proposes adding `DEFAULT 1` argues against ADR text rather than against a one-line code comment. The dominant 2-participant sports case sets `sequence_number=1` explicitly in 2 lines of code; the cost is a rounding error. The motivating multi-candidate-election case (10 candidates with sequences 1..10) makes `DEFAULT 1` wrong for 9 of those 10 rows — a default correct half the time and silently wrong the other half is the exact anti-pattern Pattern 82's "literal-ID CHECK is brittle to seed reorder" argument calls out. **No DDL change.** **Source memo: Holden item 2 + Galadriel item 2 + Joe Chip item 2 (council unanimous; rare 3/3 convergence — recorded for posterity).**
+
+3. **`canonical_events.lifecycle_phase` CHECK constraint NOW; mirror requirement on Migration 0077 `canonical_event_phase_log.phase` (#1011 item 3).** v2.39 documented an 8-value vocabulary in prose (`'proposed'|'listed'|'pre_event'|'live'|'suspended'|'settling'|'resolved'|'voided'`) but Migration 0067 enforces neither CHECK nor FK to a lookup. The closed-state-machine criterion in Pattern 81 §"When NOT to Apply (Keep CHECK)" applies here exactly as it did to `canonical_markets.market_type_general` in v2.39 (closed enum tied to code branches; a 9th lifecycle phase requires a code deploy regardless). PM adjudication is **CHECK NOW**, in **Migration 0070** (the Cohort 1 carry-forward migration shipped in parallel with this amendment):
+
+   ```sql
+   ALTER TABLE canonical_events
+       ADD CONSTRAINT canonical_events_lifecycle_phase_check
+       CHECK (lifecycle_phase IN (
+           'proposed','listed','pre_event','live','suspended','settling','resolved','voided'
+       ));
+   ```
+
+   **Mirror requirement on Migration 0077.** When `canonical_event_phase_log` lands (Migration 0077 per the migration roadmap below), `canonical_event_phase_log.phase VARCHAR(32) NOT NULL` MUST carry **the same CHECK with the same 8 values**. Without this mirror, a Cohort 6 ingestion bug writing `lifecycle_phase = 'live '` (trailing space) or `'in_progress'` (synonym) lands silently in the audit log even if the dim table CHECK rejects it — vocabulary drift across siblings is the exact failure mode that motivates this rule. The Migration 0077 design docket carries this as a hard requirement; future deferral or omission triggers a Pattern 73 SSOT violation review. **No data backfill required** — current dev DB has zero `canonical_events` rows; default `'proposed'` is in the value list. **Source memo: Holden item 3 + Galadriel item 3 + Joe Chip item 3 (3/3 convergent on CHECK-now; Joe Chip strongest on the mirror-on-0077 requirement, which PM elevated to "MUST land" rather than "SHOULD land").**
+
+4. **Pattern 82 V2 Forward-Only Direction Policy + mandatory load-bearing regression test (#1011 item 4).**
+
+   The current `trg_canonical_entity_team_backref` trigger fires on `entity_kind='team' AND ref_team_id IS NULL` ("kind=team REQUIRES ref_team_id"). It does NOT fire on the reverse direction (`entity_kind != 'team' AND ref_team_id IS NOT NULL`). The ADR docstring says this is intentional (per ADR-118 v2.38 decision #5: "ref_team_id can be anything for non-team kinds — overloading allowed"), but future Pattern 82 instances (`ref_fighter_id`, `ref_candidate_id`, `ref_storm_id`, `ref_company_id`) will face the same architectural choice. v2.40 settles the rule explicitly so all polymorphic typed back-refs follow the same one-direction contract.
+
+   > **Pattern 82 (V2): Forward-Only Direction Policy.**
+   >
+   > All Pattern 82 triggers MUST encode only the forward direction: when the discriminator value matches kind X, the typed back-ref column `ref_X_id` MUST be NOT NULL. The reverse direction (FORBID `ref_X_id IS NOT NULL` when discriminator value is non-X) is intentionally NOT enforced at the trigger level — preserves polymorphic-overloading future-extensibility per ADR-118 V2.38 decision #5.
+   >
+   > **Mandatory compensating mechanism:** every Pattern 82 application MUST be paired with a regression test asserting no row carries a `ref_*_id` for a non-matching discriminator value. The test is load-bearing — it MUST NOT be skipped, retired, or admitted to any audit bypass set. The test for the canonical_entity instance lives at `tests/database/test_canonical_entity_polymorphic_invariants.py` (folded into #1021 scope).
+   >
+   > **Why one-direction-only:** without the load-bearing regression test, future cohorts copy-paste the trigger pattern verbatim and create an N×N matrix of silent overload paths where each trigger says "I don't apply to your kind" and a malformed row passes all of them. The test is the load-bearing compensating mechanism.
+
+   Joe Chip's strongest concern in the council was that the path-of-least-resistance answer ("ratify one-sided, do nothing") is an assumption-decay accelerator. Without the load-bearing regression test, by Cohort 6 with 4-5 sibling triggers, an N×N matrix of silent overload paths exists. PM adjudication preserves the open overload door (per session 71/72 user adjudication; the council does not have standing to reopen it) BUT folds the mandatory test into Issue #1021 (Cohort 1 Pattern 14 retro). The test's load-bearing status is named in this ADR text so it cannot be silently retired by a future test-audit-bypass mechanic. **Source memo: Joe Chip item 4 (strongest concern in the bundle); Galadriel item 4 (forward-only canonical-direction table); Holden item 4 (one-direction load-bearing-test framing).**
+
+5. **Seed-subquery NULL guard promoted to Pattern 83 (#1011 item 5).** Migration 0068's `_insert_participant_role_seeds` resolves `domain_id` via the subquery `(SELECT id FROM canonical_event_domains WHERE domain = :domain_key)`. If a domain seed is missing (broken migration lineage, typo in domain key, downgrade-rerun), the subquery returns NULL — INSERT succeeds silently with `domain_id = NULL`, masquerading as a cross-domain role. The defensive guard:
+
+   ```python
+   domain_id = conn.execute(
+       sa.text("SELECT id FROM canonical_event_domains WHERE domain = :domain_key"),
+       {"domain_key": domain_key},
+   ).scalar()
+   if domain_id is None:
+       raise ValueError(
+           f"seed lineage broken: domain '{domain_key}' not found in "
+           f"canonical_event_domains — is migration 0067 applied?"
+       )
+   ```
+
+   PM adjudication: **promote to Pattern 83** (DEVELOPMENT_PATTERNS V1.37 — ships in parallel PR), apply inline to all FUTURE cross-lookup seed migrations starting with the Cohort 2+ carry-forward, do **NOT retrofit Migrations 0067/0068**. Migrations are append-only (Pattern 73 SSOT — migrations in `main` SHOULD NOT be edited post-merge except for hotfixes that don't change the apply result). The `ON CONFLICT (col_a, col_b) DO NOTHING` clause does NOT idempotently handle NULL `col_a` values (PG treats NULL as distinct in conflict matching), making this guard the only correct form. **Source memo: Holden item 5 + Galadriel item 5 + Joe Chip item 5 (3/3 convergent on Pattern 83 promotion + no-retrofit-of-0067/0068).**
+
+##### Council items scoped OUT (v2.40)
+
+Holden's "Additional Finding" on `canonical_participant_roles.description NOT NULL` discipline (severity LOW per Holden's own framing — see `memory/design_review_1011_holden_memo.md` § "Additional finding (NOT in #1011)") is **deferred to Cohort 8 LLM-projection design** when context-window-friendly enumeration becomes load-bearing for `v_canonical_market_llm` and sibling MCP-projection views. Filed as forward reference, not silent drop. Rationale: every seed row currently has a meaningful description (no live integrity violation), and the question of whether to enforce NOT NULL with a sentinel `''` value or rely on test-invariant + writer-side discipline is itself a Cohort 8 design choice that the Cohort 1 carry-forward shouldn't preempt.
+
+##### Future-Cohort consideration (NEW FINDING, v2.40 session 75 audit)
+
+Session 75 audit of pre-canonical Pattern 82 territory surfaced a NEW finding NOT in the original #1011 bundle: **`canonical_events.(game_id, series_id)` is itself a Pattern 82 instance.** The discriminator is `event_type_id`; the rule is "single-game event_types (e.g., NFL game) → `game_id` NOT NULL, `series_id` NULL; series event_types (e.g., presidential election cycle) → `series_id` NOT NULL, `game_id` NULL." Today this is enforced only by seed discipline + caller-side reasoning, not by a Pattern 82 trigger.
+
+**Disposition:** filed as forward reference; not actioned in v2.40. The natural enforcement point is the Cohort 6 seeder migration (Migration 0085 territory) when `canonical_events` gets seeded 1:1 from `games` (single-game event_types) and `series` (series event_types). At that point, two Pattern 82 triggers should land together (`trg_canonical_events_game_backref` + `trg_canonical_events_series_backref`), each following the V2 Forward-Only Direction Policy ratified in item 4 above, each paired with the mandatory compensating regression test in `tests/database/test_canonical_event_polymorphic_invariants.py` (sibling to the canonical_entity test from item 4).
+
+**Why deferred, not actioned now:** `canonical_events` has zero rows in dev today; no integrity violation exists currently; the canonical seeder is a Cohort 6 deliverable that does not yet have its design docket. Adding the triggers preemptively in v2.40 would over-commit to a seeder pattern that has not been council-validated. Forward-reference discipline (Pattern 73 SSOT cross-pointer, not premature implementation) is the correct posture.
 
 #### Matching infrastructure
 

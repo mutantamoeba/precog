@@ -341,10 +341,10 @@ precog/
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
   2. `MASTER_REQUIREMENTS_V2.26.md` - This document (requirements through Phase 10)
-  3. `MASTER_INDEX_V2.56.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.39.md` - All ADRs with design rationale (Phase 0-4.5, ADR-118 Canonical Identity/Matching/Event-State Layer + ADR-119 Business-Key Cleanup + Weather Phase 1; ADR-117 amended for series.series_key Tier-3 reclassification; V2.38 encodes ADR-118 Cohort 1 amendment per #996; V2.39 encodes ADR-118 Cohort 2 amendment session 73 — `canonical_markets` DDL tightened, `lifecycle_phase` exclusion + `updated_at` trigger template + Pattern 82 non-application + ON DELETE RESTRICT ratified)
+  3. `MASTER_INDEX_V2.57.md` - Complete document inventory
+  4. `ARCHITECTURE_DECISIONS_V2.40.md` - All ADRs with design rationale (Phase 0-4.5, ADR-118 Canonical Identity/Matching/Event-State Layer + ADR-119 Business-Key Cleanup + Weather Phase 1; ADR-117 amended for series.series_key Tier-3 reclassification; V2.38 encodes ADR-118 Cohort 1 amendment per #996; V2.39 encodes ADR-118 Cohort 2 amendment session 73 — `canonical_markets` DDL tightened, `lifecycle_phase` exclusion + `updated_at` trigger template + Pattern 82 non-application + ON DELETE RESTRICT ratified; V2.40 encodes ADR-118 Cohort 1 carry-forward amendment per #1011 / session 75 — partial unique index on `canonical_participant_roles` cross-domain singleton + `canonical_events.lifecycle_phase` CHECK + Pattern 82 V2 forward-only direction policy + Pattern 83 seed-subquery NULL guard promotion)
   5. `REQUIREMENT_INDEX_V1.17.md` - Systematic requirement catalog
-  6. `ADR_INDEX_V1.29.md` - Architecture decision index (ADR-118 row amended v1.28 per #996 Cohort 1 amendment; v1.29 amended for Cohort 2 v2.39 amendment; ADR-118 + ADR-119 in Phase B.5 Canonical Layer Foundation section; 105 catalogued; highest ADR 119)
+  6. `ADR_INDEX_V1.30.md` - Architecture decision index (ADR-118 row amended v1.28 per #996 Cohort 1 amendment; v1.29 amended for Cohort 2 v2.39 amendment; v1.30 amended for Cohort 1 carry-forward v2.40 amendment per #1011; ADR-118 + ADR-119 in Phase B.5 Canonical Layer Foundation section; 105 catalogued; highest ADR 119)
   7. `TESTING_STRATEGY_V3.9.md` - Test cases, coverage requirements, test isolation patterns
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
