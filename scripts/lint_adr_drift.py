@@ -33,7 +33,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ADR_FILE = "docs/foundation/ARCHITECTURE_DECISIONS_V2.39.md"
+ADR_FILE = "docs/foundation/ARCHITECTURE_DECISIONS_V2.40.md"
 EXCLUDE_DIR_RE = re.compile(r"(^|/)_archive(/|$)")
 
 # Backtick-quoted paths containing a slash, optionally with a recognized

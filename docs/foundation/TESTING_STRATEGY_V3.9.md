@@ -3154,7 +3154,7 @@ pytest --cov=module tests/unit/test_new_feature.py
 - **Factories:** `tests/fixtures/factories.py` - Test data factories
 - **Scripts:** `scripts/test_*.sh`, `scripts/validate_*.sh` - Execution scripts
 - **Requirements:** `docs/foundation/MASTER_REQUIREMENTS_V2.26.md` - REQ-TEST-012 through REQ-TEST-019
-- **ADRs:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.39.md` - ADR-074, ADR-076 (Test Type Categories)
+- **ADRs:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.40.md` - ADR-074, ADR-076 (Test Type Categories)
 - **Patterns:** `docs/guides/DEVELOPMENT_PATTERNS_V1.27.md` - Pattern 13 (Test Coverage Quality), Pattern 26 (Resource Cleanup), Pattern 27 (Dependency Injection), Pattern 28 (CI-Safe Stress Testing)
 - **Root Cause Analysis:** `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Phase 1.5 TDD failure lessons learned
 - **Validation:** `docs/foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Overall quality infrastructure
