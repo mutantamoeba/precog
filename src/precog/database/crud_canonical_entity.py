@@ -30,8 +30,8 @@ Pattern 82 V2 Forward-Only Direction Policy (CRITICAL DESIGN GUARDRAIL):
     lives at ``tests/database/test_canonical_entity_polymorphic_invariants.py``
     (ADR-118 V2.40 pin -- MUST NOT be retired or skipped).
 
-    Reference: ``docs/guides/DEVELOPMENT_PATTERNS_V1.37.md`` Pattern 82 V2
-    "Forward-Only Direction Policy" (lines ~12235-12239) and ADR-118 V2.40
+    Reference: ``docs/guides/DEVELOPMENT_PATTERNS_V1.38.md`` Pattern 82 V2
+    "Forward-Only Direction Policy" (lines ~12239-12245) and ADR-118 V2.40
     "Item 4. Pattern 82 V2 Forward-Only Direction Policy + mandatory
     load-bearing regression test (#1011 item 4)" (lines ~17580-17588).
 
@@ -80,8 +80,8 @@ Slice B scope (this module) -- exactly these tables:
 Reference:
     - ``docs/foundation/ARCHITECTURE_DECISIONS_V2.40.md`` lines ~17580-17590
       (Pattern 82 V2 Forward-Only Direction Policy ratification)
-    - ``docs/guides/DEVELOPMENT_PATTERNS_V1.37.md`` Pattern 82 V2 +
-      Pattern 83 (lines ~12113-12300, ~12367)
+    - ``docs/guides/DEVELOPMENT_PATTERNS_V1.38.md`` Pattern 82 V2 +
+      Pattern 83 (lines ~12117-12302, ~12371)
     - ``src/precog/database/alembic/versions/0068_canonical_entity_foundation.py``
     - ``src/precog/database/crud_canonical_markets.py`` (style reference --
       Cohort 2 sibling template, mirrored line-for-line)
@@ -217,7 +217,7 @@ def create_canonical_entity(
     Reference:
         - ``docs/foundation/ARCHITECTURE_DECISIONS_V2.40.md`` lines
           ~17580-17590 (Pattern 82 V2 Forward-Only Direction Policy)
-        - ``docs/guides/DEVELOPMENT_PATTERNS_V1.37.md`` Pattern 82 V2
+        - ``docs/guides/DEVELOPMENT_PATTERNS_V1.38.md`` Pattern 82 V2
         - Migration 0068 (table DDL + CONSTRAINT TRIGGER)
         - ADR-118 V2.38 decisions #1, #5; V2.40 amendment Item 4
     """
