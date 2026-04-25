@@ -1,9 +1,13 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.28
+**Version:** 1.29
 **Last Updated:** 2026-04-24
 **Status:** ✅ Current
+**Changes in v1.29:**
+- **ADR-118 COHORT 2 AMENDMENT (session 73):** Amended ADR-118 row in Phase B.5 section to reference Cohort 2 v2.39 amendment. Cohort 2 = `canonical_markets` (Migration 0069); 5 user-adjudicated design decisions (audit-column shorthand expansion, `market_type_general` CHECK + Pattern 81 non-application prose, `lifecycle_phase` explicit exclusion with three-distinct-concerns rationale, `updated_at` + BEFORE UPDATE trigger as #1007 retrofit template, Pattern 82 non-application + `ON DELETE RESTRICT` ratification). No new tables; narrative + DDL-tightening only.
+- Updated ARCHITECTURE_DECISIONS reference from V2.38 to V2.39.
+- Cross-references: session 73 design memo (`memory/design_review_cohort2_canonical_markets.md`), Issues #1007 / #1015 / #1016 / #1017.
 **Changes in v1.28:**
 - **ADR-118 COHORT 1 AMENDMENT (Issue #996, session 72):** Amended ADR-118 row in Phase B.5 section to reflect Cohort 1 expansion per V2.38. Cohort 1 now = 7 tables in 2 migrations (0067 + 0068): 4 new lookup tables (`canonical_event_domains`, `canonical_event_types`, `canonical_entity_kinds`, `canonical_participant_roles`) replace proposed CHECK constraints; `canonical_entity.ref_team_id` typed back-reference with partial CHECK resolves Level A ↔ Level B; `canonical_event_participants.sequence_number` handles multi-participant same-role cases (10-candidate elections). `canonical_markets.natural_key_hash` derivation rule deferred to Cohort 5 (application-layer, not DDL).
 - Updated ARCHITECTURE_DECISIONS reference from V2.37 to V2.38.
@@ -401,41 +405,41 @@ This document provides a systematic index of all Precog architecture decisions u
 
 | ADR | Title | Date | Status | Phase | Document |
 |-----|-------|------|--------|-------|----------|
-| ADR-110 | Neil Paine Sports Elo Archives (FiveThirtyEight Replacement) — MIT-licensed GitHub archives for NFL/NBA/NHL historical Elo data in dual-row CSV format | 2025-12-26 | ✅ | 2C | ARCHITECTURE_DECISIONS_V2.38 |
-| ADR-111 | Sport-Specific Team Code Mappings — nested `SPORT_CODE_MAPPINGS[sport][code]` dict replaces sport-agnostic lookup to prevent cross-sport contamination (e.g. SEA/NHL ≠ SEA/NBA) | 2025-12-26 | ✅ | 2C | ARCHITECTURE_DECISIONS_V2.38 |
-| ADR-112 | `team_season_records` VIEW — dual-source W/L/D tracking unioning `historical_games` + `game_states` with NOT EXISTS deduplication; single source of truth for standings queries | 2025-12-26 | ✅ | 2C | ARCHITECTURE_DECISIONS_V2.38 |
+| ADR-110 | Neil Paine Sports Elo Archives (FiveThirtyEight Replacement) — MIT-licensed GitHub archives for NFL/NBA/NHL historical Elo data in dual-row CSV format | 2025-12-26 | ✅ | 2C | ARCHITECTURE_DECISIONS_V2.39 |
+| ADR-111 | Sport-Specific Team Code Mappings — nested `SPORT_CODE_MAPPINGS[sport][code]` dict replaces sport-agnostic lookup to prevent cross-sport contamination (e.g. SEA/NHL ≠ SEA/NBA) | 2025-12-26 | ✅ | 2C | ARCHITECTURE_DECISIONS_V2.39 |
+| ADR-112 | `team_season_records` VIEW — dual-source W/L/D tracking unioning `historical_games` + `game_states` with NOT EXISTS deduplication; single source of truth for standings queries | 2025-12-26 | ✅ | 2C | ARCHITECTURE_DECISIONS_V2.39 |
 
 ### Phase 2: Manual Trade Placement MVP — Web Backend
 
 | ADR | Title | Date | Status | Phase | Document |
 |-----|-------|------|--------|-------|----------|
-| ADR-113 | FastAPI as Web Backend for Manual Trade Placement MVP — uvicorn ASGI server, `src/precog/web/` package, `precog web start` CLI, Pydantic Decimal serialization, two-axis env model integration | 2026-03-12 | 🔵 | 2 | ARCHITECTURE_DECISIONS_V2.38 |
+| ADR-113 | FastAPI as Web Backend for Manual Trade Placement MVP — uvicorn ASGI server, `src/precog/web/` package, `precog web start` CLI, Pydantic Decimal serialization, two-axis env model integration | 2026-03-12 | 🔵 | 2 | ARCHITECTURE_DECISIONS_V2.39 |
 
 ### Phase 2: External Data Source Architecture
 
 | ADR | Title | Date | Status | Phase | Document |
 |-----|-------|------|--------|-------|----------|
-| ADR-114 | External Data Source Architecture — Three-Tier Pattern with Multi-Source Reconciliation — classifies sources as Tier A (continuous)/B (periodic)/C (batch); Fetch/Normalize/Deliver responsibilities; ServiceSupervisor registry; TeamCodeService; three-axis cadence/cost/domain classification | 2026-03-27 | ✅ | 2 | ARCHITECTURE_DECISIONS_V2.38 |
+| ADR-114 | External Data Source Architecture — Three-Tier Pattern with Multi-Source Reconciliation — classifies sources as Tier A (continuous)/B (periodic)/C (batch); Fetch/Normalize/Deliver responsibilities; ServiceSupervisor registry; TeamCodeService; three-axis cadence/cost/domain classification | 2026-03-27 | ✅ | 2 | ARCHITECTURE_DECISIONS_V2.39 |
 
 ### Phase 1: Database Module Organization
 
 | ADR | Title | Date | Status | Phase | Document |
 |-----|-------|------|--------|-------|----------|
-| ADR-115 | Database Domain Module Architecture — 15 per-domain `crud_*.py` modules replace 8,329-line `crud_operations.py` monolith; no facade, no cross-module imports; consumers import directly from domain modules | 2026-04-04 | ✅ | 1 | ARCHITECTURE_DECISIONS_V2.38 |
+| ADR-115 | Database Domain Module Architecture — 15 per-domain `crud_*.py` modules replace 8,329-line `crud_operations.py` monolith; no facade, no cross-module imports; consumers import directly from domain modules | 2026-04-04 | ✅ | 1 | ARCHITECTURE_DECISIONS_V2.39 |
 
 ### Phase A': Schema Hardening Arc (Epic #745, Epic #935)
 
 | ADR | Title | Date | Status | Phase | Document |
 |-----|-------|------|--------|-------|----------|
-| ADR-116 | ODS Schema Conventions — Universal Surrogate PK + Business Key Suffix + FK Naming + RESTRICT Default — four rules: every table uses `id SERIAL PRIMARY KEY`, business keys use `_key` suffix, FKs use `<parent>_id`, `ON DELETE RESTRICT` is the default; partially supersedes ADR-014, refines ADR-089 | 2026-04-12 | ✅ | A' | ARCHITECTURE_DECISIONS_V2.38 |
-| ADR-117 | Three-Tier Identity Model for Schema Design — Tier 1 internal PK (always unique), Tier 2 internal business key (case-by-case unique), Tier 3 external key (ASSUMED NOT UNIQUE); no UNIQUE on Tier-3 columns without a documented vendor contract; `ON CONFLICT` targets Tier 1/2 only; Epic #935 Phase 2. V2.37 amendment: `series.series_key` reclassified Tier 2 → Tier 3 per ADR-119 Part 1 | 2026-04-21 | ✅ | Epic #935 | ARCHITECTURE_DECISIONS_V2.38 |
+| ADR-116 | ODS Schema Conventions — Universal Surrogate PK + Business Key Suffix + FK Naming + RESTRICT Default — four rules: every table uses `id SERIAL PRIMARY KEY`, business keys use `_key` suffix, FKs use `<parent>_id`, `ON DELETE RESTRICT` is the default; partially supersedes ADR-014, refines ADR-089 | 2026-04-12 | ✅ | A' | ARCHITECTURE_DECISIONS_V2.39 |
+| ADR-117 | Three-Tier Identity Model for Schema Design — Tier 1 internal PK (always unique), Tier 2 internal business key (case-by-case unique), Tier 3 external key (ASSUMED NOT UNIQUE); no UNIQUE on Tier-3 columns without a documented vendor contract; `ON CONFLICT` targets Tier 1/2 only; Epic #935 Phase 2. V2.37 amendment: `series.series_key` reclassified Tier 2 → Tier 3 per ADR-119 Part 1 | 2026-04-21 | ✅ | Epic #935 | ARCHITECTURE_DECISIONS_V2.39 |
 
 ### Phase B.5: Canonical Layer Foundation (Epic #972)
 
 | ADR | Title | Date | Status | Phase | Document |
 |-----|-------|------|--------|-------|----------|
-| ADR-118 | Canonical Identity, Matching Infrastructure, and Event-State Layer — cross-platform canonical tier (`canonical_events`, `canonical_markets`, `canonical_entity`, `canonical_event_participants`) separate from platform-scoped `markets`/`events`; first-class matching ledger (`canonical_market_links` with EXCLUDE partial-unique, append-only `canonical_match_log`, `canonical_match_reviews`, `canonical_match_overrides` honored FIRST); three-layer event-state (`canonical_observations` thin fact + per-kind projection peers `game_states`/`weather_observations`/...); three-timestamp causal-correctness commitment (`event_occurred_at`/`source_published_at`/`ingested_at` non-negotiable); dim+fact canonical linkage with nightly reconciliation; `v_temporal_alignment` stable consumer contract rewired Phase 1 (Option A writer or Option B plain view, always-fresh); LLM `trust_tier` {high/medium/provisional} surface hides raw confidence; `resolution_rule_fp` anchors natural-key hash against #935-ghost failure mode. **V2.38 Cohort 1 amendment (#996):** 4 new lookup tables (`canonical_event_domains`, `canonical_event_types`, `canonical_entity_kinds`, `canonical_participant_roles`) replace CHECK constraints; `canonical_entity.ref_team_id` typed back-reference with partial CHECK; `canonical_event_participants.sequence_number` with `UNIQUE (canonical_event_id, role_id, sequence_number)`; Cohort 1 = 7 tables across migrations 0067+0068; `canonical_markets.natural_key_hash` derivation rule deferred to Cohort 5. Migrations 0067-0090. Epic #972. | 2026-04-22 | ✅ | Epic #972 | ARCHITECTURE_DECISIONS_V2.38 |
-| ADR-119 | Business-Key Cleanup + Weather Phase 1 Non-Sport Foundation Validation — Part 1: DELETE `games.game_key`/`markets.market_key`/`events.event_key` (formatted-PK decoration, no semantic content beyond SERIAL PK), RENAME + RECLASSIFY `series.series_key` → `external_series_ticker` (Tier-3 per ADR-117 amendment), codify SCD-2 version-stable surrogate exception (`game_state_key`/`position_key`/`edge_key` KEPT; any automated lint MUST gate on `row_current_ind` presence → Pattern 80), commit canonical layer against formatted-PK decoration propagation. Part 2: ship weather observation collection Phase 1 — NOAA NWS adapter, `weather_observations` fact table per ADR-118 contract, real-data `locations` (~20-50 NOAA stations), `weather_poller.py` dual-writes canonical_observations + weather_observations transactionally, 8-type test matrix, Kalshi weather market polling folded in per session 70 user clarification. Migrations 0091-0097. Sister ADR to ADR-118. | 2026-04-22 | ✅ | Epic #972 | ARCHITECTURE_DECISIONS_V2.38 |
+| ADR-118 | Canonical Identity, Matching Infrastructure, and Event-State Layer — cross-platform canonical tier (`canonical_events`, `canonical_markets`, `canonical_entity`, `canonical_event_participants`) separate from platform-scoped `markets`/`events`; first-class matching ledger (`canonical_market_links` with EXCLUDE partial-unique, append-only `canonical_match_log`, `canonical_match_reviews`, `canonical_match_overrides` honored FIRST); three-layer event-state (`canonical_observations` thin fact + per-kind projection peers `game_states`/`weather_observations`/...); three-timestamp causal-correctness commitment (`event_occurred_at`/`source_published_at`/`ingested_at` non-negotiable); dim+fact canonical linkage with nightly reconciliation; `v_temporal_alignment` stable consumer contract rewired Phase 1 (Option A writer or Option B plain view, always-fresh); LLM `trust_tier` {high/medium/provisional} surface hides raw confidence; `resolution_rule_fp` anchors natural-key hash against #935-ghost failure mode. **V2.38 Cohort 1 amendment (#996):** 4 new lookup tables (`canonical_event_domains`, `canonical_event_types`, `canonical_entity_kinds`, `canonical_participant_roles`) replace CHECK constraints; `canonical_entity.ref_team_id` typed back-reference with partial CHECK; `canonical_event_participants.sequence_number` with `UNIQUE (canonical_event_id, role_id, sequence_number)`; Cohort 1 = 7 tables across migrations 0067+0068; `canonical_markets.natural_key_hash` derivation rule deferred to Cohort 5. Migrations 0067-0090. Epic #972. | 2026-04-22 | ✅ | Epic #972 | ARCHITECTURE_DECISIONS_V2.39 |
+| ADR-119 | Business-Key Cleanup + Weather Phase 1 Non-Sport Foundation Validation — Part 1: DELETE `games.game_key`/`markets.market_key`/`events.event_key` (formatted-PK decoration, no semantic content beyond SERIAL PK), RENAME + RECLASSIFY `series.series_key` → `external_series_ticker` (Tier-3 per ADR-117 amendment), codify SCD-2 version-stable surrogate exception (`game_state_key`/`position_key`/`edge_key` KEPT; any automated lint MUST gate on `row_current_ind` presence → Pattern 80), commit canonical layer against formatted-PK decoration propagation. Part 2: ship weather observation collection Phase 1 — NOAA NWS adapter, `weather_observations` fact table per ADR-118 contract, real-data `locations` (~20-50 NOAA stations), `weather_poller.py` dual-writes canonical_observations + weather_observations transactionally, 8-type test matrix, Kalshi weather market polling folded in per session 70 user clarification. Migrations 0091-0097. Sister ADR to ADR-118. | 2026-04-22 | ✅ | Epic #972 | ARCHITECTURE_DECISIONS_V2.39 |
 
 ### Phase 3: Edge Detection (Planned)
 
@@ -1386,7 +1390,7 @@ coverage_tiers:
 **Total ADRs catalogued in this index:** 105 (unique ADR-row count as of v1.27)
 **Highest ADR number assigned:** 119
 
-> **NOTE (v1.26 reconciliation):** The per-status (Accepted / Proposed / Rejected / Superseded) and per-phase sub-counts previously listed here had drifted to stale figures from the v1.22-v1.25 era (multiple version bumps without statistics recompute). They have been REMOVED rather than propagated further out of sync. For authoritative per-ADR status and phase metadata, consult the canonical `ARCHITECTURE_DECISIONS_V2.38.md` directly — that file is the single source of truth. Re-populating this statistics block with accurate aggregates is a separate follow-up; filing this would itself be Pattern 73 work (derive from canonical, don't maintain in two places).
+> **NOTE (v1.26 reconciliation):** The per-status (Accepted / Proposed / Rejected / Superseded) and per-phase sub-counts previously listed here had drifted to stale figures from the v1.22-v1.25 era (multiple version bumps without statistics recompute). They have been REMOVED rather than propagated further out of sync. For authoritative per-ADR status and phase metadata, consult the canonical `ARCHITECTURE_DECISIONS_V2.39.md` directly — that file is the single source of truth. Re-populating this statistics block with accurate aggregates is a separate follow-up; filing this would itself be Pattern 73 work (derive from canonical, don't maintain in two places).
 
 ---
 
@@ -1420,9 +1424,10 @@ coverage_tiers:
 - v1.6: Added ADR-074 for property-based testing integration (Hypothesis framework POC complete)
 - v1.5: Added ADR-054 for Python 3.14 compatibility (Ruff security rules instead of Bandit)
 
-**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.38.md
+**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.39.md
 
 Version history entries added with v1.28:
 - v1.28: ADR-118 row amended per issue #996 Cohort 1 amendment — Cohort 1 expanded from 4 tables → 7 tables across 2 migrations (0067 + 0068) with lookup tables + typed back-refs + sequence_number. Source canonical doc bumped V2.37 → V2.38.
+- v1.29: ADR-118 row amended for Cohort 2 v2.39 amendment — `canonical_markets` DDL tightened (audit-column expansion, `market_type_general` CHECK constraint, `updated_at` + BEFORE UPDATE trigger as #1007 retrofit template), explicit non-application prose for `lifecycle_phase` + Pattern 82, `ON DELETE RESTRICT` on `canonical_event_id` ratified, FK index requirement documented for Migration 0069. Source canonical doc bumped V2.38 → V2.39.
 
-**END OF ADR INDEX V1.28**
+**END OF ADR INDEX V1.29**

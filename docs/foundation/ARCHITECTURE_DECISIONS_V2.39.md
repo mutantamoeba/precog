@@ -1,9 +1,22 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.38
+**Version:** 2.39
 **Last Updated:** April 24, 2026
 **Status:** ✅ Current
+**Supersedes:** V2.38 (deleted per supersede-and-delete convention; PR #979 / PR #1009 precedent)
+**Session:** 73
+**Changes in v2.39:**
+- **ADR-118 COHORT 2 AMENDMENT (session 73):** Encoded 5 user-adjudicated design decisions from the Holden + Galadriel 2-agent compressed council-variant validation (session 73) for the Cohort 2 `canonical_markets` table (Migration 0069). Amendment is narrative + DDL-tightening only; no new tables.
+  - **DDL audit-column shorthand expanded** on `canonical_markets` to match the Cohort 1 (Migrations 0067/0068) full convention (`TIMESTAMPTZ NOT NULL DEFAULT now()` for `created_at` and `updated_at`; `TIMESTAMPTZ` nullable for `retired_at`). Closes Holden Finding 1.
+  - **`market_type_general` CHECK constraint added inline** (`CHECK (market_type_general IN ('binary','categorical','scalar'))`); accompanied by explicit prose documenting why this column is **NOT** a Pattern 81 lookup table (closed enum tied to pmxt #964 NormalizedMarket contract; values bind to code branches in matching/projection/pricing). Closes Holden Finding 2.
+  - **`lifecycle_phase` explicitly NOT on `canonical_markets`**, with prose explaining the three-distinct-concerns model (`canonical_events.lifecycle_phase` for "is the bet still meaningful?"; platform `markets.status` for "is it tradeable on platform X?"; `canonical_markets.retired_at` for "was the canonical identity itself retired?"). Revisit trigger documented. Resolves Holden Finding 4 / Galadriel Finding 1 conflict in favor of Holden after PM reframing (Galadriel's per-platform-divergence example actually belongs on platform `markets.status`, not the canonical tier).
+  - **`updated_at` + `BEFORE UPDATE` trigger pattern** established on `canonical_markets` as the **template** for #1007 full resolution. Cohort 2 ships the trigger in Migration 0069; future PR retrofits the same trigger to `canonical_events` and adds `updated_at` + trigger to canonical-tier lookup tables and `canonical_event_participants`. Overrides Holden Finding 7 ("drop updated_at") in favor of "install the trigger, not drop the column."
+  - **Pattern 82 explicit non-application to `canonical_markets`** documented in prose ("`canonical_markets` has NO Pattern 82 application in Phase 1; per-platform market identity is owned by `canonical_market_links` (Migration 0071), not by typed back-ref columns"). Ratifies `canonical_event_id BIGINT NOT NULL REFERENCES canonical_events(id) ON DELETE RESTRICT` with explicit rationale (NOT NULL precludes SET NULL; CASCADE would silently delete settlement-bearing markets; asymmetry with `canonical_event_participants.canonical_event_id` CASCADE intentional). Closes Holden Finding 6 + Galadriel Finding 4.
+  - **Migration 0069 ships an FK index** `idx_canonical_markets_canonical_event_id ON canonical_markets(canonical_event_id)` (migration-side discipline; Holden Finding 8).
+  - **Bonus: Migration 0076 stale roadmap entry** flagged via inline footnote + Cohort 2 amendment-rationale footnote referencing Issue #1015 (cleanup tracked separately; do NOT renumber roadmap in this amendment).
+  - **Bonus: forward-pointer footnotes** added referencing Issue #1016 (Migration 0078 amendment for `canonical_observations.canonical_market_id` + Pattern 82 trigger) and Issue #1017 (Migration 0083 amendment for `v_canonical_market_llm` view body JOIN to `canonical_event_domains`).
+  - Cross-references: session 73 design memo (`memory/design_review_cohort2_canonical_markets.md`), Issues #1007 / #1015 / #1016 / #1017, PR #1003 (v2.38 origin).
 **Changes in v2.38:**
 - **ADR-118 COHORT 1 AMENDMENT (Issue #996, session 72):** Encoded 8 user-adjudicated design decisions from the Holden + Galadriel 2-agent council-variant validation (session 71). Cohort 1 expands from 3 main tables → **7 tables across 2 migrations (0067 + 0068)**.
   - **4 new lookup tables** replace proposed CHECK constraints (Pattern 81 — "Open canonical enum → lookup table over CHECK", canonical in DEVELOPMENT_PATTERNS V1.36): `canonical_event_domains`, `canonical_event_types` (composite `(domain_id, event_type)` UNIQUE), `canonical_entity_kinds`, `canonical_participant_roles` (composite `(domain_id, role)` UNIQUE with nullable `domain_id` for cross-domain roles).
@@ -16882,7 +16895,7 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 **Purpose:** Record and rationale for all major architectural decisions with systematic ADR numbering
 
-**For complete ADR catalog, see:** ADR_INDEX_V1.28.md
+**For complete ADR catalog, see:** ADR_INDEX_V1.29.md
 
 ## Decision #115/ADR-115: Database Domain Module Architecture
 
@@ -17348,14 +17361,35 @@ CREATE TABLE canonical_events (
 );
 
 CREATE TABLE canonical_markets (
-  id                    BIGSERIAL PRIMARY KEY,
-  canonical_event_id    BIGINT NOT NULL REFERENCES canonical_events(id) ON DELETE RESTRICT,
-  market_type_general   VARCHAR(32) NOT NULL,           -- 'binary'|'categorical'|'scalar' (pmxt #964 shape)
+  id                    BIGSERIAL    PRIMARY KEY,
+  canonical_event_id    BIGINT       NOT NULL REFERENCES canonical_events(id) ON DELETE RESTRICT,  -- v2.39: RESTRICT ratified — markets carry settlement; NOT NULL precludes SET NULL; asymmetry with canonical_event_participants.CASCADE is intentional
+  market_type_general   VARCHAR(32)  NOT NULL CHECK (market_type_general IN ('binary','categorical','scalar')),  -- v2.39: inline CHECK; closed enum per pmxt #964 NormalizedMarket contract (NOT a Pattern 81 lookup; see prose below)
   outcome_label         VARCHAR(255),
-  natural_key_hash      BYTEA NOT NULL,                 -- v2.38: derivation rule is APPLICATION-LAYER, NOT DDL. See "natural_key_hash derivation rule (deferral note)" below.
-  metadata JSONB, created_at, retired_at,
+  natural_key_hash      BYTEA        NOT NULL,                                                      -- v2.38: derivation rule is APPLICATION-LAYER, NOT DDL. See "natural_key_hash derivation rule (deferral note)" below.
+  metadata              JSONB,
+  created_at            TIMESTAMPTZ  NOT NULL DEFAULT now(),                                        -- v2.39: shorthand expanded to match Cohort 1 (0067/0068) convention
+  updated_at            TIMESTAMPTZ  NOT NULL DEFAULT now(),                                        -- v2.39: maintained by trg_canonical_markets_updated_at (BEFORE UPDATE trigger; see below); template for #1007 retrofit
+  retired_at            TIMESTAMPTZ,                                                                -- v2.39: shorthand expanded; canonical-identity retirement (NOT per-platform lifecycle — see prose below)
   CONSTRAINT uq_canonical_markets_nk UNIQUE (natural_key_hash)
 );
+
+-- BEFORE UPDATE trigger pattern (v2.39 — Cohort 2 establishes the template for #1007 retrofit
+-- across canonical_events + canonical-tier lookup tables + canonical_event_participants).
+-- Pattern: insert-time DEFAULT now() handles INSERT; trigger handles every UPDATE. Without the
+-- trigger, updated_at silently records the insert timestamp forever — the "misleading tombstone"
+-- anti-pattern flagged by #1007. The fix is to INSTALL the trigger, not drop the column.
+CREATE OR REPLACE FUNCTION update_canonical_markets_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_canonical_markets_updated_at
+    BEFORE UPDATE ON canonical_markets
+    FOR EACH ROW
+    EXECUTE FUNCTION update_canonical_markets_updated_at();
 
 CREATE TABLE canonical_entity (
   id               BIGSERIAL PRIMARY KEY,
@@ -17444,6 +17478,67 @@ This subsection exists so future readers of ADR-118 understand WHY the four look
 7. **`canonical_markets.natural_key_hash` derivation rule deferred to Cohort 5.** The column ships Cohort 1; the rule (hash input list, normalization, tie-breaker) is an application-layer resolver concern and will be specified as a seed-migration amendment when Cohort 5 lands. Shipping DDL without the derivation is defensible because the DDL makes no claim about the rule; migrations are the rule's home, not the ADR or schema.
 
 8. **Migration sequencing: 0067 + 0068 (two migrations, seven tables).** Original mission brief said "3 tables across 3 migrations"; correct encoding is 7 tables across 2 migrations because lookup tables must land with the columns that FK into them (lookup → referring table in same migration, so FK can exist at migration boundary). 0067 bundles `canonical_event_domains` + `canonical_event_types` + `canonical_events`. 0068 bundles `canonical_entity_kinds` + `canonical_entity` (with `ref_team_id` + CONSTRAINT TRIGGER) + `canonical_participant_roles` + `canonical_event_participants` (with `sequence_number`). `canonical_markets` is Cohort 2 (migration 0069).
+
+##### Cohort 2 amendment rationale (v2.39, session 73 capture)
+
+This subsection exists so future readers of ADR-118 understand WHY the Cohort 2 `canonical_markets` DDL took the shape above — particularly **what was deliberately not added** — without reverse-engineering intent from DDL. The 5 user-adjudicated decisions from session 73 (sourced from the Holden + Galadriel 2-agent compressed-council validation; full memo lives at `memory/design_review_cohort2_canonical_markets.md`):
+
+1. **DDL audit-column shorthand expanded.** v2.38 carried the line `metadata JSONB, created_at, retired_at,` as a one-line shorthand that under-specified the audit columns relative to Cohort 1 (Migrations 0067/0068 use full `TIMESTAMPTZ NOT NULL DEFAULT now()` declarations). v2.39 expands the shorthand to the full convention, INCLUDING `updated_at` per decision #4 below. Pattern 73 (SSOT) discipline: this DDL block is the canonical specification; Migration 0069 takes the column declarations verbatim.
+
+2. **`market_type_general` is intentionally NOT a Pattern 81 lookup table.** Per the Pattern 81 §"When NOT to Apply (Keep CHECK)" criteria in `DEVELOPMENT_PATTERNS_V1.36.md`: `market_type_general` is a **closed enum tied to the pmxt #964 NormalizedMarket contract**; its values bind to code branches in matching, projection, and pricing modules; the open-set test fails (no future "4th market type" is expected as a data-only addition — a new market shape would require a code deploy regardless). Pattern 81 is for open canonical enums (sports, candidates, fighters, future event kinds) where new values land as INSERT rows; `market_type` is closed by the contract. The inline `CHECK (market_type_general IN ('binary','categorical','scalar'))` in the DDL above is the correct encoding. Do NOT introduce a `canonical_market_types` lookup table without first invalidating the closed-enum premise.
+
+3. **`lifecycle_phase` is intentionally NOT on `canonical_markets`.** Galadriel proposed adding `lifecycle_phase VARCHAR(32) NOT NULL DEFAULT 'proposed'` during the session 73 council (citing per-platform divergence — e.g., a Polymarket replica `listed` while the Kalshi version is `suspended`). User adjudication: NO. Rationale — `canonical_markets` is the platform-agnostic identity layer for matching across platforms. Per-platform lifecycle divergence is precisely what the canonical tier is designed NOT to encode; Galadriel's example actually belongs on the platform `markets.status` column (which already exists), not the canonical tier. Encoding it here would break the abstraction. The three concerns are kept distinct on three columns:
+   - **`canonical_events.lifecycle_phase`** — "is the bet still meaningful?" (event-level state machine; ships in Cohort 1 / Migration 0067).
+   - **platform `markets.status`** — "is the market tradeable on platform X right now?" (per-platform; pre-existing column).
+   - **`canonical_markets.retired_at`** — "was the canonical identity itself retired?" (e.g., this canonical row is deprecated because it duplicates `canonical_market_id=42`).
+   **Revisit trigger:** if Phase 3+ surfaces a real canonical-level state machine for markets distinct from per-platform lifecycle (e.g., `voided` distinct from `retired` at the canonical tier), revisit this decision. Until then, `retired_at` is the only canonical-tier lifecycle surface and platform `markets.status` is the only per-platform lifecycle surface.
+
+4. **`updated_at` + `BEFORE UPDATE` trigger — Cohort 2 as the #1007 template.** Issue #1007 flagged `canonical_events.updated_at` as a "misleading tombstone" — an `updated_at` column with a `DEFAULT now()` insert-time value but no maintenance trigger, so the column silently records the insert timestamp forever. Holden's session 73 finding 7 proposed dropping `updated_at` from `canonical_markets` to avoid recreating the anti-pattern. User adjudication: KEEP `updated_at` AND INSTALL the trigger — the misleading-tombstone problem is solved by installing the trigger, not by dropping the column. Cohort 2 establishes the canonical trigger pattern (`update_canonical_markets_updated_at()` + `trg_canonical_markets_updated_at`, declared in the DDL block above); a separate future PR retrofits the same pattern to (a) `canonical_events` (currently has `updated_at` without trigger), and (b) the canonical-tier lookup tables (`canonical_event_domains`, `canonical_event_types`, `canonical_entity_kinds`, `canonical_participant_roles`) + `canonical_event_participants`, which currently have NO `updated_at` at all. The Cohort 2 trigger DDL above is the **template** the #1007 retrofit copies (with `<table>` substitution). Pattern 73 SSOT: the trigger function definition lives once in the DDL block above; cross-references point there rather than restating the function body.
+
+5. **Pattern 82 explicit non-application to `canonical_markets`; `ON DELETE RESTRICT` ratified on `canonical_event_id`.** Two distinct sub-decisions captured together because both arose from carry-forward analysis of Cohort 1's polymorphic-back-ref pattern:
+
+   **(5a) No Pattern 82 on `canonical_markets` in Phase 1.** Markets are uniform across platforms (binary/categorical/scalar shape per the pmxt #964 contract); per-platform market identity is owned by `canonical_market_links` (Migration 0071), NOT by typed back-ref columns on `canonical_markets`. Cohort 1 introduced Pattern 82 for `canonical_entity.ref_team_id` because entities are polymorphic (team/fighter/candidate/...) and benefit from typed back-refs into platform dim tables; markets do not have that polymorphism in Phase 1. Future polymorphic market kinds (e.g., a hypothetical `derivative_basket` wrapping multiple platform markets into one canonical bet) would re-evaluate this; not a Phase 1 concern. This is documented explicitly to prevent over-application of the Cohort 1 decision #5 template language to a shape it does not fit.
+
+   **(5b) `ON DELETE RESTRICT` on `canonical_event_id` ratified.** The choice of cascade behavior on `canonical_markets.canonical_event_id` is a distinct question from the #1004 discussion of `canonical_events.game_id` / `canonical_events.series_id` (those are canonical → platform-dim relationships; this is canonical → canonical). RESTRICT is correct because: (1) `NOT NULL` precludes `SET NULL`; (2) `CASCADE` would silently delete settlement-bearing markets when a parent canonical_event is deleted, hiding data loss behind a single DELETE statement; (3) the asymmetry with `canonical_event_participants.canonical_event_id ON DELETE CASCADE` is **intentional** — participants are denormalization (rebuildable from source), markets carry settlement and observation history (not rebuildable); (4) RESTRICT is the canonical-tier default for "this row references something whose deletion should be blocked" and is consistent with the `ON DELETE RESTRICT` choices already shipped in Migrations 0067 and 0068 for similar canonical-to-canonical edges.
+
+##### Migration 0069 FK index (migration-side discipline, v2.39)
+
+ADR-118 DDL above does not declare indexes (per ADR convention — indexes are migration-side discipline, not schema specification). Migration 0069 ships:
+
+```sql
+CREATE INDEX idx_canonical_markets_canonical_event_id
+    ON canonical_markets(canonical_event_id);
+```
+
+Full (non-partial) index because `canonical_event_id` is `NOT NULL`. Same Samwise FK-index discipline as Migration 0067 (`idx_canonical_events_domain_id` etc.); the ADR documents the requirement here so the implementation session has a single source of truth for the migration scaffold.
+
+##### Footnote: Migration 0076 roadmap entry stale (v2.39)
+
+The migration roadmap below lists `0076 canonical_events.lifecycle_phase column`, but that column already shipped in Migration 0067 (Cohort 1A). Both Holden and Galadriel independently flagged this in session 73. Cleanup tracked separately as **Issue #1015** — the roadmap is **NOT renumbered** in this amendment to keep the v2.38 → v2.39 diff scoped to Cohort 2 narrative. Future cleanup PR will either reuse slot 0076 for a different migration or close the gap by renumbering 0077-0090.
+
+##### Footnotes: forward-pointer amendments (v2.39)
+
+Two cross-cohort amendments surfaced during the session 73 review but are out of scope for this PR; they are tracked as separate issues for future cohort design work:
+
+- **Issue #1016 — Migration 0078 amendment.** Add nullable `canonical_market_id` + partial index + Pattern 82 CONSTRAINT TRIGGER (gated on `observation_kind = 'market_snapshot'`) to `canonical_observations`. Without this, multi-market-per-event events make market-snapshot queries do JSONB extraction or sequential scans. Filed for Cohort 6 design review.
+- **Issue #1017 — Migration 0083 amendment.** The `v_canonical_market_llm` view body in Migration 0083 references `ce.domain` directly, but post-v2.38 `canonical_events` carries `domain_id` (FK into `canonical_event_domains`); the view body must be amended to JOIN `canonical_event_domains cd ON cd.id = ce.domain_id` and project `cd.domain`. Filed for Cohort 8 design review.
+
+##### Footnote: Galadriel Finding 3 (`resolution_window`) deferred (v2.39)
+
+Galadriel Finding 3 proposed an OPTIONAL `resolution_window TSTZRANGE NULL` column on `canonical_markets` (NULL = inherit from parent `canonical_event`) to admit Phase 3 multi-market-per-event multi-window cases without a fresh migration. Phase 1 sports are unaffected (always NULL initially). Disposition: **deferred** to a future cohort if/when Phase 3 multi-window-per-event becomes a concrete requirement. Not added to v2.39 DDL. **Revisit trigger:** Phase 3 cross-platform matching surfaces a market whose resolution timing diverges from its parent event (e.g., a Polymarket prop market on a Kalshi-tracked sports game with a different resolution moment than the game itself).
+
+##### Footnote: `outcome_label` Pattern 33 + VARCHAR(255) ratification (v2.39)
+
+Galadriel Finding 6 / Holden Finding 6 raised a Pattern 33 vocabulary-alignment concern: does pmxt's NormalizedMarket TypedDict (#964) use `outcome_label` or a different field name (e.g., `outcome_name`)? PM adjudication: ship `outcome_label` as-spec; the term is generic enough that pmxt convergence is likely; verification is deferred to the Migration 0069 implementation session if/when pmxt source becomes available. **NOT a blocker** for this amendment. Width `VARCHAR(255)` ratified: canonical tier is intentionally a superset of the platform `markets.outcome_label VARCHAR(100)` ceiling, providing headroom for non-Kalshi platforms with longer labels.
+
+##### Footnote: Holden findings dispositioned N/A or confirm-only (v2.39)
+
+Four Holden findings received N/A or confirm-only dispositions during PM adjudication; locked-knowledge discipline (Pattern 73 + Jorge completeness audit) requires narration so future readers can verify these were asked AND answered, not silently dropped:
+
+- **Finding 3 (#1011 NULL uniqueness gap):** **N/A** — no nullable columns participate in any UNIQUE constraint on `canonical_markets`. The single UNIQUE is `(natural_key_hash)` and `natural_key_hash` is `NOT NULL`.
+- **Finding 9 (Pattern 18 SCD-2 verification):** **CONFIRMED** — `canonical_markets` is NOT SCD-2 (no `row_current_ind`, no version chain). Canonical-tier model is append-then-retire (`retired_at`), not version-tracked. Pattern 18 / Pattern 80 SCD-2 surrogate-key idioms do not apply at this tier.
+- **Finding 10 (`uq_canonical_markets_nk` UNIQUE constraint naming):** **CONFIRMED** — naming consistent with Cohort 1 precedent (`uq_canonical_events_nk` at Migration 0067; `uq_canonical_event_participants` etc.).
+- **Finding 11 (Pattern 14 5-step bundle discipline):** **Cohort 2 = 5 atomic shipments**, not just Migration 0069: (1) Migration 0069 (this amendment + the migration itself), (2) `CanonicalMarket` ORM model in `src/precog/database/models.py`, (3) `crud_canonical_markets` module — including `get_canonical_for_platform_market()` helper (Galadriel Finding 5; encodes the `canonical_markets ↔ canonical_market_links ↔ markets` JOIN + `link_state = 'active'` filter once per Pattern 73), (4) CRUD unit tests, (5) integration tests (paired with #1012 for 0067/0068 + 0069). **Cohort 2 is NOT "done" until all 5 land.**
 
 #### Matching infrastructure
 
@@ -17777,7 +17872,7 @@ Phase 4 backtest filters on `source_published_at <= feature_cutoff` for causal c
 | 0073 | canonical_match_reviews, canonical_match_overrides |
 | 0074 | observation_source registry; seed espn, kalshi, manual |
 | 0075 | locations stub |
-| 0076 | canonical_events.lifecycle_phase column |
+| 0076 | canonical_events.lifecycle_phase column [stale — column already shipped in 0067; see Issue #1015] |
 | 0077 | canonical_event_phase_log |
 | 0078 | canonical_observations (partitioned by ingested_at monthly) + indexes |
 | 0079 | games.canonical_event_id (nullable) + index |
@@ -17821,6 +17916,11 @@ One-way-door inventory: **Option B** for `temporal_alignment` is the only Phase-
 - Pattern 81 (canonical in DEVELOPMENT_PATTERNS V1.36; v2.38 origin) — "Open canonical enum → lookup table over CHECK constraint" (Cohort 1 amendment origin; 4 lookup tables at ADR-118)
 - Pattern 82 (canonical in DEVELOPMENT_PATTERNS V1.36; v2.38 origin) — "CONSTRAINT TRIGGER for Polymorphic Typed Back-Reference" (Cohort 1 amendment origin; `enforce_canonical_entity_team_backref` template at Migration 0068; canonical template for Cohort 2+ polymorphic back-refs)
 - Issue #996 — ADR-118 Cohort 1 amendment tracking issue (8 user-adjudicated decisions; encoded in v2.38)
+- Issue #1007 — `updated_at` consistency across canonical-tier tables; Cohort 2 (v2.39) establishes the BEFORE UPDATE trigger template; full retrofit (canonical_events + lookup tables + canonical_event_participants) is sequenced separately
+- Issue #1015 — Migration 0076 stale roadmap entry cleanup (`canonical_events.lifecycle_phase` already shipped in 0067); roadmap deliberately not renumbered in v2.39
+- Issue #1016 — Migration 0078 amendment (`canonical_observations.canonical_market_id` + partial index + Pattern 82 trigger gated on observation_kind); filed for Cohort 6 design review
+- Issue #1017 — Migration 0083 amendment (`v_canonical_market_llm` view body must JOIN `canonical_event_domains`); filed for Cohort 8 design review
+- `memory/design_review_cohort2_canonical_markets.md` — session 73 design memo (Holden + Galadriel council output + PM adjudications + resolution log; primary source for v2.39 amendment)
 
 ---
 
@@ -17829,6 +17929,8 @@ One-way-door inventory: **Option B** for `temporal_alignment` is the only Phase-
 **Session 70 Task 5**, three rounds of architect council + Mulder's Round 2B skeptical audit + @Whatsonyourmind's #496 production experience.
 
 **Session 71 Cohort 1 amendment (v2.38):** 2-agent council-variant (Holden + Galadriel) design validation on Cohort 1 scope surfaced 8 decisions that expanded the table set. User adjudicated each; issue #996 captures. The 2-agent compressed-council process pattern remains a candidate for codification in `roster_triggers.md` as a settled-ADR validation alternative to full S25 Triple Compass; that codification is independent of the schema-pattern promotions in DEVELOPMENT_PATTERNS V1.36. The CONSTRAINT TRIGGER encoding for `canonical_entity.ref_team_id` introduced in this amendment (decision #5) — "Polymorphic typed back-refs enforced via CONSTRAINT TRIGGER, not CHECK" — was promoted as **Pattern 82** in DEVELOPMENT_PATTERNS V1.36 alongside **Pattern 81** (open canonical enum → lookup table). PostgreSQL CHECK constraints cannot contain subqueries, making the trigger the only correct encoding for dynamic kind-based integrity rules.
+
+**Session 73 Cohort 2 amendment (v2.39):** 2-agent compressed-council validation (Holden + Galadriel) on the Cohort 2 `canonical_markets` table (Migration 0069) surfaced 1 conflict (lifecycle_phase ADD vs NOT) + 4 open questions; user adjudicated all 5. Amendment is narrative + DDL-tightening only (no new tables): audit-column shorthand expanded, `market_type_general` CHECK added, `lifecycle_phase` explicitly excluded from `canonical_markets` with the three-distinct-concerns rationale documented (and Galadriel's per-platform-divergence example reframed as belonging on platform `markets.status` rather than the canonical tier), `updated_at` + BEFORE UPDATE trigger established as the #1007 retrofit template, and Pattern 82 non-application + `ON DELETE RESTRICT` ratified explicitly. Full memo: `memory/design_review_cohort2_canonical_markets.md`. The session 73 review confirmed the 2-agent compressed-council process scales to settled-ADR validation tasks where the design is canonical and council validates implementability + carry-forward + cross-module impact rather than open-ended design.
 
 - **Round 1:** canonical-tier architecture (Holden + Galadriel + Vader; PM synthesis)
 - **Round 2B:** matching-schema cardinality; M:N via link table (+ Mulder)
