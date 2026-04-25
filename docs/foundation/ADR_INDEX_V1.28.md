@@ -1425,4 +1425,4 @@ coverage_tiers:
 Version history entries added with v1.28:
 - v1.28: ADR-118 row amended per issue #996 Cohort 1 amendment — Cohort 1 expanded from 4 tables → 7 tables across 2 migrations (0067 + 0068) with lookup tables + typed back-refs + sequence_number. Source canonical doc bumped V2.37 → V2.38.
 
-**END OF ADR INDEX V1.27**
+**END OF ADR INDEX V1.28**
