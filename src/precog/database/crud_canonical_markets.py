@@ -29,7 +29,7 @@ UPDATE coverage (Cohort 2 deliberate gap, per Glokta Finding 10):
     drift across consumers); file an issue or add the helper here first.
 
 Reference:
-    - ``docs/foundation/ARCHITECTURE_DECISIONS_V2.39.md`` lines ~17363-17541
+    - ``docs/foundation/ARCHITECTURE_DECISIONS_V2.40.md`` lines ~17363-17541
       (Cohort 2 amendment + DDL + decision rationale)
     - ``src/precog/database/alembic/versions/0069_canonical_markets_foundation.py``
     - ``src/precog/database/crud_events.py`` (style reference)
@@ -132,7 +132,7 @@ def create_canonical_market(
         ``updated_at`` as an INSERT parameter (the column default handles it).
 
     Reference:
-        - ``docs/foundation/ARCHITECTURE_DECISIONS_V2.39.md`` lines ~17363-17541
+        - ``docs/foundation/ARCHITECTURE_DECISIONS_V2.40.md`` lines ~17363-17541
         - Migration 0069 (table DDL + trigger)
         - ADR-118 V2.39 Cohort 2 amendment decisions #2, #3, #4, #5b
     """

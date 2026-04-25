@@ -1,9 +1,13 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.29
+**Version:** 1.30
 **Last Updated:** 2026-04-24
 **Status:** ✅ Current
+**Changes in v1.30:**
+- **ADR-118 COHORT 1 CARRY-FORWARD AMENDMENT (Issue #1011, session 75):** Amended ADR-118 row to reference v2.40 Cohort 1 carry-forward amendment. Five PM-adjudicated design clarifications surfaced via session 72 S68 audit on Cohort 1 PRs (#1003 + #1005 + #1008) and resolved via 3-agent design council (Holden + Galadriel + Joe Chip, session 74): (1) partial unique index on `canonical_participant_roles (role) WHERE domain_id IS NULL` for cross-domain singleton enforcement; (2) `canonical_event_participants.sequence_number` NO DEFAULT ratified; (3) `canonical_events.lifecycle_phase` CHECK constraint NOW with mirror requirement on Migration 0077 `canonical_event_phase_log.phase`; (4) Pattern 82 V2 Forward-Only Direction Policy + mandatory load-bearing regression test; (5) seed-subquery NULL guard promoted to Pattern 83 (DEVELOPMENT_PATTERNS V1.37). Bonus NEW FINDING: `canonical_events.(game_id, series_id)` Pattern 82 instance flagged for Cohort 6 seeder (Migration 0085) territory. No new tables; narrative + DDL-tightening only.
+- Updated ARCHITECTURE_DECISIONS reference from V2.39 to V2.40.
+- Cross-references: session 74 design memos (`memory/design_review_1011_holden_memo.md`, `memory/design_review_1011_galadriel_memo.md`, `memory/design_review_1011_joechip_memo.md`); Issue #1011; Issues #1004 + #1007 + #1021 (sister Cohort 1 retros); DEVELOPMENT_PATTERNS V1.37.
 **Changes in v1.29:**
 - **ADR-118 COHORT 2 AMENDMENT (session 73):** Amended ADR-118 row in Phase B.5 section to reference Cohort 2 v2.39 amendment. Cohort 2 = `canonical_markets` (Migration 0069); 5 user-adjudicated design decisions (audit-column shorthand expansion, `market_type_general` CHECK + Pattern 81 non-application prose, `lifecycle_phase` explicit exclusion with three-distinct-concerns rationale, `updated_at` + BEFORE UPDATE trigger as #1007 retrofit template, Pattern 82 non-application + `ON DELETE RESTRICT` ratification). No new tables; narrative + DDL-tightening only.
 - Updated ARCHITECTURE_DECISIONS reference from V2.38 to V2.39.
@@ -1424,10 +1428,11 @@ coverage_tiers:
 - v1.6: Added ADR-074 for property-based testing integration (Hypothesis framework POC complete)
 - v1.5: Added ADR-054 for Python 3.14 compatibility (Ruff security rules instead of Bandit)
 
-**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.39.md
+**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.40.md
 
 Version history entries added with v1.28:
 - v1.28: ADR-118 row amended per issue #996 Cohort 1 amendment — Cohort 1 expanded from 4 tables → 7 tables across 2 migrations (0067 + 0068) with lookup tables + typed back-refs + sequence_number. Source canonical doc bumped V2.37 → V2.38.
 - v1.29: ADR-118 row amended for Cohort 2 v2.39 amendment — `canonical_markets` DDL tightened (audit-column expansion, `market_type_general` CHECK constraint, `updated_at` + BEFORE UPDATE trigger as #1007 retrofit template), explicit non-application prose for `lifecycle_phase` + Pattern 82, `ON DELETE RESTRICT` on `canonical_event_id` ratified, FK index requirement documented for Migration 0069. Source canonical doc bumped V2.38 → V2.39.
+- v1.30: ADR-118 row amended for Cohort 1 carry-forward v2.40 amendment (Issue #1011, session 75) — 5 PM-adjudicated design clarifications from 3-agent council (Holden + Galadriel + Joe Chip, session 74): partial unique index for `canonical_participant_roles` cross-domain singleton; `canonical_event_participants.sequence_number` NO DEFAULT ratified; `canonical_events.lifecycle_phase` CHECK NOW + mirror on 0077; Pattern 82 V2 Forward-Only Direction Policy + load-bearing regression test; seed-subquery NULL guard promoted to Pattern 83 (V1.37). Future-Cohort finding: `canonical_events.(game_id, series_id)` Pattern 82 instance flagged for Cohort 6 / Migration 0085. Source canonical doc bumped V2.39 → V2.40.
 
-**END OF ADR INDEX V1.29**
+**END OF ADR INDEX V1.30**
