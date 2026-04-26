@@ -1,11 +1,20 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.40
-**Last Updated:** April 24, 2026
+**Version:** 2.41
+**Last Updated:** April 26, 2026
 **Status:** ✅ Current
-**Supersedes:** V2.39 (deleted per supersede-and-delete convention; PR #979 / PR #1009 / PR #1018 precedent)
-**Session:** 75
+**Supersedes:** V2.40 (deleted per supersede-and-delete convention; PR #979 / PR #1009 / PR #1018 precedent)
+**Session:** 79
+**Changes in v2.41:**
+- **ADR-118 COHORT 3 SLOT COUNT ADJUDICATION (session 78 council, session 79 codification):** The session 78 Cohort 3 design council surfaced a slot-count divergence between 4-slot (Galadriel + Elrond, preserved v2.40 plan) and 5-slot (Holden, Pattern 14 hygiene) framings. User adjudicated 5 slots (synthesis ESCALATE E1). Post-adjudication slot mapping (canonical home for the new mapping is in the inline v2.41 amendment paragraph below, NOT a rewrite of the v2.40 implementation table at lines ~17944-17948 — that table is retained as historical record per Pattern 73 SSOT discipline):
+  - 0071 → `match_algorithm` standalone (Phase 1 seed `manual_v1` / `1.0.0`)
+  - 0072 → `canonical_market_links` + `canonical_event_links` (with EXCLUDE)
+  - 0073 → `canonical_match_log` (append-only enforcement deferred to 0090)
+  - 0074 → `canonical_match_reviews` + `canonical_match_overrides`
+  - 0075 → `observation_source` registry (seed `espn`, `kalshi`, `manual`)
+- **Contract-displacement consequence:** `crud_canonical_markets.py` shipped with ~10 docstring/exception-message references to "Migration 0071 = canonical_market_links" that bump to "Migration 0072" inside the slot-0071 PR (the Cohort 3 first-builder PR per Pattern 14 6-step bundle scope, `memory/build_spec_0071_holden_memo.md` § 6).
+- **Cross-references:** session 78 council memos (`memory/design_review_cohort_3_galadriel_memo.md`, `memory/design_review_cohort_3_holden_memo.md`, `memory/design_review_cohort_3_elrond_memo.md`, `memory/design_review_cohort_3_synthesis.md`); slot 0071 build spec at `memory/build_spec_0071_holden_memo.md`; #1058 P41 design-stage codification (precedent-setting first cohort under Tier 0 + S82).
 **Changes in v2.40:**
 - **ADR-118 COHORT 1 CARRY-FORWARD AMENDMENT (Issue #1011, session 75):** Encoded 5 PM-adjudicated decisions from the 3-agent design council (Holden + Galadriel + Joe Chip, session 74) bundling design clarifications surfaced via session 72 S68 audit on Cohort 1 PRs #1003 + #1005 + #1008. Amendment is narrative + DDL-tightening only; no new tables; closes #1011.
   - **Item 1 — `canonical_participant_roles` cross-domain singleton enforcement:** Add a partial unique index `(role) WHERE domain_id IS NULL`, ADDITIVE to the existing `uq_canonical_participant_roles_domain_role` composite UNIQUE. Closes the NULL-uniqueness gap that today is enforced only by seed discipline (Pattern 81 §"Nullable Parent Scope" load-bearing comment).
@@ -17614,6 +17623,35 @@ Session 75 audit of pre-canonical Pattern 82 territory surfaced a NEW finding NO
 **Disposition:** filed as forward reference; not actioned in v2.40. The natural enforcement point is the Cohort 6 seeder migration (Migration 0085 territory) when `canonical_events` gets seeded 1:1 from `games` (single-game event_types) and `series` (series event_types). At that point, two Pattern 82 triggers should land together (`trg_canonical_events_game_backref` + `trg_canonical_events_series_backref`), each following the V2 Forward-Only Direction Policy ratified in item 4 above, each paired with the mandatory compensating regression test in `tests/database/test_canonical_event_polymorphic_invariants.py` (sibling to the canonical_entity test from item 4).
 
 **Why deferred, not actioned now:** `canonical_events` has zero rows in dev today; no integrity violation exists currently; the canonical seeder is a Cohort 6 deliverable that does not yet have its design docket. Adding the triggers preemptively in v2.40 would over-commit to a seeder pattern that has not been council-validated. Forward-reference discipline (Pattern 73 SSOT cross-pointer, not premature implementation) is the correct posture.
+
+##### v2.41 amendment — Cohort 3 slot count adjudication (session 78)
+
+The session 78 Cohort 3 design council surfaced a slot-count divergence (synthesis ESCALATE E1; see `memory/design_review_cohort_3_synthesis.md`):
+
+- 4-slot framing (Galadriel, Elrond) preserved the v2.40 implementation table at lines ~17944-17948 and honored the published-contract surface in `crud_canonical_markets.py:386` ("Migration 0071 = canonical_market_links").
+- 5-slot framing (Holden) split `match_algorithm` to its own slot 0071 on Pattern 14 hygiene grounds (one DDL artifact per migration; `match_algorithm` is a 4-column lookup that 0072+ FK into).
+
+User adjudicated 5 slots (synthesis E1). Cohort 3 slot mapping post-adjudication:
+
+| Slot | Tables |
+|---|---|
+| 0071 | `match_algorithm` (seed `manual_v1`) |
+| 0072 | `canonical_market_links` + `canonical_event_links` (with EXCLUDE) |
+| 0073 | `canonical_match_log` (append-only enforcement deferred to 0090) |
+| 0074 | `canonical_match_reviews` + `canonical_match_overrides` |
+| 0075 | `observation_source` registry (seed `espn`, `kalshi`, `manual`) |
+
+The v2.40 implementation table at lines ~17944-17948 is retained as the historical record of the v2.40 plan; this v2.41 amendment is the canonical post-adjudication mapping (Pattern 73 SSOT — the v2.40 table stays as the historical anchor, this amendment paragraph is the live mapping). Downstream slot numbers (0076+) shift by one slot accordingly: `canonical_events.lifecycle_phase` was already shipped in 0067 (see Issue #1015 stale-roadmap-entry tracker), so the 0076 line was already stale at v2.40 time and that staleness is unaffected by the v2.41 amendment.
+
+**Contract-displacement consequence:** `crud_canonical_markets.py` shipped with ~10 docstring/exception-message references to "Migration 0071 = canonical_market_links" that bump to "Migration 0072" with the slot-0071 PR (the Cohort 3 first-builder PR; the bump lands inside that PR per Pattern 14 6-step bundle scope, build_spec_0071_holden_memo.md § 6). The slot-0071 PR (`match_algorithm`) is the precedent-setting Cohort 3 PR and also the first cohort to land under #1058 P41 design-stage Tier 0 / S82 codification.
+
+**Council source memos:**
+
+- `memory/design_review_cohort_3_galadriel_memo.md` (cross-module-harmony architect)
+- `memory/design_review_cohort_3_holden_memo.md` (schema-steward — argued for 5)
+- `memory/design_review_cohort_3_elrond_memo.md` (long-term-architect)
+- `memory/design_review_cohort_3_synthesis.md` (38 LOCK / 9 ESCALATE; E1 user-adjudicated)
+- `memory/build_spec_0071_holden_memo.md` (slot 0071 build spec)
 
 #### Matching infrastructure
 

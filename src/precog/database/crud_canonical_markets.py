@@ -23,7 +23,7 @@ UPDATE coverage (Cohort 2 deliberate gap, per Glokta Finding 10):
     This module ships ``retire_canonical_market`` (UPDATE retired_at) but NO
     general ``update_canonical_market_metadata()`` or ``update_canonical_market()``
     helper. This is intentional for Cohort 2 -- metadata-enrichment helpers land
-    with Cohort 3 (Migration 0071+) when the matcher pipeline begins writing to
+    with Cohort 3 (Migration 0072+) when the matcher pipeline begins writing to
     canonical_markets.metadata. Until then, callers needing UPDATE coverage
     beyond retirement must NOT write ad-hoc UPDATE SQL (Pattern 73 violation --
     drift across consumers); file an issue or add the helper here first.
@@ -62,7 +62,7 @@ def create_canonical_market(
     Canonical markets are the platform-agnostic identity tier for individual
     market shapes (binary / categorical / scalar) under a parent canonical
     event.  Per-platform market identity is owned by ``canonical_market_links``
-    (Migration 0071, Cohort 3) â€" this row is the canonical anchor that
+    (Migration 0072, Cohort 3) â€" this row is the canonical anchor that
     cross-platform replicas point to.
 
     Args:
@@ -117,7 +117,7 @@ def create_canonical_market(
         canonical_market_links -> platform markets)``.  This row exists once
         per market shape regardless of how many platforms list a replica;
         the per-platform replica edges are stored in
-        ``canonical_market_links`` (Migration 0071).
+        ``canonical_market_links`` (Migration 0072).
 
         Three concerns are kept on three distinct columns:
         - ``canonical_events.lifecycle_phase`` â€" "is the bet still meaningful?"
@@ -338,11 +338,11 @@ def get_canonical_for_platform_market(
         link is in a non-active state such as ``proposed`` / ``retired``).
 
     Raises:
-        NotImplementedError: ALWAYS (until Migration 0071 ships).  See note
+        NotImplementedError: ALWAYS (until Migration 0072 ships).  See note
             below.
 
     Example:
-        >>> # When Migration 0071 ships:
+        >>> # When Migration 0072 ships:
         >>> canonical = get_canonical_for_platform_market(platform_market_id=42)
         >>> if canonical:
         ...     print(f"Canonical market id={canonical['id']}")
@@ -352,7 +352,7 @@ def get_canonical_for_platform_market(
     Note:
         **This helper currently raises NotImplementedError.**  The
         ``canonical_market_links`` table that backs the JOIN does not exist
-        yet (it ships in Migration 0071, Cohort 3).  Per ADR-118 V2.39
+        yet (it ships in Migration 0072, Cohort 3).  Per ADR-118 V2.39
         Cohort 2 amendment Pattern 14 footnote (Holden Finding 11), the
         helper is defined at-signature now so that:
 
@@ -362,7 +362,7 @@ def get_canonical_for_platform_market(
         2. Cohort 3 implementers can drop in the JOIN body without
            changing the public signature or breaking any importer.
 
-        When Migration 0071 lands, the body will become roughly:
+        When Migration 0072 lands, the body will become roughly:
 
         .. code-block:: python
 
@@ -383,16 +383,16 @@ def get_canonical_for_platform_market(
           5-step bundle footnote)
         - Galadriel Finding 5 (session 73 design memo:
           memory/design_review_cohort2_canonical_markets.md)
-        - Future: Migration 0071 (canonical_market_links â€" Cohort 3)
+        - Future: Migration 0072 (canonical_market_links â€" Cohort 3)
     """
     msg = (
         "get_canonical_for_platform_market() cannot be implemented until "
-        "Migration 0071 ships canonical_market_links (Cohort 3).  The helper "
+        "Migration 0072 ships canonical_market_links (Cohort 3).  The helper "
         "is defined at this signature now per ADR-118 V2.39 Cohort 2 "
         "amendment Pattern 14 footnote (Holden Finding 11) so that the "
         "Pattern 73 SSOT contract for 'give me canonical for this market' "
         "(Galadriel Finding 5) is published before consumers can implement "
-        "against it.  When Migration 0071 lands, the body becomes a JOIN "
+        "against it.  When Migration 0072 lands, the body becomes a JOIN "
         "through canonical_market_links filtered to link_state = 'active'."
     )
     raise NotImplementedError(msg)

@@ -9,7 +9,7 @@ Covers (function-by-function):
       (not found), BYTEA params shape.
     - retire_canonical_market: True (row updated), False (no row).
     - get_canonical_for_platform_market: raises NotImplementedError (stub
-      until Migration 0071 ships canonical_market_links).
+      until Migration 0072 ships canonical_market_links).
 
 Pattern 43 (mock fidelity) discipline: mocks return the EXACT shape that the
 real query returns â€" full row dicts with all canonical_markets columns, no
@@ -517,7 +517,7 @@ class TestGetCanonicalForPlatformMarketStub:
     Pattern 14 footnote (Holden Finding 11) so the Pattern 73 SSOT contract
     for "give me canonical for this market" (Galadriel Finding 5) is
     published before consumers can implement against it.  The body cannot
-    land until Migration 0071 ships ``canonical_market_links`` (Cohort 3);
+    land until Migration 0072 ships ``canonical_market_links`` (Cohort 3);
     until then, the helper raises ``NotImplementedError``.
     """
 
@@ -537,7 +537,7 @@ class TestGetCanonicalForPlatformMarketStub:
         with pytest.raises(NotImplementedError) as excinfo:
             get_canonical_for_platform_market(platform_market_id=42)
         msg = str(excinfo.value)
-        assert "Migration 0071" in msg
+        assert "Migration 0072" in msg
         assert "canonical_market_links" in msg
         assert "Cohort 3" in msg
         # Both findings cited so future readers can trace the design memo
