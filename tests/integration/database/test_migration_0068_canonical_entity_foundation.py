@@ -175,6 +175,7 @@ def test_table_column_shape(
             SELECT column_name, data_type, is_nullable, column_default
             FROM information_schema.columns
             WHERE table_name = %s
+              AND table_schema = 'public'
             ORDER BY ordinal_position
             """,
             (table,),
@@ -217,6 +218,7 @@ def test_canonical_event_participants_sequence_number_has_no_default(
             FROM information_schema.columns
             WHERE table_name = 'canonical_event_participants'
               AND column_name = 'sequence_number'
+              AND table_schema = 'public'
             """
         )
         row = cur.fetchone()
@@ -358,6 +360,12 @@ def test_constraint_trigger_blocks_team_kind_with_null_ref_team_id(
                     (team_kind_id, entity_key, "Test Team With NULL Backref"),
                 )
     finally:
+        # #1050 nit 2: get_cursor's __exit__ calls conn.rollback() on exception
+        # (precog.database.connection line ~399) and release_connection() returns
+        # the connection to the pool.  The cleanup `with get_cursor` below pulls
+        # a fresh / clean connection from the pool, so the aborted-transaction
+        # state from the RaiseException above does NOT leak into the cleanup
+        # INSERT.  No explicit ROLLBACK needed here.
         with get_cursor(commit=True) as cur:
             cur.execute(
                 "DELETE FROM canonical_entity WHERE entity_key = %s",
@@ -587,4 +595,61 @@ def test_canonical_event_participants_composite_unique(db_pool: Any) -> None:
     assert row is not None, "uq_canonical_event_participants must exist"
     assert "UNIQUE (canonical_event_id, role_id, sequence_number)" in row["def"], (
         f"uq_canonical_event_participants must enforce 3-column composite UNIQUE; got: {row['def']}"
+    )
+
+
+# =============================================================================
+# Group 5: ON DELETE clauses on canonical_event_participants FKs (#1044 item 3)
+#
+# Mirrors the ON DELETE RESTRICT assertion in test_0069 against
+# ``canonical_markets_canonical_event_id_fkey``.  The 3 FKs differ:
+#   - canonical_event_id -> canonical_events(id)        ON DELETE CASCADE
+#     (participants are denormalization; deleting the parent event must
+#     cascade-clean its participant rows -- no orphans)
+#   - entity_id          -> canonical_entity(id)        ON DELETE RESTRICT
+#     (deleting an entity referenced by a participant row is a data-loss
+#     hazard; force the caller to detach explicitly)
+#   - role_id            -> canonical_participant_roles ON DELETE RESTRICT
+#     (same rationale; lookup-table rows must not be deleted while in use)
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    ("constraint_name", "expected_clause"),
+    [
+        (
+            "canonical_event_participants_canonical_event_id_fkey",
+            "ON DELETE CASCADE",
+        ),
+        (
+            "canonical_event_participants_entity_id_fkey",
+            "ON DELETE RESTRICT",
+        ),
+        (
+            "canonical_event_participants_role_id_fkey",
+            "ON DELETE RESTRICT",
+        ),
+    ],
+)
+def test_canonical_event_participants_fk_on_delete_clause(
+    db_pool: Any,
+    constraint_name: str,
+    expected_clause: str,
+) -> None:
+    """Pin the ON DELETE clause on each canonical_event_participants FK."""
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT pg_get_constraintdef(oid) AS def
+            FROM pg_constraint
+            WHERE conrelid = 'canonical_event_participants'::regclass
+              AND conname = %s
+            """,
+            (constraint_name,),
+        )
+        row = cur.fetchone()
+    assert row is not None, f"{constraint_name} must exist on canonical_event_participants"
+    fk_def = row["def"]
+    assert expected_clause in fk_def, (
+        f"{constraint_name} must include {expected_clause!r}; got: {fk_def}"
     )

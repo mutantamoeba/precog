@@ -38,6 +38,10 @@ import psycopg2
 import pytest
 
 from precog.database.connection import get_cursor
+from tests.integration.database._canonical_event_helpers import (
+    _cleanup_canonical_event,
+    _seed_canonical_event,
+)
 
 pytestmark = [pytest.mark.integration]
 
@@ -87,6 +91,7 @@ def test_canonical_markets_column_shape(
             FROM information_schema.columns
             WHERE table_name = 'canonical_markets'
               AND column_name = %s
+              AND table_schema = 'public'
             """,
             (col_name,),
         )
@@ -127,6 +132,7 @@ def test_canonical_markets_has_no_lifecycle_phase_column(db_pool: Any) -> None:
             FROM information_schema.columns
             WHERE table_name = 'canonical_markets'
               AND column_name = 'lifecycle_phase'
+              AND table_schema = 'public'
             """
         )
         row = cur.fetchone()
@@ -402,47 +408,10 @@ def test_canonical_markets_update_trigger_advances_updated_at(db_pool: Any) -> N
 
 # =============================================================================
 # Helpers (canonical_event seeding for FK-bearing tests)
+#
+# ``_seed_canonical_event`` and ``_cleanup_canonical_event`` were extracted
+# to ``tests/integration/database/_canonical_event_helpers.py`` per #1044
+# item 1 (Pattern 73 SSOT) so test_0070 and any future canonical_events-
+# bearing test can share the same INSERT shape.  Imports are at the top
+# of this file.
 # =============================================================================
-
-
-def _seed_canonical_event(suffix: str) -> int:
-    """Seed a canonical_events row to back the canonical_markets FK.
-
-    Uses the seeded ``sports`` domain + ``game`` event_type from migration 0067.
-    Caller MUST pair with ``_cleanup_canonical_event(returned_id)`` in a finally
-    block.
-    """
-    nk_hash = f"TEST-1012-evt-{suffix}".encode()
-    with get_cursor(commit=True) as cur:
-        cur.execute(
-            """
-            INSERT INTO canonical_events (
-                domain_id,
-                event_type_id,
-                entities_sorted,
-                resolution_window,
-                natural_key_hash,
-                title,
-                lifecycle_phase
-            ) VALUES (
-                (SELECT id FROM canonical_event_domains WHERE domain = 'sports'),
-                (SELECT et.id FROM canonical_event_types et
-                 JOIN canonical_event_domains d ON d.id = et.domain_id
-                 WHERE d.domain = 'sports' AND et.event_type = 'game'),
-                ARRAY[]::INTEGER[],
-                tstzrange(now(), now() + interval '1 day', '[)'),
-                %s,
-                %s,
-                'proposed'
-            )
-            RETURNING id
-            """,
-            (nk_hash, f"Test event for 1012 ({suffix})"),
-        )
-        return int(cur.fetchone()["id"])
-
-
-def _cleanup_canonical_event(event_id: int) -> None:
-    """Delete a canonical_events row seeded by ``_seed_canonical_event``."""
-    with get_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM canonical_events WHERE id = %s", (event_id,))
