@@ -46,10 +46,11 @@ MIGRATION_0070_PATH = (
 
 # Expected canonical 8 values.  Hardcoded ONCE here as the test's own
 # specification — this is the single point at which a human re-asserts
-# "these are the 8 values per ADR-118 V2.40."  Any future change to the
-# canonical vocabulary requires updating this expected tuple AND the
-# migration AND the constant in lockstep (and adding a new migration that
-# alters the CHECK).
+# "these are the 8 values per ADR-118 V2.40."  Updating this requires a new
+# migration (alembic) + updating CANONICAL_EVENT_LIFECYCLE_PHASES + updating
+# Migration 0070's CHECK constraint in lockstep.  All three must move
+# together; a partial update is the failure mode this test is designed to
+# catch.
 EXPECTED_PHASES: tuple[str, ...] = (
     "proposed",
     "listed",
@@ -97,6 +98,12 @@ class TestCanonicalEventLifecyclePhasesTyping:
         With ``include_extras=True``, ``get_type_hints`` keeps the outer
         ``Final[...]`` wrapper; we unwrap it to assert the inner
         ``tuple[str, ...]`` shape.
+
+        Note: ``annotation.__origin__ is Final`` behavior is verified on
+        CPython 3.12 + 3.14 (this project's supported targets per CLAUDE.md).
+        Earlier CPython versions may unwrap differently; if support widens,
+        loosen the outer-origin check or rely on mypy/pyright for Final
+        correctness instead.
         """
         from typing import Final
 

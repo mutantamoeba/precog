@@ -276,8 +276,8 @@ class TestCreateCanonicalEntity:
         mock_cursor = MagicMock()
         mock_cursor.fetchone.return_value = _full_row_dict()
         mock_get_cursor.return_value.__enter__.return_value = mock_cursor
-        # #1050 nit 4: explicit __exit__ for consistency with the other tests
-        # in TestCreateCanonicalEntity (e.g. the trigger-fire test sets both).
+        # Explicit __exit__ for consistency with the other tests in
+        # TestCreateCanonicalEntity (e.g. the trigger-fire test sets both).
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
         create_canonical_entity(

@@ -12513,13 +12513,14 @@ PostgreSQL does NOT support `ADD CONSTRAINT IF NOT EXISTS` directly; idempotency
 ```python
 def upgrade() -> None:
     conn = op.get_bind()
+
+    # Phase 1 — gate on constraint absence
     constraint_exists = conn.execute(sa.text(
         "SELECT 1 FROM pg_constraint "
         "WHERE conname = 'canonical_events_lifecycle_phase_check' "
         "  AND conrelid = 'canonical_events'::regclass"
     )).scalar()
     if not constraint_exists:
-        # Phase 1
         op.execute("""
             ALTER TABLE canonical_events
               ADD CONSTRAINT canonical_events_lifecycle_phase_check
@@ -12528,14 +12529,23 @@ def upgrade() -> None:
                                           'resolved', 'voided'))
               NOT VALID;
         """)
-        # Phase 2
+
+    # Phase 2 — gate on constraint NOT YET validated (separate guard so a partial
+    # failure between phases re-enters Phase 2 on the next run, not the entire block)
+    needs_validation = conn.execute(sa.text(
+        "SELECT 1 FROM pg_constraint "
+        "WHERE conname = 'canonical_events_lifecycle_phase_check' "
+        "  AND conrelid = 'canonical_events'::regclass "
+        "  AND convalidated = false"
+    )).scalar()
+    if needs_validation:
         op.execute("""
             ALTER TABLE canonical_events
               VALIDATE CONSTRAINT canonical_events_lifecycle_phase_check;
         """)
 ```
 
-The two phases live inside the same `if not constraint_exists` guard so a partial failure between Phase 1 and Phase 2 (e.g., Phase 2 raises on a violating row) leaves the constraint registered but unvalidated; the rerun re-enters the guard, finds the constraint already exists, and skips. The operator then quarantines the violating row out-of-band and runs `ALTER TABLE ... VALIDATE CONSTRAINT ...;` directly. **Important caveat:** if Phase 1 succeeded and Phase 2 raised, the second run skips the entire block via the existence check — it does NOT re-attempt Phase 2. For migrations where the predicate may genuinely fail validation, structure the guard so Phase 2 is gated on `convalidated = false` rather than on constraint absence. The first migration to ship using the two-phase form should document both branches (constraint-absence + `convalidated = false`) inline as the worked example for future readers; until then, this section is the canonical reference. (Migration 0070 itself is the *single-phase carve-out* — see the Source list — not an instance of the two-phase form.)
+The two phases live behind **separate guards**: Phase 1 gates on constraint absence (so a re-run does not attempt to re-add an existing constraint); Phase 2 gates on `convalidated = false` (so a re-run re-attempts validation on a constraint that was added but failed to validate). A partial failure between phases — e.g., Phase 2 raises on a violating row — leaves the constraint registered but unvalidated; the rerun skips Phase 1 (constraint exists), enters Phase 2 (constraint not yet validated), and retries. The operator quarantines the violating row out-of-band and re-runs the migration; Phase 2 auto-retries with no manual `ALTER TABLE ... VALIDATE CONSTRAINT ...` call needed. **Why the single-guard form is unsafe:** if both phases were nested under one `if not constraint_exists` block, Phase 1's success on a prior run would cause the next run to skip the entire block via the existence check — Phase 2 would never re-attempt. The two-guard form above is the canonical shape; do not collapse them. (Migration 0070 itself is the *single-phase carve-out* — see the Source list — not an instance of the two-phase form.)
 
 ### Pair With Pattern 81
 

@@ -190,7 +190,7 @@ precog-repo/
 - `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.2.md` - Phase roadmap (Era 2: current)
 
 **Implementation:**
-- `docs/guides/DEVELOPMENT_PATTERNS.md` - 84 development patterns with examples (V1.38 adds Pattern 84 Two-Phase NOT VALID + VALIDATE CONSTRAINT for CHECK on Populated Tables, codifying the two-phase ALTER TABLE encoding that eliminates ACCESS EXCLUSIVE production-lock surface; convergent claude-review wording from PR #1031 Migration 0070, promoted via #1037)
+- `docs/guides/DEVELOPMENT_PATTERNS.md` - 84 development patterns with examples (V1.38 adds Pattern 84: Two-Phase `NOT VALID` + `VALIDATE CONSTRAINT` for CHECK on populated tables)
 - `docs/guides/CONFIGURATION_GUIDE_V3.1.md` - YAML config reference
 - `docs/guides/KALSHI_CLIENT_USER_GUIDE_V1.0.md` - Kalshi API usage
 - `docs/guides/STRATEGY_MANAGER_USER_GUIDE_V1.1.md`

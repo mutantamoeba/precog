@@ -360,12 +360,11 @@ def test_constraint_trigger_blocks_team_kind_with_null_ref_team_id(
                     (team_kind_id, entity_key, "Test Team With NULL Backref"),
                 )
     finally:
-        # #1050 nit 2: get_cursor's __exit__ calls conn.rollback() on exception
-        # (precog.database.connection line ~399) and release_connection() returns
-        # the connection to the pool.  The cleanup `with get_cursor` below pulls
-        # a fresh / clean connection from the pool, so the aborted-transaction
-        # state from the RaiseException above does NOT leak into the cleanup
-        # INSERT.  No explicit ROLLBACK needed here.
+        # get_cursor's __exit__ calls conn.rollback() on exception and
+        # release_connection() returns the connection to the pool. The cleanup
+        # `with get_cursor` below pulls a fresh / clean connection from the
+        # pool, so the aborted-transaction state from the RaiseException above
+        # does NOT leak into the cleanup INSERT. No explicit ROLLBACK needed.
         with get_cursor(commit=True) as cur:
             cur.execute(
                 "DELETE FROM canonical_entity WHERE entity_key = %s",

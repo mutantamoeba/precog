@@ -1,11 +1,12 @@
 """Shared canonical-event seeding helpers for integration tests.
 
-Pattern 73 SSOT extraction (#1044 item 1) -- the ``_seed_canonical_event``
-helper was previously private to ``test_migration_0069_*.py`` and inlined
-verbatim in three call sites in ``test_migration_0070_*.py``.  Lifting to
-this shared module gives both files a single canonical seed path so the
-INSERT shape (FK SELECT subqueries, column list, lifecycle_phase default)
-cannot drift across test files.
+Pattern 73 SSOT extraction: the ``_seed_canonical_event`` helper was
+extracted from ``test_migration_0069_*.py`` so future canonical_events seed
+sites have a single canonical INSERT shape (FK SELECT subqueries, column
+list, lifecycle_phase default) that cannot drift across test files.
+``test_migration_0070_*.py`` keeps its own inline INSERTs intentionally —
+those test the carry-forward migration's own constraint surface and benefit
+from being self-contained at the call site.
 
 Convention:
     - Module name has a leading underscore (private/internal-to-tests).
@@ -14,8 +15,6 @@ Convention:
     - Caller MUST pair ``_seed_canonical_event(suffix)`` with
       ``_cleanup_canonical_event(returned_id)`` in a finally block so a
       failed test does not leave orphan rows behind.
-
-Issue: #1044 item 1 (Pattern 73 helper extraction)
 """
 
 from __future__ import annotations
@@ -30,7 +29,7 @@ def _seed_canonical_event(suffix: str) -> int:
     Caller MUST pair with ``_cleanup_canonical_event(returned_id)`` in a finally
     block.
     """
-    nk_hash = f"TEST-1012-evt-{suffix}".encode()
+    nk_hash = f"TEST-evt-{suffix}".encode()
     with get_cursor(commit=True) as cur:
         cur.execute(
             """
@@ -55,7 +54,7 @@ def _seed_canonical_event(suffix: str) -> int:
             )
             RETURNING id
             """,
-            (nk_hash, f"Test event for 1012 ({suffix})"),
+            (nk_hash, f"Test event ({suffix})"),
         )
         return int(cur.fetchone()["id"])
 
