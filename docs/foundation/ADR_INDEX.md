@@ -23,7 +23,7 @@
 - **ADR-117 amendment (reflected in canonical ARCHITECTURE_DECISIONS):** Tier-classification examples updated — `series.series_key` reclassified Tier 2 → Tier 3 (per ADR-119 Part 1; column stores Kalshi `series_ticker`). Grep-able policy surface caveat added: `_key` suffix is *usually* Tier 2 but MUST be audited at migration time.
 - Updated ARCHITECTURE_DECISIONS reference from V2.36 to V2.37.
 - Total ADRs catalogued: 103 → 105 (2 net-new row entries at ADR-118/119). Highest ADR number assigned: 117 → 119.
-- Pattern 80 companion pointer: `DEVELOPMENT_PATTERNS_V1.38.md` (SCD-2 Version-Stable Surrogate Identifiers, gated on `row_current_ind`). V1.36 also adds Patterns 81 + 82 for ADR-118 v2.38 Cohort 1.
+- Pattern 80 companion pointer: `DEVELOPMENT_PATTERNS.md` (SCD-2 Version-Stable Surrogate Identifiers, gated on `row_current_ind`). V1.36 also adds Patterns 81 + 82 for ADR-118 v2.38 Cohort 1.
 - Cross-references: Epic #972 (Canonical Layer Foundation), #973 (Cohort 9 Librarian integration — this bump), #496 (@Whatsonyourmind production matching experience), #937 (folded into ADR-118 migrations 0086-0089), #964 (pmxt NormalizedMarket shape feeds `canonical_markets.market_type_general`), Epic #935 (subsumed via ADR-118).
 **Changes in v1.26:**
 - **THREE-TIER IDENTITY MODEL + 7 OTHER PHASE 2/2.5 ACCEPTED ADRs**: Added ADR-110 through ADR-117 (8 ADRs; 3 overwrote stale TBD placeholders)
@@ -1394,7 +1394,7 @@ coverage_tiers:
 **Total ADRs catalogued in this index:** 105 (unique ADR-row count as of v1.27)
 **Highest ADR number assigned:** 119
 
-> **NOTE (v1.26 reconciliation):** The per-status (Accepted / Proposed / Rejected / Superseded) and per-phase sub-counts previously listed here had drifted to stale figures from the v1.22-v1.25 era (multiple version bumps without statistics recompute). They have been REMOVED rather than propagated further out of sync. For authoritative per-ADR status and phase metadata, consult the canonical `ARCHITECTURE_DECISIONS_V2.39.md` directly — that file is the single source of truth. Re-populating this statistics block with accurate aggregates is a separate follow-up; filing this would itself be Pattern 73 work (derive from canonical, don't maintain in two places).
+> **NOTE (v1.26 reconciliation):** The per-status (Accepted / Proposed / Rejected / Superseded) and per-phase sub-counts previously listed here had drifted to stale figures from the v1.22-v1.25 era (multiple version bumps without statistics recompute). They have been REMOVED rather than propagated further out of sync. For authoritative per-ADR status and phase metadata, consult the canonical `ARCHITECTURE_DECISIONS.md` directly — that file is the single source of truth. Re-populating this statistics block with accurate aggregates is a separate follow-up; filing this would itself be Pattern 73 work (derive from canonical, don't maintain in two places).
 
 ---
 
@@ -1428,7 +1428,7 @@ coverage_tiers:
 - v1.6: Added ADR-074 for property-based testing integration (Hypothesis framework POC complete)
 - v1.5: Added ADR-054 for Python 3.14 compatibility (Ruff security rules instead of Bandit)
 
-**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.40.md
+**For complete ADR details, see:** ARCHITECTURE_DECISIONS.md
 
 Version history entries added with v1.28:
 - v1.28: ADR-118 row amended per issue #996 Cohort 1 amendment — Cohort 1 expanded from 4 tables → 7 tables across 2 migrations (0067 + 0068) with lookup tables + typed back-refs + sequence_number. Source canonical doc bumped V2.37 → V2.38.

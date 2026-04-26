@@ -126,9 +126,12 @@ def validate_adr_consistency() -> ValidationResult:
     errors = []
     warnings = []
 
-    # Find latest versions
-    arch_decisions = find_latest_version("ARCHITECTURE_DECISIONS_V*.md")
-    adr_index = find_latest_version("ADR_INDEX_V*.md")
+    # ARCHITECTURE_DECISIONS and ADR_INDEX are de-versioned at the filename level
+    # (Epic #1054 Phase 1) — versions live in frontmatter + internal changelog.
+    arch_decisions_path = FOUNDATION_DIR / "ARCHITECTURE_DECISIONS.md"
+    arch_decisions = arch_decisions_path if arch_decisions_path.exists() else None
+    adr_index_path = FOUNDATION_DIR / "ADR_INDEX.md"
+    adr_index = adr_index_path if adr_index_path.exists() else None
 
     if not arch_decisions:
         return ValidationResult(
@@ -264,8 +267,9 @@ def validate_master_index() -> ValidationResult:
     errors = []
     warnings = []
 
-    # Find MASTER_INDEX
-    master_index = find_latest_version("MASTER_INDEX_V*.md")
+    # MASTER_INDEX is de-versioned at the filename level (Epic #1054 Phase 1).
+    master_index_path = FOUNDATION_DIR / "MASTER_INDEX.md"
+    master_index = master_index_path if master_index_path.exists() else None
 
     if not master_index:
         return ValidationResult(
@@ -513,8 +517,9 @@ def validate_new_docs_in_master_index() -> ValidationResult:
         """Check if document is ephemeral (session-specific, temporary)."""
         return any(pattern in filename for pattern in ephemeral_patterns)
 
-    # Find MASTER_INDEX
-    master_index = find_latest_version("MASTER_INDEX_V*.md")
+    # MASTER_INDEX is de-versioned at the filename level (Epic #1054 Phase 1).
+    master_index_path = FOUNDATION_DIR / "MASTER_INDEX.md"
+    master_index = master_index_path if master_index_path.exists() else None
 
     if not master_index:
         return ValidationResult(
@@ -533,8 +538,20 @@ def validate_new_docs_in_master_index() -> ValidationResult:
     #  - Mixed-case filenames (e.g., Handoff_Protocol_V1_1.md)
     #  - Dots in base filename (e.g., PHASE_0.7_DEFERRED_TASKS_V1.0.md)
     #  - Both dot and underscore version separators (V1.0 and V1_1)
-    doc_pattern = r"\|\s+\*\*([A-Za-z_0-9.]+_V\d+[._]\d+\.md)\*\*\s+\|"
+    #  - Unversioned canonical docs (e.g., MASTER_INDEX.md) per Epic #1054 Phase 1
+    doc_pattern = r"\|\s+\*\*([A-Za-z_0-9.]+\.md)\*\*\s+\|"
     listed_docs = set(re.findall(doc_pattern, content))
+
+    # Canonical de-versioned docs (Epic #1054 Phase 1) — included in the
+    # all_docs set so Check #6 still sees them after their *_V*.md filename
+    # was retired. Versions for these docs now live in frontmatter, not the
+    # filename, so the rglob("*_V*.md") pattern would otherwise miss them.
+    deversioned_canonical_docs = {
+        "DEVELOPMENT_PATTERNS.md",
+        "ARCHITECTURE_DECISIONS.md",
+        "ADR_INDEX.md",
+        "MASTER_INDEX.md",
+    }
 
     # Find all versioned markdown files in docs/ (excluding _archive/, planning/, and ephemeral patterns)
     all_docs = set()
@@ -545,6 +562,12 @@ def validate_new_docs_in_master_index() -> ValidationResult:
             and not is_ephemeral(doc_file.name)
         ):
             all_docs.add(doc_file.name)
+
+    # Add the 4 de-versioned canonical docs if they exist on disk
+    for canonical_name in deversioned_canonical_docs:
+        for doc_file in DOCS_ROOT.rglob(canonical_name):
+            if "_archive" not in str(doc_file) and "planning" not in str(doc_file):
+                all_docs.add(doc_file.name)
 
     # Calculate unlisted documents
     unlisted = all_docs - listed_docs
