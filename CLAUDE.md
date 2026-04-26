@@ -150,6 +150,10 @@ mock_client.get_markets.return_value = {
 
 **Umbrella issue #764** tracks the retrofit of 8 files that historically violated this rule and had been reporting fictional green CI for months. **Trigger S73** (a PM-side agent review that fires Joe Chip on PRs touching external API tests to catch hand-written mocks) enforces this rule on new PRs; **Pattern 22** in `docs/guides/DEVELOPMENT_PATTERNS.md` is the authoritative reference.
 
+### 9. Pattern 41 + Tier 0 Design-Stage Check — design BEFORE you build
+
+Every task that adds a new production module OR major-enriches an existing module's surface MUST run a **Tier 0 design-stage P41 review** with **Miles + Uhura** BEFORE Builder dispatch — not after. Trigger: **S82**. Canonical rule lives in `protocols.md § Step 1c` and `three_tier_quality_model.md` (memory files). S82 (pre-build) and S60 (post-build) are sequential gates on the same module across its lifecycle, not redundant. Closes the #462 → #477 retrofit gap where modules shipped with correct behavior but zero production visibility.
+
 ---
 
 ## Repository Structure
