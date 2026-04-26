@@ -440,6 +440,11 @@ def test_canonical_events_fk_on_delete_clause(
                 f"found unexpected {forbidden!r} in: {fk_def}"
             )
     else:
+        # Future-extensibility branch: handles explicit ON DELETE CASCADE /
+        # SET NULL / RESTRICT if a third canonical_events FK is added with
+        # non-default action.  Currently no parametrize value reaches here;
+        # leaving in place so adding a non-default-action FK is a one-line
+        # parametrize update.
         assert expected_clause in fk_def, (
             f"{constraint_name} must include {expected_clause!r}; got: {fk_def}"
         )
