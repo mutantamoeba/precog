@@ -1,13 +1,18 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.38
+**Version:** 1.39
 **Created:** 2025-11-13
-**Last Updated:** 2026-04-25
+**Last Updated:** 2026-04-26
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.39:**
+- **Added Pattern 86: Living-Doc Freshness Markers (ALWAYS for Living Canonical Docs Describing Moving Targets)** — codifies the HTML-comment freshness-marker shape (`<!-- FRESHNESS: alembic_head=0070, verified=2026-04-26, tables=51, migrations=69, last_changelog_migration=0070 -->`) every living canonical doc MUST carry near the top of the file. Without a concrete marker, "is this doc fresh?" has no answer; with one, the question reduces to a one-line comparison against source-of-truth. Pattern 86 is Pattern 73 (SSOT) applied to time: the canonical truth for a doc's freshness is the doc itself, and the marker is how the doc declares which version of truth it claims to represent.
+- Origin: `feedback_doc_freshness_markers.md` — session 36 origin (DATABASE_SCHEMA_SUMMARY V1.15 35-migration silent gap); recurrences sessions 50 + 75 + 76 + 77 culminating in the V2.0 → V2.1 rewrite (#897). DATABASE_SCHEMA_SUMMARY V2.1 (this PR) is the canonical-form demonstration.
+- Pattern 85 reserved (skip slot, matching the Pattern 51 precedent established when V1.31 promoted Patterns 52-64 as a contiguous batch). Number is reserved, not unused — the next promotion landing here can claim Pattern 85 without renumbering.
+- Forward-enforcement work tracked in Epic #1054 Phase 3 (G1 hook widening + version-marker auto-bumper). Until that ships the rule is human-applied at session-end S80 doc updates + session-start step 5b parity check.
 **Changes in V1.38:**
 - **Added Pattern 84: Two-Phase `NOT VALID` + `VALIDATE CONSTRAINT` for CHECK on Populated Tables (ALWAYS for CHECKs Where Rows May Exist at Deploy Time)** — codifies the two-phase ALTER TABLE encoding (`ADD CONSTRAINT ... NOT VALID` followed by `VALIDATE CONSTRAINT ...`) that eliminates the production-lock surface the single-phase `ADD CONSTRAINT CHECK` form creates. Single-phase acquires `ACCESS EXCLUSIVE` for the duration of the validation table scan; two-phase acquires `ACCESS EXCLUSIVE` only briefly (to register the constraint metadata, with new writes immediately checked) then validates existing rows under `SHARE UPDATE EXCLUSIVE` (allowing concurrent reads and writes). Pairs with Pattern 81 (which decides *whether* to use a CHECK at all): Pattern 81 chooses the constraint shape, Pattern 84 chooses how to apply that shape safely on a populated table.
 - Origin: PR #1031 (Migration 0070, session 75) claude-review — both review passes independently arrived at identical wording, a convergent-reviewer signal (Pattern 70). Migration 0070's single-phase form was defensible (canonical_events had 0 rows, no expected rows by deploy time), but the omission of Pattern 84 risked Cohort 6+ migrations adopting the same shape on populated tables (Cohort 6 seeder lands canonical_events 1:1 from games; Cohort 7 weather observations lands range CHECKs on temperature/humidity; Cohort 8 LLM-projection lands enrichment-column CHECKs). Codifying now closes the door before the first populated-table CHECK ships.
@@ -12560,9 +12565,183 @@ Pattern 81 covers the *which* (open-canonical-enum → lookup table FK; closed-e
 - Issue #1037 — Pattern 84 promotion-candidate tracking issue
 - ADR-118 v2.40 Cohort 1 carry-forward item 3 — single-phase justified by 0-row state on `canonical_events.lifecycle_phase` (the explicit precedent for the "When NOT to Apply" carve-out)
 - Migration 0070 (`src/precog/database/alembic/versions/0070_cohort_1_carryforward_hardening.py`) — canonical instance of the carve-out (single-phase justified by both criteria documented inline)
-- Pattern 81 § "When NOT to Apply (Keep CHECK)" (V1.38 lines ~12077-12082) — sibling pattern; routes "should this be a CHECK?" decision
+- Pattern 81 § "When NOT to Apply (Keep CHECK)" — sibling pattern; routes "should this be a CHECK?" decision
 - Pattern 70 (Convergent-Reviewer Signal Rule) — origin discipline for promoting Pattern 84 (two cold-context reviewers arrived at the same wording independently)
 - PostgreSQL docs: [ALTER TABLE / NOT VALID](https://www.postgresql.org/docs/current/sql-altertable.html) — the canonical reference for the lock-surface guarantees cited above
+
+---
+
+> **Pattern 85 reserved.** Held open for a future promotion (matching the
+> Pattern 51-skip precedent established when V1.31 promoted Patterns 52-64
+> as a contiguous batch). The number is reserved, not unused — the next
+> promotion that lands here can claim Pattern 85 without renumbering.
+
+## Pattern 86: Living-Doc Freshness Markers (ALWAYS for Living Canonical Docs Describing Moving Targets)
+
+**Severity:** MEDIUM — silent doc drift erodes the trust that makes canonical docs canonical. Without a concrete marker, "is this doc fresh?" has no answer; with a marker, the question reduces to a one-line comparison against source-of-truth.
+
+### Problem / Trigger
+
+A "living" canonical document (DATABASE_SCHEMA_SUMMARY, ARCHITECTURE_DECISIONS, MASTER_REQUIREMENTS, anything that describes a target that moves with the codebase) drifts silently because nothing mechanically couples it to the source-of-truth state it describes. DATABASE_SCHEMA_SUMMARY V2.0 — which itself was a "complete rewrite" intended to consolidate after V1.16 fell behind — drifted 19 migrations behind alembic_head between V2.0's authoring (alembic_head=0051, ostensibly) and the Cohort 1+2 ship at alembic_head=0070. Worse: V2.0's freshness marker said `alembic_head=0051` while V2.0's own body text said "Status: Current — Alembic head: migration 0048" — the marker had decayed *before V2.0 shipped*.
+
+The same drift class hit the testcontainers static SQL (frozen at 0044 while production was at 0048 — a 4-migration silent gap surfaced only by an unrelated test failure) and DATABASE_SCHEMA_SUMMARY V1.15 (covered migration 0013 while production was at 0048 — 35 migrations undocumented; none of the existing triggers caught it).
+
+The shared shape: living docs ship without a concrete state-of-truth declaration → readers cannot tell "fresh" from "stale" by inspection → drift compounds across sessions until a structural rewrite is required.
+
+### The Pattern / Rule
+
+> Every living canonical document MUST include a freshness marker as an HTML comment near the top of the document, with structured fields that name the source-of-truth state the document was last verified against.
+
+The marker is a *declaration*, not an enforcement: it says "this document claims to describe state X at time Y." The check that turns the declaration into a gate is a one-line comparison against current source-of-truth (e.g. `SELECT version_num FROM alembic_version`) at session-end S80 doc-update time and at session-start step 5b parity check. The cost of the check is bounded; the cost of NOT having the declaration is unbounded — a stale doc cannot be detected without it.
+
+### Canonical Format
+
+```markdown
+<!-- FRESHNESS: <key>=<value>, verified=<YYYY-MM-DD>, <other-state-fields> -->
+```
+
+The HTML comment form keeps the marker invisible in rendered Markdown but trivially `grep`-able in source. Field names are doc-type-specific:
+
+**Schema docs** (DATABASE_SCHEMA_SUMMARY, schema-related references):
+
+```markdown
+<!-- FRESHNESS: alembic_head=0070, verified=2026-04-26, tables=51, migrations=69, last_changelog_migration=0070 -->
+```
+
+Fields: `alembic_head`, `verified`, `tables`, `migrations`, `last_changelog_migration`.
+
+**ADR docs** (ARCHITECTURE_DECISIONS, ADR_INDEX):
+
+```markdown
+<!-- FRESHNESS: adr_count=119, verified=2026-04-26, last_adr=119 -->
+```
+
+Fields: `adr_count`, `verified`, `last_adr` = the maximum `Decision #N` (or `## ADR-N`) heading number physically present in the doc body. Mechanical: a `grep -oE` of the heading regex resolves it without semantic interpretation. (Do NOT use "highest non-superseded ADR" — that requires reading every ADR for supersession state and is not mechanically checkable.)
+
+**Requirements docs** (MASTER_REQUIREMENTS):
+
+```markdown
+<!-- FRESHNESS: verified=2026-04-26, req_count=NNN, last_review_session=77 -->
+```
+
+Fields: `verified`, `req_count`, `last_review_session` = session in which a Tier 2 dispatch (Builder + Reviewer) systematically swept the doc body end-to-end for stale references — NOT a session that touched a single section in place. Without this discipline, every session-toucher bumps the field and it loses signal value.
+
+The format is deliberately rigid: a single-line HTML comment, comma-separated `key=value` pairs, no whitespace inside the values. This makes the marker mechanically parseable — a future hook (tracked in #1054 Phase 3) can grep for the marker and compare each field against live state without per-doc parsing logic.
+
+### Why It Matters
+
+Living docs drift silently because nothing mechanically couples them to source-of-truth. Three concrete drift incidents from project history:
+
+1. **DATABASE_SCHEMA_SUMMARY V1.15 → 35-migration gap.** V1.15 covered migration 0013; production was at 0048. None of the existing periodic triggers (S16, C18) caught it. Surfaced only when session 36 reached for a schema reference and found it unusable.
+2. **Testcontainers static SQL → 4-migration gap.** Static SQL frozen at 0044; production was at 0048. Surfaced only when an unrelated test failure cascaded into "why is this column missing in CI but not in dev?"
+3. **DATABASE_SCHEMA_SUMMARY V2.0 → 19-migration gap, marker lied about its own body.** V2.0's freshness marker said `alembic_head=0051`; V2.0's body said `Status: Current — Alembic head: migration 0048`. Both were behind the actual head (0070 by V2.1's authoring). The marker had decayed *before V2.0 shipped*, because no convention forced the author to verify-before-write.
+
+The cost of the drift compounds in two ways: (a) downstream consumers (Builders, Reviewers, Sentinels) treat the doc as a reference and silently propagate stale assumptions; (b) when the gap is finally noticed, the rewrite cost scales with the gap size (V1.15 → V2.0 was a "complete rewrite"; V2.0 → V2.1 is a less expensive resync because it landed before the gap exceeded a half-cohort).
+
+The marker breaks the silence. Without it, "is this doc fresh?" has no answer. With it, the question reduces to a one-line `grep` + compare.
+
+### Wrong
+
+```markdown
+# Database Schema Summary
+
+**Version:** 2.0
+**Last Updated:** 2026-04-05
+**Status:** Current — Alembic head: migration 0048
+
+> **V2.0 Rewrite:** Complete schema reference covering all 42 tables, 8 views, and 47 migrations.
+
+# (no machine-readable freshness declaration; the prose "Status: Current"
+#  contains a number that immediately decays AND contradicts the prose
+#  "all 42 tables, 8 views, and 47 migrations" — three drift surfaces in
+#  one document, and none mechanically detectable)
+```
+
+### Right
+
+```markdown
+# Database Schema Summary
+
+<!-- FRESHNESS: alembic_head=0070, verified=2026-04-26, tables=51, migrations=69, last_changelog_migration=0070 -->
+
+---
+**Version:** 2.1
+**Last Updated:** 2026-04-26
+**Status:** Current — Alembic head: migration 0070
+
+> **V2.1 Rewrite:** Brings the schema reference back in sync with alembic_version
+> after the 19-migration drift V2.0 acquired ...
+
+# The marker is the canonical declaration; prose statements are pointers
+# to the marker, not redundant statements of truth.  When the marker
+# updates, the prose updates with it — the marker leads.
+```
+
+### Canonical Demonstration
+
+DATABASE_SCHEMA_SUMMARY V2.1 (`docs/database/DATABASE_SCHEMA_SUMMARY_V2.1.md`)
+demonstrates Pattern 86 in canonical form. Future revisions of that document
+update the marker fields in lockstep with the body — the marker leads, the
+prose follows. ARCHITECTURE_DECISIONS.md and MASTER_REQUIREMENTS_V2.26.md will
+adopt the marker shape in their next revisions (out of scope for this PR;
+tracked under Epic #1054 Phase 3 alongside G1 hook widening + version-marker
+auto-bumper).
+
+### When to Apply
+
+ALWAYS for living canonical docs — defined as documents that describe a moving
+target where the target is the canonical source-of-truth (alembic_head, ADR
+count, requirement count, tracked-issue count, etc.). Specifically:
+
+- **Schema documentation** — alembic_head + table count + migration count.
+- **Architecture decision records** — ADR count + last ADR number.
+- **Master requirements** — req count + last review session.
+- **Long-lived plan / arc documents** — anything with a "Status:" line that
+  paraphrases a count or version that lives elsewhere.
+- **Test inventory / coverage references** — current test type counts, current
+  cassette count, current test-file count.
+
+### When NOT to Apply
+
+- **Non-living references** — patterns that document a fixed historical state
+  (post-mortems, retrospectives, completed-arc summaries). The marker is for
+  *current* state declarations; immutable history doesn't need one.
+- **Auto-generated artifacts** — files generated by tooling whose freshness is
+  guaranteed by the regeneration step (alembic-generated migration files
+  themselves, type stubs, OpenAPI schemas). The generator is the marker.
+- **Inline code documentation** — docstrings, comments inside source files.
+  The freshness contract there is "the docstring describes the function it's
+  attached to"; the source code is the marker.
+
+### Pair With Pattern 73
+
+Pattern 86 is **Pattern 73 (SSOT) applied to time**. Pattern 73 says: any rule,
+value, formula, or logic that appears in more than one location MUST have ONE
+canonical definition plus pointers/imports from the others. Pattern 86 says:
+any *declaration of current state* that a living doc makes MUST have ONE
+canonical marker plus prose pointers to it.
+
+The two are complementary:
+
+1. Pattern 73 prevents drift across copies of the *same* truth at the *same* time.
+2. Pattern 86 prevents drift across versions of the *same* truth at *different* times.
+
+A document can violate both at once (V2.0 did — its prose copied an
+already-stale marker value into the body, then both diverged from production
+together). Apply both patterns together for living canonical docs: marker as
+the single declaration, prose pointing to the marker, marker compared against
+source-of-truth at session-end.
+
+### Source
+
+- `feedback_doc_freshness_markers.md` (memory) — session 36 origin (V1.15 35-migration gap discovery); recurrence trail in that file (V2.0 19-migration gap rediscovery during the session-77 S80 sweep that promoted this pattern)
+- DATABASE_SCHEMA_SUMMARY V2.1 — canonical-form demonstration (this PR)
+- Issue #897 — DATABASE_SCHEMA_SUMMARY V2.1 rewrite (Pattern 86 promotion bundled here)
+- Pattern 73 (Single Source of Truth) — sibling pattern; Pattern 86 is the
+  time-axis specialization
+- Epic #1054 Phase 3 — forward-enforcement work (G1 hook widening +
+  version-marker auto-bumper); marker is human-applied at session-end S80 +
+  session-start step 5b until that ships
 
 ---
 

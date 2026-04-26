@@ -190,7 +190,7 @@ precog-repo/
 - `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.2.md` - Phase roadmap (Era 2: current)
 
 **Implementation:**
-- `docs/guides/DEVELOPMENT_PATTERNS.md` - 84 development patterns with examples (V1.38 adds Pattern 84: Two-Phase `NOT VALID` + `VALIDATE CONSTRAINT` for CHECK on populated tables)
+- `docs/guides/DEVELOPMENT_PATTERNS.md` - 84 active development patterns with examples (highest numbered slot is 86; slots 51 + 85 reserved-for-future-promotion, so 86 - 2 = 84 active). V1.39 adds Pattern 86: Living-Doc Freshness Markers (ALWAYS for living canonical docs describing moving targets; codifies the `<!-- FRESHNESS: ... -->` HTML-comment shape DATABASE_SCHEMA_SUMMARY V2.1 demonstrates). V1.38 adds Pattern 84: Two-Phase `NOT VALID` + `VALIDATE CONSTRAINT` for CHECK on populated tables.
 - `docs/guides/CONFIGURATION_GUIDE_V3.1.md` - YAML config reference
 - `docs/guides/KALSHI_CLIENT_USER_GUIDE_V1.0.md` - Kalshi API usage
 - `docs/guides/STRATEGY_MANAGER_USER_GUIDE_V1.1.md`
@@ -198,7 +198,7 @@ precog-repo/
 - `docs/guides/POSITION_MANAGER_USER_GUIDE_V1.1.md`
 
 **Database & API:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V2.0.md` - Complete schema (supersedes V1.16; freshness marker shows alembic_head sync state)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V2.1.md` - Complete schema (supersedes V2.0; resyncs with alembic_head=0070 after V2.0 acquired a 19-migration drift; +8 canonical_* tables from Cohorts 1A+1B+2; canonical demonstration of Pattern 86 freshness markers — V2.0 retained for changelog history)
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md`
 - `docs/api-integration/KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md` - CRITICAL reference
 
