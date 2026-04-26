@@ -117,6 +117,7 @@ MODULE_TIERS = {
     "database/crud_analytics": "experimental",
     "database/crud_canonical_markets": "experimental",
     "database/crud_canonical_entity": "experimental",
+    "database/crud_match_algorithm": "experimental",
     "database/constants": "experimental",
     "database/seeding/seeding_manager": "business",
     "database/seeding/historical_elo_loader": "business",
