@@ -49,8 +49,8 @@ Cleanup discipline:
 Reference:
     - ``docs/foundation/ARCHITECTURE_DECISIONS_V2.40.md`` lines
       ~17580-17590 (Item 4 -- Pattern 82 V2 + this file's path pin)
-    - ``docs/guides/DEVELOPMENT_PATTERNS_V1.37.md`` Pattern 82 V2
-      (lines ~12235-12239)
+    - ``docs/guides/DEVELOPMENT_PATTERNS_V1.38.md`` Pattern 82 V2
+      (lines ~12239-12245)
     - ``src/precog/database/crud_canonical_entity.py``
     - ``src/precog/database/alembic/versions/0068_canonical_entity_foundation.py``
     - ``tests/integration/database/test_migration_0068_canonical_entity_foundation.py``

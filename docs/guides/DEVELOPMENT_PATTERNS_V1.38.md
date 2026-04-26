@@ -1,13 +1,17 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.37
+**Version:** 1.38
 **Created:** 2025-11-13
 **Last Updated:** 2026-04-25
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.38:**
+- **Added Pattern 84: Two-Phase `NOT VALID` + `VALIDATE CONSTRAINT` for CHECK on Populated Tables (ALWAYS for CHECKs Where Rows May Exist at Deploy Time)** — codifies the two-phase ALTER TABLE encoding (`ADD CONSTRAINT ... NOT VALID` followed by `VALIDATE CONSTRAINT ...`) that eliminates the production-lock surface the single-phase `ADD CONSTRAINT CHECK` form creates. Single-phase acquires `ACCESS EXCLUSIVE` for the duration of the validation table scan; two-phase acquires `ACCESS EXCLUSIVE` only briefly (to register the constraint metadata, with new writes immediately checked) then validates existing rows under `SHARE UPDATE EXCLUSIVE` (allowing concurrent reads and writes). Pairs with Pattern 81 (which decides *whether* to use a CHECK at all): Pattern 81 chooses the constraint shape, Pattern 84 chooses how to apply that shape safely on a populated table.
+- Origin: PR #1031 (Migration 0070, session 75) claude-review — both review passes independently arrived at identical wording, a convergent-reviewer signal (Pattern 70). Migration 0070's single-phase form was defensible (canonical_events had 0 rows, no expected rows by deploy time), but the omission of Pattern 84 risked Cohort 6+ migrations adopting the same shape on populated tables (Cohort 6 seeder lands canonical_events 1:1 from games; Cohort 7 weather observations lands range CHECKs on temperature/humidity; Cohort 8 LLM-projection lands enrichment-column CHECKs). Codifying now closes the door before the first populated-table CHECK ships.
+- Pair-with: Pattern 81 (open canonical enum vs CHECK) — Pattern 81 decides *which* shape; Pattern 84 decides *how* to apply that shape. Pattern 84 is silent when Pattern 81 routes the column to a lookup-table FK (no CHECK to apply); Pattern 84 fires whenever Pattern 81's "Keep CHECK" criteria are met AND the target table is populated (or expected to be by deploy time).
 **Changes in V1.37:**
 - **Amended Pattern 82:** added new "**V2: Forward-Only Direction Policy**" subsection — Pattern 82 triggers MUST encode only the forward direction (require typed back-ref when discriminator matches); the reverse direction (forbid back-ref when discriminator does not match) is intentionally NOT enforced at the trigger level, preserving polymorphic-overloading future-extensibility per ADR-118 V2.38 decision #5 (ratified in V2.40 amendment). Mandatory compensating mechanism: every Pattern 82 application MUST be paired with a load-bearing regression test. Decision Checklist gains a "Direction" item + "Compensating test" item.
 - **Added Pattern 83: Seed-Time Foreign-Key Subquery Guard for Cross-Migration Lookups (ALWAYS for Cross-Migration Seed Inserts)** — codifies the inline guard pattern that resolves a parent lookup id BEFORE the dependent INSERT and raises on NULL. Closes the silent-failure path where `INSERT ... VALUES ((SELECT id FROM parent WHERE key=:key), ...)` lands a NULL-bearing row when the parent key fails to resolve. Includes explicit `ON CONFLICT` NULL-distinctness warning and append-only retrofit principle (do NOT retrofit shipped migrations 0067 + 0068; apply going forward).
@@ -12365,6 +12369,190 @@ Do NOT retrofit Pattern 83 into shipped migrations (the precedent is migrations 
 ### Pair with
 
 Pattern 81 (lookup table — Pattern 83 protects the seed integrity of Pattern 81 instances) and Pattern 82 (typed back-ref — Pattern 83 protects the seed integrity of the discriminator FKs that Pattern 82 depends on).
+
+---
+
+## Pattern 84: Two-Phase `NOT VALID` + `VALIDATE CONSTRAINT` for CHECK on Populated Tables (ALWAYS for CHECKs Where Rows May Exist at Deploy Time)
+
+**Severity:** HIGH — single-phase `ALTER TABLE ... ADD CONSTRAINT ... CHECK (...)` on a populated table acquires `ACCESS EXCLUSIVE` for the duration of the validating table scan. On a production table of any size, that means *all reads AND writes block* until the scan completes. A 100M-row table can lock for tens of minutes. The two-phase form is a one-extra-statement change that eliminates the lock surface entirely and costs nothing when the table is small.
+
+### Problem / Trigger
+
+A migration adds a CHECK constraint to a table that has rows (or may have rows by deploy time). The naive form is:
+
+```sql
+ALTER TABLE <table>
+  ADD CONSTRAINT <constraint_name>
+  CHECK (<predicate>);
+```
+
+PostgreSQL's default behavior on `ADD CONSTRAINT CHECK` is to validate every existing row before declaring the constraint enforced. The validation runs under `ACCESS EXCLUSIVE` — the strongest lock level — which blocks every concurrent read AND write until validation completes. On a small table this is irrelevant; on a populated production table it is a deploy-time outage that nobody sees coming because the migration "works" in dev where the table has 12 seed rows.
+
+The two-phase form decouples the *constraint registration* (which holds `ACCESS EXCLUSIVE` for milliseconds) from the *validation scan* (which can run under a vastly weaker lock). New writes are checked from the moment the `NOT VALID` constraint is registered; existing rows are validated in the second phase.
+
+### The Pattern / Rule
+
+**Canonical decision context lives in [ADR-118 v2.40](../foundation/ARCHITECTURE_DECISIONS_V2.40.md) Cohort 1 carry-forward item 3** (single-phase justified by 0-row state on `canonical_events.lifecycle_phase` in Migration 0070 — the explicit precedent for the "When NOT to apply" carve-out below). Per Pattern 73, this pattern does not restate the per-migration justification — it codifies the *general rule*:
+
+> Adding a CHECK constraint to a table that has rows OR may have rows by deploy time MUST use the two-phase `NOT VALID` + `VALIDATE CONSTRAINT` form. The single-phase `ADD CONSTRAINT ... CHECK (...)` form is acceptable ONLY when MCP-verified zero rows in dev/staging AND no expected rows by production deploy time (the constraint races the data — the constraint wins).
+
+### Canonical Shape
+
+```sql
+-- Phase 1: register the constraint with NOT VALID.
+-- Lock: ACCESS EXCLUSIVE briefly (metadata write).
+-- Effect: new INSERT / UPDATE rows are checked immediately;
+--         existing rows are NOT checked — the constraint exists
+--         but is in pg_catalog state convalidated = false.
+ALTER TABLE <table>
+  ADD CONSTRAINT <constraint_name>
+  CHECK (<predicate>)
+  NOT VALID;
+
+-- Phase 2: validate existing rows.
+-- Lock: SHARE UPDATE EXCLUSIVE (allows concurrent reads AND writes).
+-- Effect: PostgreSQL scans every existing row against the predicate;
+--         on success, sets convalidated = true. On failure, raises
+--         and identifies the offending row — caller can quarantine
+--         and retry.
+ALTER TABLE <table>
+  VALIDATE CONSTRAINT <constraint_name>;
+```
+
+### Wrong
+
+```sql
+-- Single-phase ADD CONSTRAINT CHECK on a populated table:
+ALTER TABLE canonical_events
+  ADD CONSTRAINT canonical_events_lifecycle_phase_check
+  CHECK (lifecycle_phase IN ('proposed', 'listed', 'pre_event',
+                              'live', 'suspended', 'settling',
+                              'resolved', 'voided'));
+
+-- Lock: ACCESS EXCLUSIVE for the entire validation table scan.
+-- On a 100M-row canonical_events table mid-Cohort-6 backfill,
+-- this blocks every reader AND every writer for the duration.
+-- Pollers stall, dashboards timeout, the trade pipeline halts.
+-- The migration "succeeds" — exactly the silent-failure shape
+-- that makes this pattern HIGH severity.
+```
+
+### Right
+
+```sql
+-- Two-phase: brief ACCESS EXCLUSIVE + concurrent-safe validation.
+ALTER TABLE canonical_events
+  ADD CONSTRAINT canonical_events_lifecycle_phase_check
+  CHECK (lifecycle_phase IN ('proposed', 'listed', 'pre_event',
+                              'live', 'suspended', 'settling',
+                              'resolved', 'voided'))
+  NOT VALID;
+
+ALTER TABLE canonical_events
+  VALIDATE CONSTRAINT canonical_events_lifecycle_phase_check;
+
+-- Lock surface during Phase 2: SHARE UPDATE EXCLUSIVE.
+-- Concurrent reads: ALLOWED. Concurrent writes: ALLOWED.
+-- Phase 2 runs sequentially against the validation predicate;
+-- on failure, the error names the offending row's id so the
+-- caller can quarantine + fix + retry without rolling back
+-- the constraint registration.
+```
+
+### Lock Surface Comparison
+
+| Form | Phase 1 lock | Phase 2 lock | Concurrent reads | Concurrent writes | New rows checked |
+|---|---|---|---|---|---|
+| Single-phase `ADD CONSTRAINT CHECK` | `ACCESS EXCLUSIVE` (metadata + scan) | n/a | BLOCKED | BLOCKED | Yes (after scan completes) |
+| Two-phase `NOT VALID` + `VALIDATE` | `ACCESS EXCLUSIVE` (metadata only — milliseconds) | `SHARE UPDATE EXCLUSIVE` | ALLOWED | ALLOWED | Yes (immediately after Phase 1) |
+
+The cost of the two-phase form is one additional `ALTER TABLE` statement and a slightly weaker but equivalent integrity guarantee in the brief window between Phase 1 and Phase 2 (existing rows might violate the predicate in that window — but new writes cannot, so the violation surface is bounded by the existing-row population at Phase 1 time, which Phase 2 then validates). For populated production tables this trade is a no-brainer.
+
+### When to Apply
+
+ALWAYS, with one defensible carve-out. Specifically:
+
+- **Table has rows in any environment that will receive the migration** — dev / staging / prod. Even 1,000 rows on a 4-vCPU dev box is enough to feel the lock when concurrent integration tests are running.
+- **Table is *expected* to have rows by deploy time** — even if the table is empty when the migration is authored, if a sibling migration in the same release seeds it, the lock is held during the seeded validation.
+- **Table is on a path read by long-running transactions** — pollers, schedulers, the trade pipeline — where blocking for even a few seconds is a customer-visible event.
+- **Migration is in a Cohort that runs against a production-like dataset** — Cohort 6+ canonical-layer seeders fall into this category once Migration 0085 lands the 1:1 canonical_events ↔ games seeding.
+
+### When NOT to Apply (Defensible Single-Phase Use)
+
+The carve-out is narrow and must be explicitly justified in the migration docstring with both criteria:
+
+- **MCP-verified zero rows in every environment that will receive the migration** — `SELECT count(*) FROM <table>;` returns 0 on dev (and staging if applicable). This is empirical, not aspirational.
+- **No expected rows by production deploy time** — the seeder migration that will populate the table has not yet been authored, OR the table is only written to by a future Cohort that ships in a later release.
+
+**Canonical example:** Migration 0070's `canonical_events.lifecycle_phase` CHECK. The amendment justification is documented in ADR-118 v2.40 Cohort 1 carry-forward item 3: `canonical_events` was empty in dev when 0070 shipped (Cohort 1 created the table; the seeder for it is Cohort 6 / Migration 0085 territory, not yet authored). Single-phase `ADD CONSTRAINT CHECK` was defensible *because the table cannot have rows until Migration 0085 ships*, and that migration will land its own seed in a transaction that already validates against the constraint registered in 0070. The migration docstring cites both criteria explicitly.
+
+If only one of the two criteria holds — or if the criteria hold by accident rather than by design — use the two-phase form. The default answer is two-phase.
+
+### Decision Checklist Before Adding a CHECK Constraint
+
+1. **Is the column eligible for Pattern 81 (open-canonical-enum → lookup table)?** If yes → don't use CHECK at all; use the FK form. Pattern 84 is silent in that branch.
+2. **Does Pattern 81 §"When NOT to Apply (Keep CHECK)" route this column to a CHECK?** (Closed enum, fixed business meaning, values bound to code branches.) If yes → continue.
+3. **Does any environment that will receive the migration have non-zero rows in the target table TODAY?** If yes → two-phase. If no → continue.
+4. **Will any sibling migration in the same release populate the target table BEFORE this CHECK lands?** If yes → two-phase. If no → continue.
+5. **Is there a forward-known seeder migration in the next 1-2 cohorts that will populate the target table?** If yes → two-phase (the constraint outlives the empty-table state and the next deploy may be running against a populated table). If no → single-phase is defensible; document both carve-out criteria in the migration docstring.
+
+### Concrete Instances (Forward-Pointers)
+
+| Migration | Table | Constraint | Form Used | Justification |
+|---|---|---|---|---|
+| 0070 | canonical_events | `lifecycle_phase IN (...)` | Single-phase | 0-row state in dev; seeder is Cohort 6 / Migration 0085 (ADR-118 v2.40 item 3) |
+| 0077 (planned) | canonical_event_phase_log | `phase IN (...)` (mirrors 0070) | Two-phase REQUIRED | Migration 0085 will have populated `canonical_events` before 0077 lands its mirror CHECK on the audit log; the audit log is co-populated by trigger |
+| 0085 (planned) | canonical_events (seeder) | n/a — INSERT-only | n/a | Lifecycle CHECK already in place from 0070; seed runs against the existing constraint |
+| 0095+ (planned) | weather_observations | temperature/humidity range CHECKs | Two-phase REQUIRED | Weather observations table is written-to by `weather_poller` from the moment Phase 1 weather lands (ADR-119) |
+| Cohort 8 (planned) | LLM-projection enrichment columns | various | Two-phase REQUIRED | Enrichment columns are added to existing populated canonical tables |
+
+### Critical Interaction with `IF NOT EXISTS` and Idempotent Re-Runs
+
+PostgreSQL does NOT support `ADD CONSTRAINT IF NOT EXISTS` directly; idempotency for re-runnable migrations requires a `pg_catalog` lookup before the `ALTER TABLE`. The pattern composes cleanly with that idempotency wrapper:
+
+```python
+def upgrade() -> None:
+    conn = op.get_bind()
+    constraint_exists = conn.execute(sa.text(
+        "SELECT 1 FROM pg_constraint "
+        "WHERE conname = 'canonical_events_lifecycle_phase_check' "
+        "  AND conrelid = 'canonical_events'::regclass"
+    )).scalar()
+    if not constraint_exists:
+        # Phase 1
+        op.execute("""
+            ALTER TABLE canonical_events
+              ADD CONSTRAINT canonical_events_lifecycle_phase_check
+              CHECK (lifecycle_phase IN ('proposed', 'listed', 'pre_event',
+                                          'live', 'suspended', 'settling',
+                                          'resolved', 'voided'))
+              NOT VALID;
+        """)
+        # Phase 2
+        op.execute("""
+            ALTER TABLE canonical_events
+              VALIDATE CONSTRAINT canonical_events_lifecycle_phase_check;
+        """)
+```
+
+The two phases live inside the same `if not constraint_exists` guard so a partial failure between Phase 1 and Phase 2 (e.g., Phase 2 raises on a violating row) leaves the constraint registered but unvalidated; the rerun re-enters the guard, finds the constraint already exists, and skips. The operator then quarantines the violating row out-of-band and runs `ALTER TABLE ... VALIDATE CONSTRAINT ...;` directly. **Important caveat:** if Phase 1 succeeded and Phase 2 raised, the second run skips the entire block via the existence check — it does NOT re-attempt Phase 2. For migrations where the predicate may genuinely fail validation, structure the guard so Phase 2 is gated on `convalidated = false` rather than on constraint absence. The first migration to ship using the two-phase form should document both branches (constraint-absence + `convalidated = false`) inline as the worked example for future readers; until then, this section is the canonical reference. (Migration 0070 itself is the *single-phase carve-out* — see the Source list — not an instance of the two-phase form.)
+
+### Pair With Pattern 81
+
+Pattern 81 covers the *which* (open-canonical-enum → lookup table FK; closed-enum → CHECK). Pattern 84 covers the *how* (when Pattern 81 routes to CHECK on a populated table, use two-phase). The two together encode the complete CHECK-application contract:
+
+1. Pattern 81 asks: should this be a CHECK at all? (If no → FK, Pattern 84 is silent.)
+2. Pattern 84 asks: how do I apply this CHECK without locking the table? (Two-phase by default; single-phase only with both carve-out criteria documented.)
+
+### Source
+
+- PR #1031 (Migration 0070) claude-review § "Issues & Suggestions / 1. Missing NOT VALID on the CHECK constraint" — both review passes converged on identical wording (Pattern 70 convergent-reviewer signal)
+- Issue #1037 — Pattern 84 promotion-candidate tracking issue
+- ADR-118 v2.40 Cohort 1 carry-forward item 3 — single-phase justified by 0-row state on `canonical_events.lifecycle_phase` (the explicit precedent for the "When NOT to Apply" carve-out)
+- Migration 0070 (`src/precog/database/alembic/versions/0070_cohort_1_carryforward_hardening.py`) — canonical instance of the carve-out (single-phase justified by both criteria documented inline)
+- Pattern 81 § "When NOT to Apply (Keep CHECK)" (V1.38 lines ~12077-12082) — sibling pattern; routes "should this be a CHECK?" decision
+- Pattern 70 (Convergent-Reviewer Signal Rule) — origin discipline for promoting Pattern 84 (two cold-context reviewers arrived at the same wording independently)
+- PostgreSQL docs: [ALTER TABLE / NOT VALID](https://www.postgresql.org/docs/current/sql-altertable.html) — the canonical reference for the lock-surface guarantees cited above
 
 ---
 
