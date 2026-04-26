@@ -154,6 +154,7 @@ def test_table_column_shape(
             SELECT column_name, data_type, is_nullable, column_default
             FROM information_schema.columns
             WHERE table_name = %s
+              AND table_schema = 'public'
             ORDER BY ordinal_position
             """,
             (table,),
@@ -190,6 +191,7 @@ def test_canonical_events_lifecycle_phase_default_is_proposed(db_pool: Any) -> N
             FROM information_schema.columns
             WHERE table_name = 'canonical_events'
               AND column_name = 'lifecycle_phase'
+              AND table_schema = 'public'
             """
         )
         row = cur.fetchone()
@@ -381,3 +383,63 @@ def test_canonical_events_natural_key_hash_unique(db_pool: Any) -> None:
     assert "UNIQUE (natural_key_hash)" in row["def"], (
         f"uq_canonical_events_nk must enforce UNIQUE (natural_key_hash); got: {row['def']}"
     )
+
+
+# =============================================================================
+# Group 5: ON DELETE clauses on canonical_events FKs (#1044 item 2)
+#
+# Mirrors the ON DELETE RESTRICT assertion in test_0069 against
+# ``canonical_markets_canonical_event_id_fkey``.  Both ``game_id`` and
+# ``series_id`` FKs default to ON DELETE NO ACTION (the migration does not
+# specify an action; PG default = NO ACTION).  This pins that intent so a
+# future migration that quietly upgrades to CASCADE / SET NULL is forced
+# to update this test alongside.
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    ("constraint_name", "expected_clause"),
+    [
+        ("canonical_events_game_id_fkey", "ON DELETE NO ACTION"),
+        ("canonical_events_series_id_fkey", "ON DELETE NO ACTION"),
+    ],
+)
+def test_canonical_events_fk_on_delete_clause(
+    db_pool: Any,
+    constraint_name: str,
+    expected_clause: str,
+) -> None:
+    """Pin the ON DELETE clause on canonical_events FKs (game_id, series_id).
+
+    PG ``pg_get_constraintdef`` only emits an explicit ``ON DELETE`` clause
+    when the action is non-default; ``NO ACTION`` is the default and is
+    therefore typically OMITTED from the textual rendering.  We accept
+    either an explicit ``ON DELETE NO ACTION`` substring OR no ON DELETE
+    substring at all (which means PG defaulted to NO ACTION).
+    """
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT pg_get_constraintdef(oid) AS def
+            FROM pg_constraint
+            WHERE conrelid = 'canonical_events'::regclass
+              AND conname = %s
+            """,
+            (constraint_name,),
+        )
+        row = cur.fetchone()
+    assert row is not None, f"{constraint_name} must exist on canonical_events"
+    fk_def = row["def"]
+    if expected_clause == "ON DELETE NO ACTION":
+        # NO ACTION is PG default; pg_get_constraintdef OMITS it.  Accept
+        # either explicit text or absence-of-other-clauses.
+        forbidden_clauses = ("ON DELETE CASCADE", "ON DELETE SET NULL", "ON DELETE RESTRICT")
+        for forbidden in forbidden_clauses:
+            assert forbidden not in fk_def, (
+                f"{constraint_name} must be ON DELETE NO ACTION (default); "
+                f"found unexpected {forbidden!r} in: {fk_def}"
+            )
+    else:
+        assert expected_clause in fk_def, (
+            f"{constraint_name} must include {expected_clause!r}; got: {fk_def}"
+        )

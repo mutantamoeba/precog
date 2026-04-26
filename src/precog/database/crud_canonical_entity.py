@@ -91,13 +91,9 @@ Reference:
 """
 
 import json
-import logging
 from typing import Any
 
 from .connection import fetch_one, get_cursor
-
-logger = logging.getLogger(__name__)
-
 
 # =============================================================================
 # CANONICAL ENTITY OPERATIONS

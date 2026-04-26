@@ -23,7 +23,7 @@
 - **ADR-117 amendment (reflected in canonical ARCHITECTURE_DECISIONS):** Tier-classification examples updated — `series.series_key` reclassified Tier 2 → Tier 3 (per ADR-119 Part 1; column stores Kalshi `series_ticker`). Grep-able policy surface caveat added: `_key` suffix is *usually* Tier 2 but MUST be audited at migration time.
 - Updated ARCHITECTURE_DECISIONS reference from V2.36 to V2.37.
 - Total ADRs catalogued: 103 → 105 (2 net-new row entries at ADR-118/119). Highest ADR number assigned: 117 → 119.
-- Pattern 80 companion pointer: `DEVELOPMENT_PATTERNS_V1.36.md` (SCD-2 Version-Stable Surrogate Identifiers, gated on `row_current_ind`). V1.36 also adds Patterns 81 + 82 for ADR-118 v2.38 Cohort 1.
+- Pattern 80 companion pointer: `DEVELOPMENT_PATTERNS_V1.38.md` (SCD-2 Version-Stable Surrogate Identifiers, gated on `row_current_ind`). V1.36 also adds Patterns 81 + 82 for ADR-118 v2.38 Cohort 1.
 - Cross-references: Epic #972 (Canonical Layer Foundation), #973 (Cohort 9 Librarian integration — this bump), #496 (@Whatsonyourmind production matching experience), #937 (folded into ADR-118 migrations 0086-0089), #964 (pmxt NormalizedMarket shape feeds `canonical_markets.market_type_general`), Epic #935 (subsumed via ADR-118).
 **Changes in v1.26:**
 - **THREE-TIER IDENTITY MODEL + 7 OTHER PHASE 2/2.5 ACCEPTED ADRs**: Added ADR-110 through ADR-117 (8 ADRs; 3 overwrote stale TBD placeholders)
