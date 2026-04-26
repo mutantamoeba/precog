@@ -38,14 +38,14 @@
 - **CANONICAL IDENTITY + MATCHING INFRASTRUCTURE + EVENT-STATE LAYER:** Added ADR-118 (Epic #972 Canonical Layer Foundation — cross-platform canonical identity, first-class matching ledger, three-layer event-state construct with three-timestamp ML causal-correctness commitment, dim+fact canonical linkage with reconciliation, `v_temporal_alignment` stable consumer contract, LLM `trust_tier` surface).
 - **BUSINESS-KEY CLEANUP + WEATHER PHASE 1 NON-SPORT FOUNDATION VALIDATION:** Added ADR-119 (sister to ADR-118 — DELETE three formatted-PK decoration columns (`games.game_key`, `markets.market_key`, `events.event_key`); RENAME + RECLASSIFY `series.series_key` → `external_series_ticker` (Tier-3); ship `weather_observations` Phase 1 with NOAA adapter + weather_poller to validate canonical-layer foundations against non-sport domain BEFORE 20+ canonical migrations land; codify SCD-2 version-stable surrogate exception via Pattern 80).
 - **ADR-117 AMENDMENT:** Tier-classification examples updated — `series.series_key` reclassified from Tier 2 → Tier 3 (per ADR-119 Part 1 audit finding; column actually stores Kalshi `series_ticker`, is externally-sourced).
-- Operational how-to companion: Pattern 80 (SCD-2 Version-Stable Surrogate Identifiers) in `DEVELOPMENT_PATTERNS_V1.38.md` — the `row_current_ind` lint gate that distinguishes legitimate SCD-2 surrogate keys (`position_key`, `game_state_key`, `edge_key`) from pure formatted-PK decoration.
+- Operational how-to companion: Pattern 80 (SCD-2 Version-Stable Surrogate Identifiers) in `DEVELOPMENT_PATTERNS.md` — the `row_current_ind` lint gate that distinguishes legitimate SCD-2 surrogate keys (`position_key`, `game_state_key`, `edge_key`) from pure formatted-PK decoration.
 - Cross-references: Epic #972 (Canonical Layer Foundation), #496 (@Whatsonyourmind production matching experience), #935 (parent Epic — subsumed via ADR-118 migrations 0086-0089), #937 (folded into ADR-118 UNIQUE demotions), #964 (pmxt NormalizedMarket shape), ADR-089, ADR-116, ADR-117.
 **Changes in v2.36:**
 - **THREE-TIER IDENTITY MODEL:** Added ADR-117 codifying Epic #935's identity taxonomy for schema design
   - ADR-117: Every identifier column is Tier 1 (internal PK, 100% unique), Tier 2 (internal business key, case-by-case), or Tier 3 (external key, ASSUMED NOT UNIQUE)
   - No `UNIQUE` on Tier 3 columns; `ON CONFLICT` targets must be Tier 1 or 2; pollers tolerate duplicate external keys silently
   - Shipped in response to session 67 #933 `UniqueViolation` incident — Option D fix (demote `idx_games_espn_event` UNIQUE → non-unique) via migration 0066 (PR #938)
-  - Operational how-to companion: Pattern 79 in `DEVELOPMENT_PATTERNS_V1.38.md`
+  - Operational how-to companion: Pattern 79 in `DEVELOPMENT_PATTERNS.md`
   - Unblocks cross-table audit in #937
   - Cross-references: Epic #935, #933, #936 (this ADR's tracking issue), #937, #938, ADR-116 (naming convention), ADR-089 (dual-key foundation), migration 0066
 **Changes in v2.35:**
@@ -17211,12 +17211,12 @@ The tier is recorded in the migration docstring that creates or demotes the colu
 ### Implementation
 
 - **Migration 0066** (shipped PR #938, session 67): demote `idx_games_espn_event` from partial `UNIQUE` → non-unique partial index. Docstring records `espn_event_id` as Tier 3 and embeds the Epic #935 cross-reference.
-- **Pattern 79** (DEVELOPMENT_PATTERNS_V1.38) — operational how-to companion to this ADR. Includes the wrong/right code examples, the 5-step pre-migration decision checklist, and the Tier-3 UNIQUE exception rule (requires documented vendor contract).
+- **Pattern 79** (DEVELOPMENT_PATTERNS) — operational how-to companion to this ADR. Includes the wrong/right code examples, the 5-step pre-migration decision checklist, and the Tier-3 UNIQUE exception rule (requires documented vendor contract).
 - **Cross-table audit (#937)** — blocked on this ADR landing. Will systematically enumerate every `UNIQUE` / composite UNIQUE / `ON CONFLICT` in the schema and classify each component column by tier. Any Tier-3 UNIQUE not backed by a documented vendor contract becomes a demotion-migration candidate.
 
 ### Cross-References
 
-- **Pattern 79** (`DEVELOPMENT_PATTERNS_V1.38.md`): operational how-to — the decision checklist, wrong/right examples, the Tier-3 UNIQUE exception rule
+- **Pattern 79** (`DEVELOPMENT_PATTERNS.md`): operational how-to — the decision checklist, wrong/right examples, the Tier-3 UNIQUE exception rule
 - **ADR-116:** ODS Schema Conventions — the `_key` / external-`_id` naming convention that makes Tier 2 vs Tier 3 grep-able
 - **ADR-089:** Dual-Key Schema Pattern — foundational (two-layer surrogate + business key); this ADR extends to a three-layer taxonomy by separating internal business keys from external keys
 - **Migration 0066:** `src/precog/database/alembic/versions/0066_demote_games_espn_event_unique.py` — the canonical Option D implementation; docstring embeds the three-tier framing

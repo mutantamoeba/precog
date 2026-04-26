@@ -118,7 +118,7 @@ if actual_outcome not in ("yes", "no", "void", "unresolved"): ...  # copy
 if actual_outcome not in ("yes", "no", "void", "unresolved"): ...  # copy drifts eventually
 ```
 
-**Why this is critical:** duplicated rules silently drift when one copy is updated and others aren't. Session 66 found three Pattern 73 violations in one session (claude-review parse rule, slotting checklist, Pipeline Completeness Gate) — all had the same shape: *rule exists somewhere, invocation point doesn't reference it, drift goes undetected until someone asks the right question.* See Pattern 73 in `docs/guides/DEVELOPMENT_PATTERNS_V*.md`.
+**Why this is critical:** duplicated rules silently drift when one copy is updated and others aren't. Session 66 found three Pattern 73 violations in one session (claude-review parse rule, slotting checklist, Pipeline Completeness Gate) — all had the same shape: *rule exists somewhere, invocation point doesn't reference it, drift goes undetected until someone asks the right question.* See Pattern 73 in `docs/guides/DEVELOPMENT_PATTERNS.md`.
 
 **Before copying any rule/logic to a second location: either (a) extract to a shared helper/constant and import, or (b) write a pointer that references the canonical location.** Audit triggers S81 + #929 check for compliance periodically.
 
@@ -148,7 +148,7 @@ mock_client.get_markets.return_value = {
 
 **Why:** Hand-written mocks freeze a guessed shape that diverges from the real API over time. VCR cassettes (`tests/cassettes/`) record real responses once and replay them — they catch regressions in our code AND surface format drift when the cassette is re-recorded. Live contract tests catch drift in real-time but are gated to nightly runs. See `tests/integration/api_connectors/test_kalshi_client_vcr.py` for the canonical Pattern 22 reference implementation. VCR cassettes live in `tests/cassettes/` (configured per-test via `@pytest.fixture(scope="module")` in each VCR test file, not in a shared conftest).
 
-**Umbrella issue #764** tracks the retrofit of 8 files that historically violated this rule and had been reporting fictional green CI for months. **Trigger S73** (a PM-side agent review that fires Joe Chip on PRs touching external API tests to catch hand-written mocks) enforces this rule on new PRs; **Pattern 22** in `docs/guides/DEVELOPMENT_PATTERNS_V1.38.md` is the authoritative reference.
+**Umbrella issue #764** tracks the retrofit of 8 files that historically violated this rule and had been reporting fictional green CI for months. **Trigger S73** (a PM-side agent review that fires Joe Chip on PRs touching external API tests to catch hand-written mocks) enforces this rule on new PRs; **Pattern 22** in `docs/guides/DEVELOPMENT_PATTERNS.md` is the authoritative reference.
 
 ---
 
@@ -186,11 +186,11 @@ precog-repo/
 
 **Architecture & Planning:**
 - `docs/foundation/MASTER_REQUIREMENTS_V2.26.md` - All requirements
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.40.md` - 116+ ADRs including ADR-118 + ADR-119 (Canonical Layer Foundation — Epic #972; ADR-118 Cohort 1 amendment per #996 encoded in V2.38, Cohort 2 amendment per session 73 encoded in V2.39, Cohort 1 carry-forward amendment per #1011 / session 75 encoded in V2.40) (count may drift from document head — the V2.x version bumps track document revisions, not ADR count)
+- `docs/foundation/ARCHITECTURE_DECISIONS.md` - 116+ ADRs including ADR-118 + ADR-119 (Canonical Layer Foundation — Epic #972; ADR-118 Cohort 1 amendment per #996 encoded in V2.38, Cohort 2 amendment per session 73 encoded in V2.39, Cohort 1 carry-forward amendment per #1011 / session 75 encoded in V2.40) (count may drift from document head — the V2.x version bumps track document revisions, not ADR count)
 - `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.2.md` - Phase roadmap (Era 2: current)
 
 **Implementation:**
-- `docs/guides/DEVELOPMENT_PATTERNS_V1.38.md` - 84 development patterns with examples (V1.38 adds Pattern 84 Two-Phase NOT VALID + VALIDATE CONSTRAINT for CHECK on Populated Tables, codifying the two-phase ALTER TABLE encoding that eliminates ACCESS EXCLUSIVE production-lock surface; convergent claude-review wording from PR #1031 Migration 0070, promoted via #1037)
+- `docs/guides/DEVELOPMENT_PATTERNS.md` - 84 development patterns with examples (V1.38 adds Pattern 84 Two-Phase NOT VALID + VALIDATE CONSTRAINT for CHECK on Populated Tables, codifying the two-phase ALTER TABLE encoding that eliminates ACCESS EXCLUSIVE production-lock surface; convergent claude-review wording from PR #1031 Migration 0070, promoted via #1037)
 - `docs/guides/CONFIGURATION_GUIDE_V3.1.md` - YAML config reference
 - `docs/guides/KALSHI_CLIENT_USER_GUIDE_V1.0.md` - Kalshi API usage
 - `docs/guides/STRATEGY_MANAGER_USER_GUIDE_V1.1.md`

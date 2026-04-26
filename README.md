@@ -239,9 +239,9 @@ python -m mypy src/
 ## Documentation
 
 **Key Documents:**
-- [Master Index](docs/foundation/MASTER_INDEX_V2.2.md) - Complete document inventory
+- [Master Index](docs/foundation/MASTER_INDEX.md) - Complete document inventory
 - [Master Requirements](docs/foundation/MASTER_REQUIREMENTS_V2.3.md) - All requirements
-- [Architecture Decisions](docs/foundation/ARCHITECTURE_DECISIONS_V2.3.md) - Design rationale
+- [Architecture Decisions](docs/foundation/ARCHITECTURE_DECISIONS.md) - Design rationale
 - [API Integration Guide](docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md) - Kalshi, ESPN APIs
 - [Database Schema](docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md) - PostgreSQL schema
 - [Configuration Guide](docs/guides/CONFIGURATION_GUIDE_V3.1.md) - YAML configuration

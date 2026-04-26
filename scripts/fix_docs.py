@@ -88,14 +88,12 @@ def add_missing_docs_to_master_index(dry_run: bool = False) -> int:
     Returns:
         Number of documents added (or would be added)
     """
-    # Find MASTER_INDEX
-    master_index_files = list(FOUNDATION_DIR.glob("MASTER_INDEX_V*.md"))
-    if not master_index_files:
+    # MASTER_INDEX is de-versioned at the filename level (Epic #1054 Phase 1).
+    master_index = FOUNDATION_DIR / "MASTER_INDEX.md"
+    if not master_index.exists():
         print("  [ERROR] MASTER_INDEX not found")
         return 0
 
-    # Get latest version
-    master_index = sorted(master_index_files, reverse=True)[0]
     content = master_index.read_text(encoding="utf-8")
 
     # Extract already listed documents
