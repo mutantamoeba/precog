@@ -17992,8 +17992,8 @@ One-way-door inventory: **Option B** for `temporal_alignment` is the only Phase-
 - ADR-120 (future) — Level A vs Level B entity abstraction axis codification
 - Pattern 79 — Tier-3 demotion idiom reused in 0086-0089
 - Pattern 80 (promoted in `DEVELOPMENT_PATTERNS_V1.38.md`) — SCD-2 Version-Stable Surrogate Identifiers (ADR-119 Part 1 origin)
-- Pattern 81 (canonical in DEVELOPMENT_PATTERNS V1.36; v2.38 origin) — "Open canonical enum → lookup table over CHECK constraint" (Cohort 1 amendment origin; 4 lookup tables at ADR-118)
-- Pattern 82 (canonical in DEVELOPMENT_PATTERNS V1.36; v2.38 origin) — "CONSTRAINT TRIGGER for Polymorphic Typed Back-Reference" (Cohort 1 amendment origin; `enforce_canonical_entity_team_backref` template at Migration 0068; canonical template for Cohort 2+ polymorphic back-refs)
+- Pattern 81 (canonical in DEVELOPMENT_PATTERNS V1.38; v2.38 origin) — "Open canonical enum → lookup table over CHECK constraint" (Cohort 1 amendment origin; 4 lookup tables at ADR-118)
+- Pattern 82 (canonical in DEVELOPMENT_PATTERNS V1.38; v2.38 origin) — "CONSTRAINT TRIGGER for Polymorphic Typed Back-Reference" (Cohort 1 amendment origin; `enforce_canonical_entity_team_backref` template at Migration 0068; canonical template for Cohort 2+ polymorphic back-refs)
 - Issue #996 — ADR-118 Cohort 1 amendment tracking issue (8 user-adjudicated decisions; encoded in v2.38)
 - Issue #1007 — `updated_at` consistency across canonical-tier tables; Cohort 2 (v2.39) establishes the BEFORE UPDATE trigger template; full retrofit (canonical_events + lookup tables + canonical_event_participants) is sequenced separately
 - Issue #1015 — Migration 0076 stale roadmap entry cleanup (`canonical_events.lifecycle_phase` already shipped in 0067); roadmap deliberately not renumbered in v2.39
