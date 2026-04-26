@@ -16904,7 +16904,7 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 **Purpose:** Record and rationale for all major architectural decisions with systematic ADR numbering
 
-**For complete ADR catalog, see:** ADR_INDEX_V1.29.md
+**For complete ADR catalog, see:** ADR_INDEX.md
 
 ## Decision #115/ADR-115: Database Domain Module Architecture
 
@@ -17494,7 +17494,7 @@ This subsection exists so future readers of ADR-118 understand WHY the Cohort 2 
 
 1. **DDL audit-column shorthand expanded.** v2.38 carried the line `metadata JSONB, created_at, retired_at,` as a one-line shorthand that under-specified the audit columns relative to Cohort 1 (Migrations 0067/0068 use full `TIMESTAMPTZ NOT NULL DEFAULT now()` declarations). v2.39 expands the shorthand to the full convention, INCLUDING `updated_at` per decision #4 below. Pattern 73 (SSOT) discipline: this DDL block is the canonical specification; Migration 0069 takes the column declarations verbatim.
 
-2. **`market_type_general` is intentionally NOT a Pattern 81 lookup table.** Per the Pattern 81 §"When NOT to Apply (Keep CHECK)" criteria in `DEVELOPMENT_PATTERNS_V1.36.md`: `market_type_general` is a **closed enum tied to the pmxt #964 NormalizedMarket contract**; its values bind to code branches in matching, projection, and pricing modules; the open-set test fails (no future "4th market type" is expected as a data-only addition — a new market shape would require a code deploy regardless). Pattern 81 is for open canonical enums (sports, candidates, fighters, future event kinds) where new values land as INSERT rows; `market_type` is closed by the contract. The inline `CHECK (market_type_general IN ('binary','categorical','scalar'))` in the DDL above is the correct encoding. Do NOT introduce a `canonical_market_types` lookup table without first invalidating the closed-enum premise.
+2. **`market_type_general` is intentionally NOT a Pattern 81 lookup table.** Per the Pattern 81 §"When NOT to Apply (Keep CHECK)" criteria in `DEVELOPMENT_PATTERNS.md`: `market_type_general` is a **closed enum tied to the pmxt #964 NormalizedMarket contract**; its values bind to code branches in matching, projection, and pricing modules; the open-set test fails (no future "4th market type" is expected as a data-only addition — a new market shape would require a code deploy regardless). Pattern 81 is for open canonical enums (sports, candidates, fighters, future event kinds) where new values land as INSERT rows; `market_type` is closed by the contract. The inline `CHECK (market_type_general IN ('binary','categorical','scalar'))` in the DDL above is the correct encoding. Do NOT introduce a `canonical_market_types` lookup table without first invalidating the closed-enum premise.
 
 3. **`lifecycle_phase` is intentionally NOT on `canonical_markets`.** Galadriel proposed adding `lifecycle_phase VARCHAR(32) NOT NULL DEFAULT 'proposed'` during the session 73 council (citing per-platform divergence — e.g., a Polymarket replica `listed` while the Kalshi version is `suspended`). User adjudication: NO. Rationale — `canonical_markets` is the platform-agnostic identity layer for matching across platforms. Per-platform lifecycle divergence is precisely what the canonical tier is designed NOT to encode; Galadriel's example actually belongs on the platform `markets.status` column (which already exists), not the canonical tier. Encoding it here would break the abstraction. The three concerns are kept distinct on three columns:
    - **`canonical_events.lifecycle_phase`** — "is the bet still meaningful?" (event-level state machine; ships in Cohort 1 / Migration 0067).
@@ -17991,7 +17991,7 @@ One-way-door inventory: **Option B** for `temporal_alignment` is the only Phase-
 - ADR-119 — sibling (business-key cleanup + weather Phase 1)
 - ADR-120 (future) — Level A vs Level B entity abstraction axis codification
 - Pattern 79 — Tier-3 demotion idiom reused in 0086-0089
-- Pattern 80 (promoted in `DEVELOPMENT_PATTERNS_V1.38.md`) — SCD-2 Version-Stable Surrogate Identifiers (ADR-119 Part 1 origin)
+- Pattern 80 (promoted in `DEVELOPMENT_PATTERNS.md`, V1.38 era) — SCD-2 Version-Stable Surrogate Identifiers (ADR-119 Part 1 origin)
 - Pattern 81 (canonical in DEVELOPMENT_PATTERNS V1.38; v2.38 origin) — "Open canonical enum → lookup table over CHECK constraint" (Cohort 1 amendment origin; 4 lookup tables at ADR-118)
 - Pattern 82 (canonical in DEVELOPMENT_PATTERNS V1.38; v2.38 origin) — "CONSTRAINT TRIGGER for Polymorphic Typed Back-Reference" (Cohort 1 amendment origin; `enforce_canonical_entity_team_backref` template at Migration 0068; canonical template for Cohort 2+ polymorphic back-refs)
 - Issue #996 — ADR-118 Cohort 1 amendment tracking issue (8 user-adjudicated decisions; encoded in v2.38)
@@ -18091,7 +18091,7 @@ Each independently reversible. Test-fixture updates accompany migration (not fol
 
 `game_state_key`, `position_key`, `edge_key` follow `{PREFIX}-{id}` but serve different architectural purpose: SCD-2 tables represent logical entity as chain of rows (one per version), each with distinct `id`. External reference to "position 4821" must resolve to same logical position across version chain — changing `id` cannot provide. `_key` column supplies version-stable identity.
 
-**Any automated lint must gate on `row_current_ind` column presence.** Tables without SCD-2 markers have no legitimate need for version-stable-over-PK identifier; SCD-2 tables do. This is Pattern 80 (promoted to `DEVELOPMENT_PATTERNS_V1.38.md` alongside this ADR).
+**Any automated lint must gate on `row_current_ind` column presence.** Tables without SCD-2 markers have no legitimate need for version-stable-over-PK identifier; SCD-2 tables do. This is Pattern 80 (promoted to `DEVELOPMENT_PATTERNS.md` V1.38 alongside this ADR).
 
 Future Phase 2+ migration will rename these to `version_stable_id` for self-documenting naming; semantics preserved; no blast-radius work blocked.
 
@@ -18257,7 +18257,7 @@ User corrected an earlier misunderstanding: **Kalshi has comprehensive weather m
 - ADR-117 — series_key reclassification updates Tier taxonomy
 - ADR-116 — Part 1 implements Rule 2; SCD-2 exception amends Rule 2
 - ADR-089 — Dual-key pattern; SCD-2 surrogate is extension not contradiction
-- Pattern 80 (promoted in `DEVELOPMENT_PATTERNS_V1.38.md`) — SCD-2 Version-Stable Surrogate Identifiers; lint gate on `row_current_ind`
+- Pattern 80 (promoted in `DEVELOPMENT_PATTERNS.md`, V1.38 era) — SCD-2 Version-Stable Surrogate Identifiers; lint gate on `row_current_ind`
 - Isidore memo (session 70 design review) — audit origin
 - Round 3 synthesis (session 70 design review) — event-state architecture
 - Issue #496 — `_key` suffix history

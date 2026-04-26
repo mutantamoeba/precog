@@ -1394,7 +1394,7 @@ coverage_tiers:
 **Total ADRs catalogued in this index:** 105 (unique ADR-row count as of v1.27)
 **Highest ADR number assigned:** 119
 
-> **NOTE (v1.26 reconciliation):** The per-status (Accepted / Proposed / Rejected / Superseded) and per-phase sub-counts previously listed here had drifted to stale figures from the v1.22-v1.25 era (multiple version bumps without statistics recompute). They have been REMOVED rather than propagated further out of sync. For authoritative per-ADR status and phase metadata, consult the canonical `ARCHITECTURE_DECISIONS_V2.39.md` directly — that file is the single source of truth. Re-populating this statistics block with accurate aggregates is a separate follow-up; filing this would itself be Pattern 73 work (derive from canonical, don't maintain in two places).
+> **NOTE (v1.26 reconciliation):** The per-status (Accepted / Proposed / Rejected / Superseded) and per-phase sub-counts previously listed here had drifted to stale figures from the v1.22-v1.25 era (multiple version bumps without statistics recompute). They have been REMOVED rather than propagated further out of sync. For authoritative per-ADR status and phase metadata, consult the canonical `ARCHITECTURE_DECISIONS.md` directly — that file is the single source of truth. Re-populating this statistics block with accurate aggregates is a separate follow-up; filing this would itself be Pattern 73 work (derive from canonical, don't maintain in two places).
 
 ---
 
