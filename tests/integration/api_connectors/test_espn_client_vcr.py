@@ -30,7 +30,7 @@ Related Requirements:
     - REQ-TEST-002: Integration tests use real API fixtures (Pattern 22)
 
 Reference:
-    - Pattern 22 (CLAUDE.md Critical Pattern #7 + DEVELOPMENT_PATTERNS_V1.36.md)
+    - Pattern 22 (CLAUDE.md Critical Pattern #7 + DEVELOPMENT_PATTERNS.md)
     - GitHub Issue #180: ESPN E2E test edge cases (down: -1)
     - scripts/record_espn_cassettes.py: Cassette recording script
 """
