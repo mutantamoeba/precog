@@ -549,6 +549,48 @@ class TestRetireCanonicalEvent:
         assert "retired_at" in set_clause
         assert "updated_at" not in set_clause
 
+    @patch("precog.database.crud_canonical_events.get_cursor")
+    def test_retire_already_retired_event_returns_true_and_refreshes_timestamp(
+        self, mock_get_cursor
+    ):
+        """Re-retiring an already-retired row returns True and refreshes retired_at.
+
+        Pins the docstring claim: ``retire_canonical_event`` is idempotent in
+        effect -- retiring an already-retired row simply refreshes
+        ``retired_at`` to the current timestamp.  The SQL must NOT carry a
+        guard clause like ``WHERE id = %s AND retired_at IS NULL`` (which
+        would silently change rowcount=1 -> rowcount=0 for an already-retired
+        row, regressing this idempotency contract to "first retire wins").
+
+        Without this test, a future refactor that adds a "skip if already
+        retired" guard could merge silently -- the docstring would say one
+        thing, the implementation would do another, and callers depending
+        on the documented refresh-on-re-retire behavior would break in ways
+        that surface only at runtime.
+
+        At the unit-test level we cannot distinguish "row was already
+        retired" from "row was never retired" (we mock the cursor); the pin
+        is therefore on the SQL shape (no NULL-guard on retired_at) plus the
+        rowcount=1 -> True return contract.
+        """
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1  # PG returns rowcount=1 even for re-retire (no guard)
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = retire_canonical_event(7)
+
+        # rowcount=1 -> True (matches the documented idempotent behavior)
+        assert result is True
+
+        sql = mock_cursor.execute.call_args[0][0]
+        # The WHERE clause must NOT carry a NULL-guard on retired_at;
+        # case-insensitive check defends against minor SQL stylistic drift.
+        where_clause = sql.split("WHERE")[1] if "WHERE" in sql else ""
+        assert "retired_at is null" not in where_clause.lower()
+        # Positive shape pin: the WHERE is simply ``id = %s``
+        assert "id = %s" in where_clause
+
 
 # =============================================================================
 # get_canonical_event_domain_id_by_domain
