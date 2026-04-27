@@ -1,11 +1,16 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.41
+**Version:** 2.42
 **Last Updated:** April 26, 2026
 **Status:** ✅ Current
-**Supersedes:** V2.40 (deleted per supersede-and-delete convention; PR #979 / PR #1009 / PR #1018 precedent)
+**Supersedes:** V2.41 (deleted per supersede-and-delete convention; PR #979 / PR #1009 / PR #1018 / PR #1063 precedent)
 **Session:** 79
+**Changes in v2.42:**
+- **ADR-118 AUDIT-COLUMN CONVENTION RATIFICATION (Issue #1007, session 79):** Sub-amendment A. All canonical-tier tables carry `created_at TIMESTAMPTZ NOT NULL DEFAULT now()` (already shipped Cohorts 1-2 + slot 0071; ratified for forward consistency). Main tables carrying `updated_at` MUST install a BEFORE UPDATE trigger using a generic `set_updated_at()` function — a nullable `updated_at` without a trigger is a misleading tombstone, either actively maintained or removed. Pattern 83 candidate flagged for DEVELOPMENT_PATTERNS promotion ("Audit-column convention for canonical-tier tables — created_at always; updated_at only with trigger"). Trigger retrofit migration ships at **slot 0076+** (post-Cohort 3 close); see #1074.
+- **ADR-118 CANONICAL_EVENTS ON DELETE SEMANTICS (Issue #1004, session 79):** Sub-amendment B. `canonical_events.game_id` and `canonical_events.series_id` use `ON DELETE SET NULL` (was unspec'd / defaulted to `NO ACTION` in v2.38 DDL). Reconciles the ADR-118 v2.38 framing (canonical OUTLIVES platform deletion — see §"Context: three tiers of identity we do not yet express") with the FK behavior; current `NO ACTION` contradicts the framing. Carve-out: this sub-amendment ONLY covers `canonical_events.game_id`/`.series_id`. Other canonical-tier FKs retain their explicitly-spec'd ON DELETE clauses (e.g., `canonical_market_links.canonical_market_id ON DELETE RESTRICT`, `canonical_market_links.platform_market_id ON DELETE CASCADE` per Cohort 3 design ratified in v2.41). SET NULL migration ships at **slot 0076+** (possibly bundled with #1074); see #1075.
+- **Slot-ordering constraint:** v2.42 ships ADR amendment text only. Cohort 3 (slots 0071-0075 per v2.41 PR #1063) is binding; Alembic's linear `down_revision` chain prevents inserting new migrations between 0071 and 0072 without re-displacing Cohort 3. Both v2.42 sub-amendments therefore defer code to slot 0076+ (post-Cohort 3 close, ~session 83).
+- **Cross-references:** #1007 + #1004 (closed by v2.42 amendment text); #1074 + #1075 (slot 0076+ migration follow-ups); ADR-118 v2.38 §"Context: three tiers of identity we do not yet express" (canonical-outlives-platform framing); ADR-118 v2.39 (`canonical_markets` BEFORE UPDATE trigger template precedent — Cohort 2 amendment); #1018 (generic `set_updated_at()` hint).
 **Changes in v2.41:**
 - **ADR-118 COHORT 3 SLOT COUNT ADJUDICATION (session 78 council, session 79 codification):** The session 78 Cohort 3 design council surfaced a slot-count divergence between 4-slot (Galadriel + Elrond, preserved v2.40 plan) and 5-slot (Holden, Pattern 14 hygiene) framings. User adjudicated 5 slots (synthesis ESCALATE E1). Post-adjudication slot mapping (canonical home for the new mapping is in the inline v2.41 amendment paragraph below, NOT a rewrite of the v2.40 implementation table at lines ~17944-17948 — that table is retained as historical record per Pattern 73 SSOT discipline):
   - 0071 → `match_algorithm` standalone (Phase 1 seed `manual_v1` / `1.0.0`)
@@ -17652,6 +17657,40 @@ The v2.40 implementation table at lines ~17944-17948 is retained as the historic
 - `memory/design_review_cohort_3_elrond_memo.md` (long-term-architect)
 - `memory/design_review_cohort_3_synthesis.md` (38 LOCK / 9 ESCALATE; E1 user-adjudicated)
 - `memory/build_spec_0071_holden_memo.md` (slot 0071 build spec)
+
+##### v2.42 amendment — audit-column convention + canonical_events ON DELETE semantics (session 79)
+
+Two sub-amendments bundled in v2.42, both closing session 72 Glokta findings on Cohort 1 PRs (#1007 and #1004) that were filed for ADR-amendment consideration and parked until a natural amendment slot opened. Cohort 3 v2.41 codification (PR #1063) makes the natural slot: Cohort 1+2 has been ratified end-to-end, Cohort 3 is locked, and the next migration slot (0076+) is the right home for the implementing migration code. v2.42 ships the amendment text now while context is fresh; the migration code defers to slot 0076+ per the slot-ordering constraint.
+
+###### Sub-amendment A — audit-column convention ratification (#1007)
+
+**Statement.** All canonical-tier tables carry `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`. Already shipped end-to-end for Cohort 1 (Migrations 0067 + 0068) and Cohort 2 (Migration 0069) and the Cohort 3 first table (Migration 0071 `match_algorithm`); v2.42 ratifies the convention as canonical for forward consistency rather than treating it as per-cohort discretion.
+
+**Statement.** Main tables carrying an `updated_at` column MUST install a `BEFORE UPDATE` trigger that maintains it. The trigger uses a generic `set_updated_at()` PL/pgSQL function (one function, many triggers) rather than per-table inline trigger bodies. A nullable `updated_at` without a trigger is a misleading tombstone — readers cannot distinguish "row never updated" from "trigger missing"; either the column is actively maintained or it should not exist. v2.39 ratified the BEFORE UPDATE trigger pattern on `canonical_markets` as the **template** for full resolution; v2.42 codifies the rule as universal across canonical-tier main tables.
+
+**Forward-pointer.** Trigger retrofit migration ships at **slot 0076+** (post-Cohort 3 close, ~session 83). See **#1074** for migration-side spec (function definition, per-table CREATE TRIGGER, Pattern 82 V2 load-bearing test, idempotency + downgrade test plan). The slot-ordering constraint (Alembic linear `down_revision` chain, Cohort 3 v2.41 lock) prevents inserting between 0071 and 0072; the retrofit batches with #1075 candidates inside slot 0076+ at the implementing Builder's discretion.
+
+**Pattern 83 promotion candidate.** The audit-column convention codified here is a candidate for promotion to `docs/guides/DEVELOPMENT_PATTERNS.md` Pattern 83 in a future V1.40+ revision: "Audit-column convention for canonical-tier tables — `created_at` always; `updated_at` only with a generic `set_updated_at()` BEFORE UPDATE trigger." Promotion is deferred until at least one retrofit migration (#1074) has shipped to provide the canonical reference implementation.
+
+###### Sub-amendment B — canonical_events ON DELETE SET NULL (#1004)
+
+**Statement.** `canonical_events.game_id INTEGER NULL REFERENCES games(id)` ships with `ON DELETE SET NULL`. `canonical_events.series_id INTEGER NULL REFERENCES series(id)` ships with `ON DELETE SET NULL`. v2.38 DDL was silent on the ON DELETE clause; PostgreSQL defaulted to `NO ACTION`; Migration 0067 faithfully implemented the silent default. v2.42 corrects the defaulted-NO-ACTION behavior to explicit `SET NULL`.
+
+**Rationale.** The ADR-118 v2.38 framing (`§"Context: three tiers of identity we do not yet express"` — see also v2.38 prose at lines noted in the v2.38 amendment block) commits the canonical tier to OUTLIVE platform deletion: canonical rows are the cross-platform identity surface, platform rows are venue-scoped artifacts. The default `NO ACTION` behavior (silently inherited from a missing ON DELETE clause) blocks platform-row deletion while canonical references exist, which contradicts the framing. `SET NULL` reconciles them: a platform-row delete gracefully nulls the canonical-tier FK, the canonical row persists, and Phase 3 cross-platform reconciliation flows (Polymarket-class platforms, multi-platform matching) work as the framing promised. Pattern 73 SSOT pointer: the canonical-outlives-platform framing lives in v2.38 §"Context"; v2.42 sub-amendment B is the FK-level enforcement of that framing, not a re-statement of it.
+
+**Carve-out.** This sub-amendment is scoped ONLY to `canonical_events.game_id` and `canonical_events.series_id`. Other canonical-tier FKs have their ON DELETE clauses spec'd explicitly in their respective migrations and are NOT touched by v2.42:
+
+- `canonical_event_participants.canonical_event_id ON DELETE CASCADE` (Migration 0068 — participant rows die with their parent event by design)
+- `canonical_markets.canonical_event_id ON DELETE RESTRICT` (Migration 0069 — settlement-bearing markets must not silently disappear; v2.39 amendment ratified this asymmetry with `canonical_event_participants` CASCADE)
+- `canonical_market_links.canonical_market_id ON DELETE RESTRICT` (Cohort 3 design, v2.41 amendment lines ~17668-17678)
+- `canonical_market_links.platform_market_id ON DELETE CASCADE` (Cohort 3 design, v2.41 amendment lines ~17668-17678)
+- `canonical_match_log.link_id ON DELETE SET NULL` (Cohort 3 design, v2.41 amendment lines ~17682-17691 — preserves audit history when a link is deleted)
+
+**Forward-pointer.** SET NULL migration ships at **slot 0076+** (post-Cohort 3 close, ~session 83). See **#1075** for migration-side spec (ALTER TABLE DROP CONSTRAINT + ADD CONSTRAINT pair on `game_id` + `series_id`, integration test plan, downgrade test plan). The slot-ordering constraint defers the migration to 0076+; the implementing Builder may bundle with #1074 (sub-amendment A trigger retrofit) inside one slot 0076+ migration or split across two consecutive slots — bundling decision is at Builder discretion since both sub-amendments share the same scope (ALTER on canonical-tier tables).
+
+###### Slot-ordering constraint (why v2.42 is ADR-text-only)
+
+PR #1063 (session 79) ratified ADR-118 v2.41 with a binding 5-slot Cohort 3 plan (0071 `match_algorithm` shipped, 0072 `canonical_market_links`, 0073 `canonical_match_log`, 0074 `canonical_match_reviews` + `canonical_match_overrides`, 0075 `observation_source`). Alembic's linear `down_revision` chain prevents inserting new migrations between 0071 and 0072 without re-displacing the Cohort 3 plan, which would invalidate the v2.41 amendment less than a session after it was ratified. v2.42 therefore ships the amendment **text** at amendment-time-velocity (decisions captured while the Glokta findings are fresh in mind) and defers the migration code to slot 0076+ (the natural post-Cohort 3 home, ~session 83). The two follow-up issues (#1074 + #1075) carry the migration-side spec forward; v2.42 closes #1007 and #1004 as ADR-amendment requests, with the implementing migrations tracked separately.
 
 #### Matching infrastructure
 
