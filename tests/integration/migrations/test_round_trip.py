@@ -462,9 +462,10 @@ def _diff_snapshots(
     """Return a human-readable diff between two snapshots.
 
     Walks each section (tables / columns / constraints / indexes / triggers /
-    sequences) and emits added / removed entries.  Used in the assertion
-    failure message so a CI failure shows EXACTLY what drifted, rather than
-    relying on pytest's default-repr of two large dicts (which truncates).
+    functions / sequences) and emits added / removed entries.  Used in the
+    assertion failure message so a CI failure shows EXACTLY what drifted,
+    rather than relying on pytest's default-repr of two large dicts (which
+    truncates).
     """
     lines: list[str] = []
     for section in (
@@ -623,7 +624,7 @@ _REVISIONS_TO_TEST: list[str] = _get_revisions_to_test()
 
 @pytest.mark.parametrize("revision", _REVISIONS_TO_TEST)
 def test_round_trip_preserves_schema_for_revision(
-    db_pool: Any,
+    db_pool: Any,  # session-scoped fixture; initializes connection pool used by get_cursor()
     revision: str,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -632,7 +633,7 @@ def test_round_trip_preserves_schema_for_revision(
     For revision ``{revision}``:
         1. Precondition: DB is at head (verified via ``alembic_version``).
         2. Snapshot the schema (tables / columns / constraints / indexes /
-           triggers / sequences).
+           triggers / functions / sequences).
         3. ``downgrade(R.down_revision)`` — exercises R's ``downgrade()``
            step (plus any higher-revision downgrades on the way down).
         4. ``upgrade head`` — exercises R's ``upgrade()`` step (plus any
@@ -705,10 +706,6 @@ def test_round_trip_preserves_schema_for_revision(
     try:
         command.downgrade(cfg, down_target)
         command.upgrade(cfg, "head")
-    except Exception:
-        # Re-raise as-is — pytest will surface the Alembic exception type
-        # and traceback.  The autouse finalizer will attempt recovery.
-        raise
     finally:
         elapsed = time.perf_counter() - t_start
         # Per-test timing — visible in `pytest -v` output via
