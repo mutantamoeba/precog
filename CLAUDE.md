@@ -154,6 +154,10 @@ mock_client.get_markets.return_value = {
 
 Every task that adds a new production module OR major-enriches an existing module's surface MUST run a **Tier 0 design-stage P41 review** with **Miles + Uhura** BEFORE Builder dispatch — not after. Trigger: **S82**. Canonical rule lives in `protocols.md § Step 1c` and `three_tier_quality_model.md` (memory files). S82 (pre-build) and S60 (post-build) are sequential gates on the same module across its lifecycle, not redundant. Closes the #462 → #477 retrofit gap where modules shipped with correct behavior but zero production visibility.
 
+### 10. Append-Only Migration Files (Pattern 87) — never edit shipped migrations
+
+Once an Alembic migration file is merged to main, its file contents are **immutable**. No edits to migration code, seed values, docstrings, comments, or whitespace. Stale text in a shipped migration is corrected in the authority document for the decision (ADR amendment, DEVELOPMENT_PATTERNS revision) or in a subsequent migration's docstring — never in the shipped migration itself. Carve-out: migrations whose PR has not yet merged are editable freely (review-time edits are the intended surface). Canonical rule lives in `docs/guides/DEVELOPMENT_PATTERNS.md` Pattern 87 (V1.40+). Origin: session 79 PR #1063 — Glokta proposed a one-line forward-pointer comment in shipped Migration 0069; Ripley caught the proposal as itself violating the rule (which until now was project-folklore). Folklore promoted to Pattern to prevent the next reviewer from reasonably proposing the same edit.
+
 ---
 
 ## Repository Structure

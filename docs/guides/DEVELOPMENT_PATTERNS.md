@@ -1,13 +1,17 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.39
+**Version:** 1.40
 **Created:** 2025-11-13
 **Last Updated:** 2026-04-26
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.40:**
+- **Added Pattern 87: Append-Only Migration Files (ALWAYS Once a Migration is Committed to Main)** — codifies the rule that once an Alembic migration file is merged to main, its file contents are immutable. No edits to migration code, seed values, docstrings, or comments. The principle is structural: contributor dev DBs and CI ephemeral DBs have already executed the migration on its existing content; editing it creates ambiguity about what state any given DB is in (was your DB last migrated against the pre-edit text or the post-edit text? alembic_version doesn't know — only the file content does, and that content is now in flux). Stale text in a shipped migration is corrected in the canonical authority for that decision (ADR-118 amendments, DEVELOPMENT_PATTERNS revisions, or subsequent migration docstrings), not by editing the migration itself.
+- Origin: Session 79 PR #1063. Glokta's review proposed adding one-line forward-pointer comments to Migration 0069's docstring to reflect the v2.41 5-slot adjudication that displaced canonical_market_links from slot 0071 to slot 0072. Ripley caught Glokta's proposal as itself violating the append-only rule (the rule was project-folklore, not codified, so Glokta had no reference to cite against the proposal). Samwise correctly applied the rule via judgment to Migration 0070 (also stale post-v2.41) without proposing edits. Session 79 mid-session migration audit (Tyrion-frame, PM-direct) flagged the gap between "rule applied via judgment by Samwise" and "rule proposable for violation by Glokta" as the core failure mode — codifying the rule prevents the next reviewer/builder from reasonably proposing the same edit again. Closes Issue #1069 + naturally resolves #1064 (4-site forward-pointer cleanup → no-fix-per-Pattern-87 for the migration sites; ADR-side sweep already shipped in PR #1079).
+- Pair-with: Pattern 73 (Single Source of Truth — the canonical correction for stale migration text lives in the authority document for the decision, not in the migration); Pattern 62 (In-Repo Per-Migration Rationale Docs — when a migration's design is architecturally significant, the rationale lives in a companion `_rationale_*.md` doc, which IS editable; the migration code/docstring is not).
 **Changes in V1.39:**
 - **Added Pattern 86: Living-Doc Freshness Markers (ALWAYS for Living Canonical Docs Describing Moving Targets)** — codifies the HTML-comment freshness-marker shape (`<!-- FRESHNESS: alembic_head=0070, verified=2026-04-26, tables=51, migrations=69, last_changelog_migration=0070 -->`) every living canonical doc MUST carry near the top of the file. Without a concrete marker, "is this doc fresh?" has no answer; with one, the question reduces to a one-line comparison against source-of-truth. Pattern 86 is Pattern 73 (SSOT) applied to time: the canonical truth for a doc's freshness is the doc itself, and the marker is how the doc declares which version of truth it claims to represent.
 - Origin: `feedback_doc_freshness_markers.md` — session 36 origin (DATABASE_SCHEMA_SUMMARY V1.15 35-migration silent gap); recurrences sessions 50 + 75 + 76 + 77 culminating in the V2.0 → V2.1 rewrite (#897). DATABASE_SCHEMA_SUMMARY V2.1 (this PR) is the canonical-form demonstration.
@@ -12742,6 +12746,150 @@ source-of-truth at session-end.
 - Epic #1054 Phase 3 — forward-enforcement work (G1 hook widening +
   version-marker auto-bumper); marker is human-applied at session-end S80 +
   session-start step 5b until that ships
+
+---
+
+## Pattern 87: Append-Only Migration Files (ALWAYS Once a Migration is Committed to Main)
+
+**Status:** ALWAYS once a migration file's PR is merged to main. PROHIBITED for migrations whose content is in code review (carve-out below).
+
+### Rule
+
+Once an Alembic migration file is merged to main, its file contents are immutable.
+No edits to migration code, seed values, docstrings, comments, or import organization.
+
+If a shipped migration's text is stale (forward-references to a renumbered slot, an outdated comment, a typo that nobody noticed at review), the canonical correction lives in:
+
+1. The authority document for the decision (ADR-118 amendment for canonical-tier schema decisions; ADR-114 for source-tier; DEVELOPMENT_PATTERNS revision for cross-cutting rules)
+2. The docstring of a *subsequent* migration that addresses the displacement
+3. A companion `_rationale_*.md` doc per Pattern 62 (which IS editable; the migration is not)
+
+NEVER in the shipped migration itself.
+
+### Why
+
+Migrations have already run on contributor dev DBs and CI ephemeral DBs. Alembic
+records *which* migration ran (`alembic_version` table holds the head revision),
+not *what content* the migration had at the time. Editing a shipped migration
+creates an ambiguity that nothing in the toolchain detects: was your DB last
+migrated against the pre-edit text or the post-edit text? Two contributors
+running `alembic upgrade head` against the same `alembic_version` will get
+different schema state if one upgraded before the edit and one after. The
+ambiguity is silent — no error, no warning, no tooling surface — until a
+downstream test or production query notices the divergence.
+
+The displacement-bump pattern shipped in PR #1063 is the correct alternative:
+when canonical_market_links displaced from slot 0071 to slot 0072, the live
+references in `crud_canonical_markets.py` (production code, NOT migrations)
+were edited; the shipped Migrations 0069 and 0070 docstrings were left
+deliberately stale. Anyone chasing the stale forward-reference in 0069
+lands on ADR-118 v2.41 amendment, which has the canonical 5-slot mapping.
+
+### How to Apply
+
+Before editing a migration file, run the gate:
+
+```bash
+git log --oneline --all -- src/precog/database/alembic/versions/<migration>.py
+```
+
+If the file's first commit appears in `git log origin/main` (i.e., the
+migration's PR has merged), the file is APPEND-ONLY — close any open editor
+and find the canonical authority document instead. If the file's first
+commit is on a feature branch with no merged PR yet, edits are free (the
+carve-out below).
+
+For text that *needs* updating in a shipped migration's neighborhood:
+
+| Stale text location | Correct destination |
+|---|---|
+| Forward-reference to a renumbered migration slot | ADR amendment + subsequent migration's docstring |
+| Outdated rationale comment about a design choice | ADR amendment OR Pattern 62 companion `_rationale_*.md` |
+| Typo / clarity nit nobody caught at review | Leave it. The cost of "I read past a typo" is < the cost of contributor DB ambiguity |
+| Wrong cross-reference to a sibling migration | ADR amendment table that maps slot → table |
+| Seed value bug | NEW migration that updates the seed (UPDATE / DELETE+INSERT) — never edit the original |
+
+### Carve-Out
+
+A migration whose PR has not yet merged to main is editable freely. The
+append-only rule begins at merge, not at first commit. During code review,
+reviewers may request migration edits and Builders may apply them — that is
+the intended review surface. The rule fires the moment the PR's merge
+commit lands on main.
+
+### Anti-Pattern Examples
+
+#### Anti-Pattern 1: One-line forward-pointer comment in a shipped migration
+
+```python
+# WRONG — Glokta's proposed fix on PR #1063 (rejected):
+# 0069_canonical_markets_foundation.py
+"""
+... existing docstring ...
+
+NOTE (added 2026-04-26): canonical_market_links was displaced from slot 0071
+to slot 0072 by ADR-118 v2.41 (session 78 5-slot adjudication). See
+crud_canonical_markets.py for the live reference.
+"""
+```
+
+The "NOTE (added 2026-04-26)" header makes the violation visible — a one-line
+clarification IS still an edit to a shipped migration's text. Contributors
+who pulled the repo before this edit have a different 0069 docstring than
+contributors who pull after. Better: leave 0069 alone; let the chase land
+on ADR-118 v2.41.
+
+#### Anti-Pattern 2: Renumbering the migration file itself
+
+```python
+# WRONG — physically moving versions/0071_match_algorithm.py to 0072_match_algorithm.py
+# because "the original numbering was wrong"
+```
+
+Alembic's `down_revision` chain encodes the file numbering by content
+(`down_revision = "0070"`). Renumbering the file changes its `revision`
+identifier, which means `alembic_version` rows pointing at "0071" become
+orphaned. The ONLY safe way to "rename" a migration is a NEW migration that
+inherits from the old one and contains the corrected logic; the old one
+stays.
+
+#### Anti-Pattern 3: Reformatting a shipped migration's imports / spacing
+
+```bash
+# WRONG — running ruff format / isort on a shipped migration "for hygiene"
+ruff format src/precog/database/alembic/versions/0067_*.py
+```
+
+Whitespace edits are still edits. The migration's content has already run
+on contributor DBs; reformatted whitespace creates the same silent
+ambiguity as a code change. Pre-commit hooks must EXCLUDE
+`src/precog/database/alembic/versions/*` from any auto-formatter that
+runs after the file's PR merges.
+
+### Pair With Pattern 62 + Pattern 73
+
+Pattern 62 (In-Repo Per-Migration Rationale Docs) is the editable companion
+to the immutable migration: architecturally significant migrations get a
+`docs/database/migration_NNNN_rationale.md` doc that CAN be edited freely
+(it isn't an Alembic-tracked artifact). Pattern 87 says the migration
+itself is frozen; Pattern 62 says the rationale doc isn't. Use them
+together when a migration's design context evolves post-merge.
+
+Pattern 73 (Single Source of Truth) is the structural foundation: the
+canonical authority for a migration-design decision is the ADR (one
+location); the migration's docstring and the rationale doc both POINT to
+the ADR rather than restate it. When the ADR amends, only the ADR text
+moves — the migration docstring's pointer keeps resolving and stays
+immutable per Pattern 87.
+
+### Source
+
+- Issue #1069 — Pattern 87 promotion request (this PR)
+- Session 79 PR #1063 claude-review — Glokta's proposed forward-pointer comment caught by Ripley as itself violating the rule
+- Session 79 PR #1063 — Samwise's correct judgment-based application to Migration 0070 (left stale post-v2.41)
+- ADR-118 v2.41 amendment (session 78) + v2.42 amendment (session 79) — the canonical authority documents that absorb the corrections that would otherwise be applied to shipped migrations
+- Pattern 62 — In-Repo Per-Migration Rationale Docs (the editable companion)
+- Pattern 73 — Single Source of Truth (the structural foundation)
 
 ---
 
