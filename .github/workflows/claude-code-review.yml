@@ -1,42 +1,97 @@
 name: Claude Code Review
 
-on:
-  pull_request:
-    types: [opened, synchronize]
-    # Skip claude-code-review on docs-only and memory-only PRs.
-    # Reasoning (session 73 GHA-minutes reduction):
-    # - Doc-only PRs (e.g., ADR amendments, README fixes, version bumps) get
-    #   minimal signal from claude-review — most findings are cosmetic nitpicks
-    #   already caught by pre-commit doc-version + ADR-drift gates.
-    # - For mixed PRs (docs + code), the review still runs because the path
-    #   filter only excludes when EVERY changed file matches paths-ignore.
-    # - Per-PR savings: ~2 min per docs-only PR. Across a doc-heavy week
-    #   (e.g., session 73 had 4 doc-only PRs), this is ~10 min/week.
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
-      - 'memory/**'
-      - '_archive/**'
+# ============================================================================
+# WORKFLOW DESIGN: Trigger on CI/CD Pipeline success, not on every PR push.
+# ============================================================================
+#
+# Why workflow_run instead of pull_request:
+#   Previously this workflow ran on every `pull_request` opened/synchronize
+#   event. That meant claude-review fired even when CI was broken — wasting
+#   runner minutes + Anthropic API cost reviewing code that wouldn't merge
+#   anyway. PR #1084 (Cohort 3 slot 0072) hit this 3 times in one session
+#   across iterative pushes, motivating this rework.
+#
+#   The new shape watches the `CI/CD Pipeline` workflow (defined in ci.yml)
+#   and only fires claude-review when CI completes with conclusion=success
+#   AND the originating event was a pull_request (so direct pushes to main
+#   never trigger a review).
+#
+# Context lost by switching triggers (and how we recover it):
+#   - PR number: workflow_run events do NOT carry pull_request.number.
+#     We derive it via `gh pr list --head <branch>` in the "Get PR number"
+#     step below. If no open PR exists for the head branch (e.g., PR was
+#     already merged/closed by the time CI finished), we skip cleanly.
+#   - Checkout SHA: workflow_run runs against the default branch by default.
+#     We override `ref` to `github.event.workflow_run.head_sha` so we review
+#     the exact commit that passed CI — not the latest tip of the PR (which
+#     may have new pushes that haven't run CI yet).
+#   - Concurrency key: github.head_ref is empty on workflow_run events;
+#     we use github.event.workflow_run.head_branch instead.
+#
+# Tradeoffs accepted:
+#   - claude-review only ever sees CI-green commits. If CI is flaky and the
+#     author force-pushes a fix, the previous (flaky) review is cancelled by
+#     concurrency and the new one fires on the green SHA. This is a feature.
+#   - Slight latency increase: claude-review now waits for CI/CD Pipeline
+#     to finish (~3-5 min) instead of starting in parallel. Net-positive
+#     since we no longer review broken code.
+#   - paths-ignore is not supported on workflow_run triggers. We preserve
+#     the docs-skip behavior via an explicit "Skip on docs-only PR" step
+#     that diffs the PR's changed files (see step below).
+#
+# Historical note (session 73 GHA-minutes reduction):
+#   The original docs-only paths-ignore filter was added in session 73 to
+#   skip claude-review on doc-only PRs (~2 min saved per PR; ~10 min/week
+#   on doc-heavy weeks). That savings is preserved by the explicit
+#   docs-only skip step below — same behavior, different mechanism.
+# ============================================================================
 
-# Concurrency: cancel in-progress claude-review when a new PR push lands.
-# Latest push wins; stale reviews (which would post against an outdated diff)
-# never complete. Saves ~2 min per cancelled run on rapid-iteration PRs.
+on:
+  workflow_run:
+    workflows: ["CI/CD Pipeline"]
+    types: [completed]
+  # Manual escape hatch: maintainer can request a review on a CI-red PR
+  # by triggering this workflow from the Actions UI with the PR number.
+  # See feature/claude-review-after-ci-passes Ripley sentinel finding F2.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to review (manual override when CI is stuck red)"
+        required: true
+        type: string
+
+# Concurrency: cancel in-progress claude-review when a new CI run completes
+# for the same branch. Latest green commit wins; stale reviews (which would
+# post against an outdated diff) never complete. Saves ~2 min per cancelled
+# run on rapid-iteration PRs.
+#
+# Note: github.head_ref is empty on workflow_run events. Use
+# github.event.workflow_run.head_branch as the concurrency key instead.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+    # Only fire when:
+    #   - workflow_run path: the watched CI run succeeded AND was triggered
+    #     by a pull_request (skip direct pushes to main + skip CI failures).
+    #   - workflow_dispatch path: always fire (manual escape hatch).
+    #
+    # NOTE on `if:` syntax: do NOT wrap the expression in `${{ }}`. The
+    # `if:` key on a job/step auto-evaluates as a GitHub Actions expression;
+    # wrapping in `${{ }}` is a documented footgun where the literal string
+    # `${{ ... }}` evaluates as truthy regardless of the inner boolean,
+    # causing the job to run when it should skip. See Ripley sentinel F1.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'pull_request')
 
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write    # gh pr comment requires write (Ripley F4)
       issues: read
       id-token: write
 
@@ -44,16 +99,93 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          # workflow_run path: review the exact commit that passed CI, not
+          # the PR tip (which may have newer pushes not yet validated by CI).
+          # workflow_dispatch path: workflow_run.head_sha is empty; fall back
+          # to the default branch checkout (gh pr diff handles the diff).
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 1
+
+      - name: Get PR number
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISPATCH_PR: ${{ github.event.inputs.pr_number }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          # workflow_dispatch: PR number provided as input.
+          if [ -n "$DISPATCH_PR" ]; then
+            echo "number=$DISPATCH_PR" >> "$GITHUB_OUTPUT"
+            echo "Manual dispatch: reviewing PR #$DISPATCH_PR"
+            exit 0
+          fi
+          # workflow_run: derive PR number from head_branch + head_sha.
+          # Disambiguate by SHA (Ripley F3) — `gh pr list --head <branch>`
+          # alone can return a different PR if a fork uses the same branch
+          # name. Matching headRefOid against the workflow_run's head_sha
+          # guarantees we comment on the exact PR whose CI just succeeded.
+          PR_NUMBER=$(gh pr list \
+            --head "$HEAD_BRANCH" \
+            --state open \
+            --json number,headRefOid \
+            --jq ".[] | select(.headRefOid == \"$HEAD_SHA\") | .number" \
+            | head -1)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No open PR found for head_branch=$HEAD_BRANCH head_sha=$HEAD_SHA — skipping"
+            echo "(Note: --state open intentionally skips PRs that auto-merged before CI completed.)"
+            exit 0
+          fi
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      # Preserve the session-73 docs-only skip behavior. workflow_run does
+      # not support paths-ignore, so we diff the PR's changed files and
+      # exit early if every file matches a docs/memory/archive pattern.
+      #
+      # Patterns mirror the original paths-ignore list:
+      #   docs/**, **.md, memory/**, _archive/**
+      #
+      # As before, mixed PRs (docs + code) still get reviewed because the
+      # check requires EVERY file to match an ignore pattern.
+      - name: Skip on docs-only PR
+        id: docs_check
+        if: steps.pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FILES=$(gh pr diff "${{ steps.pr.outputs.number }}" --name-only)
+          if [ -z "$FILES" ]; then
+            # Empty diff (merge commit only, or transient API blip).
+            # Skip rather than burn API minutes reviewing nothing (Ripley F7).
+            echo "No changed files reported — skipping review"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          NON_DOCS=0
+          while IFS= read -r f; do
+            case "$f" in
+              docs/*|memory/*|_archive/*) ;;
+              *.md) ;;
+              *) NON_DOCS=1; break ;;
+            esac
+          done <<< "$FILES"
+          if [ "$NON_DOCS" -eq 0 ]; then
+            echo "All changed files match docs-only patterns — skipping claude-review"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "PR contains non-docs changes — proceeding with review"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Run Claude Code Review
         id: claude-review
+        if: steps.pr.outputs.number != '' && steps.docs_check.outputs.skip != 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
+            PR NUMBER: ${{ steps.pr.outputs.number }}
 
             Please review this pull request and provide feedback on:
             - Code quality and best practices
