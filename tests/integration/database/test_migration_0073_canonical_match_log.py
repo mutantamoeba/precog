@@ -62,6 +62,15 @@ from tests.integration.database._canonical_event_helpers import (
     _cleanup_canonical_event,
     _seed_canonical_event,
 )
+from tests.integration.database._canonical_market_helpers import (
+    _cleanup_canonical_market,
+    _cleanup_canonical_market_link,
+    _cleanup_platform_market,
+    _get_manual_v1_algorithm_id,
+    _seed_canonical_market,
+    _seed_canonical_market_link,
+    _seed_platform_market,
+)
 
 pytestmark = [pytest.mark.integration]
 
@@ -98,103 +107,6 @@ _MATCH_LOG_COLS: list[tuple[str, str, str, str | None, int | None]] = [
 # =============================================================================
 # Seed helpers.
 # =============================================================================
-
-
-def _seed_canonical_market(canonical_event_id: int, suffix: str) -> int:
-    """Seed a canonical_markets row to back canonical_match_log.canonical_market_id."""
-    nk_hash = f"TEST-0073-cm-{suffix}".encode()
-    with get_cursor(commit=True) as cur:
-        cur.execute(
-            """
-            INSERT INTO canonical_markets (
-                canonical_event_id, market_type_general, natural_key_hash
-            ) VALUES (%s, 'binary', %s)
-            RETURNING id
-            """,
-            (canonical_event_id, nk_hash),
-        )
-        return int(cur.fetchone()["id"])
-
-
-def _cleanup_canonical_market(canonical_market_id: int) -> None:
-    """Remove a canonical_markets row seeded by _seed_canonical_market."""
-    with get_cursor(commit=True) as cur:
-        cur.execute(
-            "DELETE FROM canonical_markets WHERE id = %s",
-            (canonical_market_id,),
-        )
-
-
-def _seed_platform_market(suffix: str) -> int:
-    """Seed a platform markets row."""
-    with get_cursor(commit=True) as cur:
-        cur.execute(
-            """
-            INSERT INTO markets (
-                platform_id, event_id, external_id, ticker, title,
-                market_type, status, market_key
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """,
-            (
-                "kalshi",
-                None,
-                f"TEST-0073-mkt-EXT-{suffix}",
-                f"TEST-0073-MKT-{suffix}",
-                f"Migration 0073 platform market test ({suffix})",
-                "binary",
-                "open",
-                f"TEMP-{uuid.uuid4()}",
-            ),
-        )
-        return int(cur.fetchone()["id"])
-
-
-def _cleanup_platform_market(platform_market_id: int) -> None:
-    """Remove a platform markets row."""
-    with get_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM markets WHERE id = %s", (platform_market_id,))
-
-
-def _seed_canonical_market_link(
-    canonical_market_id: int, platform_market_id: int, algorithm_id: int
-) -> int:
-    """Seed an active canonical_market_links row to back link_id / prior_link_id FKs."""
-    with get_cursor(commit=True) as cur:
-        cur.execute(
-            """
-            INSERT INTO canonical_market_links (
-                canonical_market_id, platform_market_id, link_state,
-                confidence, algorithm_id, decided_by
-            ) VALUES (%s, %s, 'active', 1.000, %s, %s)
-            RETURNING id
-            """,
-            (canonical_market_id, platform_market_id, algorithm_id, "system:test"),
-        )
-        return int(cur.fetchone()["id"])
-
-
-def _cleanup_canonical_market_link(link_id: int) -> None:
-    """Remove a canonical_market_links row."""
-    with get_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM canonical_market_links WHERE id = %s", (link_id,))
-
-
-def _get_manual_v1_algorithm_id() -> int:
-    """Look up the seeded match_algorithm.id for ('manual_v1', '1.0.0')."""
-    with get_cursor() as cur:
-        cur.execute(
-            """
-            SELECT id FROM match_algorithm
-            WHERE name = 'manual_v1' AND version = '1.0.0'
-            """
-        )
-        row = cur.fetchone()
-    assert row is not None, (
-        "Pre-condition: match_algorithm seed missing — Migration 0071 should "
-        "have populated ('manual_v1', '1.0.0')"
-    )
-    return int(row["id"])
 
 
 def _insert_log_row(

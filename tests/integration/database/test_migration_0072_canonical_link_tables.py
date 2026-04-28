@@ -56,6 +56,13 @@ from tests.integration.database._canonical_event_helpers import (
     _cleanup_canonical_event,
     _seed_canonical_event,
 )
+from tests.integration.database._canonical_market_helpers import (
+    _cleanup_canonical_market,
+    _cleanup_platform_market,
+    _get_manual_v1_algorithm_id,
+    _seed_canonical_market,
+    _seed_platform_market,
+)
 
 pytestmark = [pytest.mark.integration]
 
@@ -106,62 +113,6 @@ _EVENT_LINKS_COLS: list[tuple[str, str, str, str | None, int | None]] = [
 # =============================================================================
 
 
-def _seed_canonical_market(canonical_event_id: int, suffix: str) -> int:
-    """Seed a canonical_markets row to back canonical_market_links.canonical_market_id."""
-    nk_hash = f"TEST-0072-cm-{suffix}".encode()
-    with get_cursor(commit=True) as cur:
-        cur.execute(
-            """
-            INSERT INTO canonical_markets (
-                canonical_event_id, market_type_general, natural_key_hash
-            ) VALUES (%s, 'binary', %s)
-            RETURNING id
-            """,
-            (canonical_event_id, nk_hash),
-        )
-        return int(cur.fetchone()["id"])
-
-
-def _cleanup_canonical_market(canonical_market_id: int) -> None:
-    """Remove a canonical_markets row seeded by _seed_canonical_market."""
-    with get_cursor(commit=True) as cur:
-        cur.execute(
-            "DELETE FROM canonical_markets WHERE id = %s",
-            (canonical_market_id,),
-        )
-
-
-def _seed_platform_market(suffix: str) -> int:
-    """Seed a platform markets row to back canonical_market_links.platform_market_id."""
-    with get_cursor(commit=True) as cur:
-        cur.execute(
-            """
-            INSERT INTO markets (
-                platform_id, event_id, external_id, ticker, title,
-                market_type, status, market_key
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """,
-            (
-                "kalshi",
-                None,
-                f"TEST-0072-mkt-EXT-{suffix}",
-                f"TEST-0072-MKT-{suffix}",
-                f"Migration 0072 platform market test ({suffix})",
-                "binary",
-                "open",
-                f"TEMP-{uuid.uuid4()}",
-            ),
-        )
-        return int(cur.fetchone()["id"])
-
-
-def _cleanup_platform_market(platform_market_id: int) -> None:
-    """Remove a platform markets row seeded by _seed_platform_market."""
-    with get_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM markets WHERE id = %s", (platform_market_id,))
-
-
 def _seed_platform_event(suffix: str) -> int:
     """Seed a platform events row to back canonical_event_links.platform_event_id."""
     with get_cursor(commit=True) as cur:
@@ -187,23 +138,6 @@ def _cleanup_platform_event(platform_event_id: int) -> None:
     """Remove a platform events row seeded by _seed_platform_event."""
     with get_cursor(commit=True) as cur:
         cur.execute("DELETE FROM events WHERE id = %s", (platform_event_id,))
-
-
-def _get_manual_v1_algorithm_id() -> int:
-    """Look up the seeded match_algorithm.id for ('manual_v1', '1.0.0')."""
-    with get_cursor() as cur:
-        cur.execute(
-            """
-            SELECT id FROM match_algorithm
-            WHERE name = 'manual_v1' AND version = '1.0.0'
-            """
-        )
-        row = cur.fetchone()
-    assert row is not None, (
-        "Pre-condition: match_algorithm seed missing — Migration 0071 should "
-        "have populated ('manual_v1', '1.0.0')"
-    )
-    return int(row["id"])
 
 
 # =============================================================================
