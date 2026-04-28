@@ -462,14 +462,16 @@ def test_event_links_algorithm_id_fk_exists(db_pool: Any) -> None:
 
 
 def test_market_links_canonical_market_delete_restrict_fires(db_pool: Any) -> None:
-    """DELETE FROM canonical_markets while a link exists raises RestrictViolation.
+    """DELETE FROM canonical_markets while a link exists raises FK-violation class.
 
     L3 behavioral proof: settlement-bearing canonical markets must not be
     deletable while linked rows still exist.  Operator must retire the link
-    first.  PostgreSQL's RESTRICT FK action surfaces as
-    ``psycopg2.errors.RestrictViolation`` (SQLSTATE 23001), distinct from
-    the generic ``ForeignKeyViolation`` (SQLSTATE 23503) which fires for
-    NO ACTION + check-time deferred violations.
+    first.  Caught as the tuple ``(ForeignKeyViolation, RestrictViolation)``
+    for parity with sibling RESTRICT tests in migrations 0057 + 0063.  In
+    practice PostgreSQL surfaces ``ON DELETE RESTRICT`` as SQLSTATE 23503
+    (``foreign_key_violation``); the tuple form absorbs SQLSTATE 23001
+    (``restrict_violation``) defensively in case future PG versions or
+    constraint shapes route the violation through the alternate class.
     """
     suffix = uuid.uuid4().hex[:8]
     seeded_event_id = _seed_canonical_event(suffix)
@@ -492,8 +494,11 @@ def test_market_links_canonical_market_delete_restrict_fires(db_pool: Any) -> No
             )
             link_id = cur.fetchone()["id"]
 
-        # DELETE on canonical_markets must raise RestrictViolation.
-        with pytest.raises(psycopg2.errors.RestrictViolation):
+        # DELETE on canonical_markets must raise FK-violation class.
+        # Tuple form matches sibling RESTRICT tests in 0057 + 0063 (see docstring).
+        with pytest.raises(
+            (psycopg2.errors.ForeignKeyViolation, psycopg2.errors.RestrictViolation)
+        ):
             with get_cursor(commit=True) as cur:
                 cur.execute("DELETE FROM canonical_markets WHERE id = %s", (seeded_market_id,))
     finally:
@@ -550,11 +555,13 @@ def test_market_links_platform_market_delete_cascades_link(db_pool: Any) -> None
 
 
 def test_event_links_canonical_event_delete_restrict_fires(db_pool: Any) -> None:
-    """DELETE FROM canonical_events while a link exists raises RestrictViolation.
+    """DELETE FROM canonical_events while a link exists raises FK-violation class.
 
     Parallel to ``test_market_links_canonical_market_delete_restrict_fires`` —
-    same RESTRICT FK action; same ``psycopg2.errors.RestrictViolation``
-    (SQLSTATE 23001) surface; distinct from generic ``ForeignKeyViolation``.
+    same ``ON DELETE RESTRICT`` FK action; same tuple form
+    ``(ForeignKeyViolation, RestrictViolation)`` for sibling parity with
+    migrations 0057 + 0063.  See sibling test for the full SQLSTATE
+    23001-vs-23503 rationale.
     """
     suffix = uuid.uuid4().hex[:8]
     seeded_event_id = _seed_canonical_event(suffix)
@@ -575,7 +582,9 @@ def test_event_links_canonical_event_delete_restrict_fires(db_pool: Any) -> None
             )
             link_id = cur.fetchone()["id"]
 
-        with pytest.raises(psycopg2.errors.RestrictViolation):
+        with pytest.raises(
+            (psycopg2.errors.ForeignKeyViolation, psycopg2.errors.RestrictViolation)
+        ):
             with get_cursor(commit=True) as cur:
                 cur.execute("DELETE FROM canonical_events WHERE id = %s", (seeded_event_id,))
     finally:
