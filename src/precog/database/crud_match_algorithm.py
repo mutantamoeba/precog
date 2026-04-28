@@ -16,12 +16,17 @@ Tables covered:
 
 Naming note (no ``canonical_`` prefix — deliberate):
     ``match_algorithm`` is a **foundation** lookup table consumed BY the
-    canonical layer, not a member of the canonical-tier surface itself.
-    Mirrors the Cohort 1 ``canonical_event_domains`` / ``canonical_event_
-    types`` lookup naming where the lookup table itself is canonical-
-    namespaced because it scopes canonical-tier columns; ``match_algorithm``
-    has no equivalent scope-binding to a canonical-tier column (it is
-    referenced from link tables in Cohort 3+).  Spec memo § 5 row 3 is
+    canonical layer, not a member of the canonical-tier surface itself —
+    it is referenced FROM canonical-tier tables (``canonical_market_links``,
+    ``canonical_event_links``, ``canonical_match_log``), not a canonical-tier
+    identity table itself.  Contrast with the Cohort 1 ``canonical_event_
+    domains`` / ``canonical_event_types`` lookups, which ARE canonical-tier
+    identity tables: their ``canonical_`` prefix scopes canonical-tier
+    columns (``canonical_events.event_domain_id`` /
+    ``canonical_events.event_type_id``) and the rows themselves are part of
+    the canonical-tier identity surface.  ``match_algorithm`` has no
+    equivalent scope-binding to a canonical-tier column — it scopes the
+    matching machinery, not the identity surface.  Spec memo § 5 row 3 is
     explicit on this naming call.
 
 Critical Pattern #6 (Immutable Versioning) — load-bearing:
