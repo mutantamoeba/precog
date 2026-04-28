@@ -326,6 +326,17 @@ def test_duplicate_name_version_insert_raises_unique_violation(db_pool: Any) -> 
     This is the affirmative behavioral proof that the constraint is the
     single source of truth for ``(name, version)`` uniqueness — not just
     seed discipline.
+
+    Implicit dependency on ``get_cursor`` rollback-on-exception semantics:
+    after the UniqueViolation fires, this test relies on
+    ``get_cursor.__exit__`` rolling back the aborted transaction so that
+    subsequent test fixtures see a clean connection state.  If a future
+    refactor of ``connection.py`` changes that behavior (e.g., suppresses
+    the exception or omits the rollback), this test will appear to pass
+    while leaving the session in an aborted state — manifesting as
+    confusing ``InFailedSqlTransaction`` errors in the next test in the
+    module.  The rollback discipline is behavioral, not assertion-pinned;
+    flagged here so a future refactor surfaces the dependency.
     """
     # Attempt a duplicate INSERT without ON CONFLICT — must raise.
     with pytest.raises(psycopg2.errors.UniqueViolation):

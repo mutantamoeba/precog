@@ -153,8 +153,7 @@ class TestCreateCanonicalEventParticipant:
         params = mock_cursor.execute.call_args[0][1]
         assert params[3] == 10  # sequence_number
 
-    @patch("precog.database.crud_canonical_event_participants.get_cursor")
-    def test_sequence_number_no_default_at_python_layer(self, mock_get_cursor):
+    def test_sequence_number_no_default_at_python_layer(self):
         """sequence_number is REQUIRED at the Python signature -- no default.
 
         Calling create_canonical_event_participant() without sequence_number
@@ -162,8 +161,12 @@ class TestCreateCanonicalEventParticipant:
         Python layer; the DB layer also enforces NOT NULL with no DEFAULT
         per Migration 0068, but the Python signature is the first line of
         defense (Glokta carry-forward #5).
+
+        No ``@patch`` decorator: TypeError fires at Python's call-dispatch
+        layer (signature mismatch) BEFORE the function body runs, so
+        ``get_cursor`` is never reached and a mock would be misleading
+        ceremony.
         """
-        # No mock setup needed -- we expect TypeError BEFORE any DB call.
         with pytest.raises(TypeError):
             create_canonical_event_participant(  # type: ignore[call-arg]
                 canonical_event_id=42,
@@ -171,8 +174,6 @@ class TestCreateCanonicalEventParticipant:
                 role_id=1,
                 # sequence_number intentionally omitted
             )
-        # Verify the DB was not touched
-        mock_get_cursor.assert_not_called()
 
     @patch("precog.database.crud_canonical_event_participants.get_cursor")
     def test_returning_projects_all_participant_columns(self, mock_get_cursor):
@@ -419,3 +420,27 @@ class TestGetCanonicalParticipantRoleIdByDomainAndRole:
         # Must use IS NULL, never equality with NULL
         assert "domain_id IS NULL" in sql
         assert "domain_id = %s" not in sql  # equality form must be absent in this branch
+
+    @patch("precog.database.crud_canonical_event_participants.fetch_one")
+    def test_non_null_domain_query_uses_equality_not_is_null(self, mock_fetch_one):
+        """Non-NULL-domain query MUST use ``= %s`` not ``IS NULL``.
+
+        Symmetric counterpart to ``test_null_domain_query_does_not_use_
+        equality``: when ``domain_id`` is provided as an integer, the
+        implementation MUST emit the parameterized equality form
+        (``WHERE domain_id = %s``) and MUST NOT emit ``IS NULL`` (which
+        would never match a real seeded row, silently returning None for
+        every domain-scoped role lookup).  Without this symmetric pin, a
+        future refactor that collapses the if/else branch could regress
+        the equality side undetected — the existing NULL-branch test
+        would still pass, but every domain-scoped lookup in production
+        would silently return None.
+        """
+        mock_fetch_one.return_value = None
+
+        get_canonical_participant_role_id_by_domain_and_role(1, "home")
+
+        sql = mock_fetch_one.call_args[0][0]
+        # Must use = %s, never IS NULL
+        assert "domain_id = %s" in sql
+        assert "domain_id IS NULL" not in sql  # NULL form must be absent in this branch

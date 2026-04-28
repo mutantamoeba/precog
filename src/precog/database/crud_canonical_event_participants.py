@@ -287,9 +287,7 @@ def get_canonical_event_participant_by_id(
         Lookup by surrogate PK is the cheapest path (single B-tree probe on
         the primary key).  For lookup by canonical (event, role, sequence)
         natural identity, use
-        ``get_canonical_event_participants_by_event_and_role()`` (or the
-        composite-natural-key probe).  For listing all participants of an
-        event, see ``list_canonical_event_participants_by_event()``.
+        ``get_canonical_event_participant_by_natural_key()``.
 
     Reference:
         - Migration 0068 (table DDL)
