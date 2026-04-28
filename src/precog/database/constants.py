@@ -232,3 +232,78 @@ covering every conceivable origin of a match decision); a lookup table is
 not warranted — see ``Migration 0073`` docstring for the explicit carve-
 out rationale.
 """
+
+
+PHASE_1_SOURCE_KEYS: Final[tuple[str, ...]] = ("espn", "kalshi", "manual")
+"""Phase 1 baseline source_key values for ``observation_source``.
+
+Authoritative per ADR-118 v2.40 lines 17785-17791 + line 18006 (canonical
+seed list) + slot 0075 build spec § 4 (Phase 1 baseline = ``espn``,
+``kalshi``, ``manual``).
+
+Migration 0075 seeds these three rows into the ``observation_source``
+lookup table.  Future sources (``noaa``, ``bls``, ``fivethirtyeight``,
+etc.) extend the lookup table via INSERT seeds in their cohort-of-origin
+migrations (Phase 3+ data-source-expansion territory).
+
+**Documentation-not-enforcement framing (Pattern 81 lookup-not-CHECK):**
+Unlike ``LINK_STATE_VALUES`` / ``ACTION_VALUES`` which back DDL CHECK
+constraints with closed-enum semantics, ``observation_source.source_key``
+has NO CHECK constraint by design — it is an OPEN ENUM encoded as a
+lookup table per Pattern 81.  This Python tuple documents the Phase 1
+baseline at code level (so test code + CRUD code can reference the
+canonical Phase 1 set as Pattern 73 SSOT real-guard) but is NOT a closed
+enforcement set.  CRUD code (when it ships in Cohort 5+) will likely
+treat ``source_key`` as opaque text and not validate against this tuple.
+
+Per CLAUDE.md Critical Pattern #8 (Pattern 73 SSOT): test code uses this
+constant in real-guard validation against the seeded rows (the
+``test_observation_source_phase_1_seeds_present`` integration test asserts
+all three keys round-trip through the lookup table).
+
+Pattern 81 lookup convention: future sources extend by INSERT seeds in
+their cohort-of-origin migrations, never by ALTER TABLE.  Same shape as
+``match_algorithm`` slot 0071 — ``match_algorithm`` is the precursor
+that justifies Pattern 81's existence, and ``observation_source`` is its
+sibling lookup-table peer.
+"""
+
+
+SOURCE_KIND_VALUES: Final[tuple[str, ...]] = (
+    "api",
+    "scrape",
+    "manual",
+    "derived",
+)
+"""Phase 1 baseline source_kind values for ``observation_source``.
+
+Authoritative per ADR-118 v2.40 lines 17785-17791 (DDL example values) +
+slot 0075 build spec § 3.
+
+The four values document the Phase 1 ingestion-mechanism vocabulary:
+
+    ``api``      — pulled via authenticated API (e.g., ``espn``, ``kalshi``).
+    ``scrape``   — pulled via HTML scraping or undocumented endpoint.
+    ``manual``   — human-entered observation (e.g., ``manual`` source).
+    ``derived``  — synthesized from other observations (e.g., a rolling
+                   average over an upstream API source).
+
+**Documentation-not-enforcement framing (Pattern 81 lookup-not-CHECK):**
+Unlike ``LINK_STATE_VALUES`` / ``ACTION_VALUES`` which back DDL CHECK
+constraints with closed-enum semantics, ``observation_source.source_kind``
+has NO CHECK constraint by design — it is an OPEN ENUM encoded as a
+lookup table per Pattern 81.  Future kinds (e.g., ``streaming``,
+``webhook``) extend this column via new seed values in cohort-of-origin
+migrations, never by ALTER TABLE.  This Python tuple is the documented
+anchor at code level, NOT a closed enforcement set.
+
+Per CLAUDE.md Critical Pattern #8 (Pattern 73 SSOT): when CRUD code
+ships in Cohort 5+, the canonical observation pipeline can reference
+this constant as the documented Phase 1 baseline; runtime validation
+against the lookup table itself (``SELECT source_kind FROM
+observation_source WHERE source_key = ?``) is the authoritative source.
+
+Pattern 81 lookup convention: same shape as ``match_algorithm`` slot
+0071 — ``observation_source`` is the lookup-table sibling for ingestion
+sources; future kinds extend by INSERT seeds, never by CHECK ALTER.
+"""
