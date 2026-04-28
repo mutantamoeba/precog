@@ -120,3 +120,115 @@ Per CLAUDE.md Critical Pattern #8 (Pattern 73 SSOT): when slot 0074
 ships ``canonical_match_overrides``, its CRUD module + tests + state-
 machine code MUST import from this constant rather than hardcoding.
 """
+
+
+ACTION_VALUES: Final[tuple[str, ...]] = (
+    "link",  # initial active link created
+    "unlink",  # active link transitioned to retired
+    "relink",  # retired link re-activated (ABA path)
+    "quarantine",  # active link transitioned to quarantined
+    "override",  # human override row created (in canonical_match_overrides)
+    "review_approve",  # canonical_match_reviews row transitioned to 'approved'
+    "review_reject",  # canonical_match_reviews row transitioned to 'rejected'
+)
+"""Canonical 7-value vocabulary for ``canonical_match_log.action``.
+
+Authoritative per ADR-118 v2.41 amendment + Cohort 3 design council L11 +
+session-80 PM adjudication of Open Item B (Uhura logging-frame argument:
+UNIFIED SHAPE > NORMALIZED SHAPE for the audit ledger — the log carries
+review/override actions alongside link-state-transition actions so an
+operator querying "everything that touched this platform_market" gets a
+single chronological stream).
+
+Migration 0073 enforces this list at the DDL layer via an inline CHECK
+constraint on ``canonical_match_log.action``.  Adding a new action requires
+lockstep update of both this constant AND a migration ALTERing the CHECK
+constraint — drift between Python and DDL would produce silent audit-
+ledger bugs (a CRUD-side write of an unknown action would be rejected by
+DDL but pass Python validation, or vice versa).
+
+Action semantics (S82 council Section 4 + slot 0073 build spec § 2):
+    ``link``           — initial ``active`` link inserted into
+                         canonical_market_links.  Pairs 1:1 with the link
+                         table INSERT in the slot-0073 two-table-write.
+    ``unlink``         — existing ``active`` link transitioned to
+                         ``retired`` via ``crud_canonical_market_links.
+                         retire_link()``.
+    ``relink``         — previously ``retired`` link re-activated (the ABA
+                         path: A → retire → B → retire → A again).  The
+                         re-activation is a fresh ``active`` row, but the
+                         log row's ``prior_link_id`` points to the
+                         predecessor for audit traceability.
+    ``quarantine``     — ``active`` link transitioned to ``quarantined``
+                         (algorithm-flagged uncertainty pending review).
+    ``override``       — human override row created in
+                         ``canonical_match_overrides`` (slot 0074 territory).
+                         Logged here for unified audit-stream visibility;
+                         the log row carries the override's polarity in
+                         ``features`` JSONB, not in a discriminator column.
+    ``review_approve`` — ``canonical_match_reviews`` row transitioned to
+                         ``approved`` (slot 0074 territory).
+    ``review_reject``  — ``canonical_match_reviews`` row transitioned to
+                         ``rejected`` (slot 0074 territory).
+
+Per CLAUDE.md Critical Pattern #8 (Pattern 73 SSOT): the
+``crud_canonical_match_log.append_match_log_row()`` CRUD function uses
+this constant in *real-guard* validation (not side-effect-only import) —
+``if action not in ACTION_VALUES: raise ValueError(...)``.  This is the
+#1085-finding-#2 strengthening of the slot-0072 ``LINK_STATE_VALUES``
+side-effect-only convention: real-guard usage turns a documentation
+cite into an executable contract.
+
+Pattern 81 carve-out: this is intentionally NOT a lookup table.  The
+action set is closed (every value binds to code branches per Pattern 81 §
+"When NOT to Apply"); same carve-out rationale as ``LINK_STATE_VALUES``.
+See ``Migration 0073`` docstring for the full Pattern 81 non-application
+explanation.
+"""
+
+
+DECIDED_BY_PREFIXES: Final[tuple[str, ...]] = (
+    "human:",
+    "service:",
+    "system:",
+)
+"""Canonical 3-prefix vocabulary for ``decided_by`` columns on
+``canonical_match_log`` + ``canonical_market_links`` + ``canonical_event_links``.
+
+Authoritative per ADR-118 v2.41 amendment + Cohort 3 design council L24 +
+session-80 Uhura S82 Builder consideration #5 (decided_by Pattern 73 SSOT
+pointer).
+
+The ``decided_by`` column is ``VARCHAR(64) NOT NULL`` on all three tables;
+a DDL CHECK cannot enforce free-text format (string-format validation is
+Pattern 81 non-application territory and overkill for a free-text actor
+field), so the discipline lives at THIS constant + the convention in
+``crud_canonical_match_log.py``'s module docstring + the real-guard
+validation in ``append_match_log_row()``.
+
+Conventions (canonical):
+    ``'human:<username>'``    — human-driven action.  Examples:
+                                ``'human:eric'``, ``'human:etollef@pm.me'``.
+                                Override rows always use this prefix
+                                (overrides are by definition human-decided).
+    ``'service:<svc-name>'``  — autonomous matcher service.  Examples:
+                                ``'service:matching-v1'``,
+                                ``'service:keyword_jaccard_v1'``.  The
+                                Cohort 5+ matcher writes service prefixes.
+    ``'system:<context>'``    — seed/migration/system writes.  Examples:
+                                ``'system:migration_0073'``, ``'system:test'``.
+                                Used for fixture rows + bulk backfills.
+
+Per CLAUDE.md Critical Pattern #8 (Pattern 73 SSOT): the
+``crud_canonical_match_log.append_match_log_row()`` CRUD function uses
+this constant in real-guard validation —
+``if not any(decided_by.startswith(p) for p in DECIDED_BY_PREFIXES): raise``.
+Length-bound enforcement (``len(decided_by) <= 64``) is also at the CRUD
+boundary per #1085 finding #3 (the ``retire_reason`` length-not-validated
+case the slot-0072 review surfaced; slot 0073 inherits the lesson).
+
+Pattern 81 non-application: the prefix set is closed (3 actor categories
+covering every conceivable origin of a match decision); a lookup table is
+not warranted — see ``Migration 0073`` docstring for the explicit carve-
+out rationale.
+"""
