@@ -801,7 +801,9 @@ def test_market_links_update_trigger_exists(db_pool: Any) -> None:
     assert row is not None, "trg_canonical_market_links_updated_at must exist post-0072"
     trigger_def = row["def"]
     assert "BEFORE UPDATE" in trigger_def
-    assert "update_canonical_market_links_updated_at" in trigger_def
+    # Migration 0076 retrofit (#1074, ADR-118 V2.42 sub-amendment A): rewired
+    # to the generic ``set_updated_at()`` function; trigger name preserved.
+    assert "set_updated_at" in trigger_def
 
 
 def test_market_links_update_trigger_advances_updated_at(db_pool: Any) -> None:
@@ -891,7 +893,9 @@ def test_event_links_update_trigger_exists(db_pool: Any) -> None:
     assert row is not None, "trg_canonical_event_links_updated_at must exist post-0072"
     trigger_def = row["def"]
     assert "BEFORE UPDATE" in trigger_def
-    assert "update_canonical_event_links_updated_at" in trigger_def
+    # Migration 0076 retrofit (#1074, ADR-118 V2.42 sub-amendment A): rewired
+    # to the generic ``set_updated_at()`` function; trigger name preserved.
+    assert "set_updated_at" in trigger_def
 
 
 def test_event_links_update_trigger_advances_updated_at(db_pool: Any) -> None:
