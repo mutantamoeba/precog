@@ -389,9 +389,6 @@ def transition_review(
         reviewed_at = datetime.now(UTC)
 
     log_action = _TRANSITION_LOG_ACTION.get(new_state)
-    # Resolve manual_v1.id BEFORE opening the transaction (cached after
-    # first call; subsequent calls are zero-cost).
-    algorithm_id = get_manual_v1_algorithm_id() if log_action is not None else None
 
     # ---- Atomic SELECT + UPDATE + optional log INSERT -----------------------
     # All statements share a single cursor / transaction per Glokta F5
@@ -455,7 +452,21 @@ def transition_review(
                     "invariant violated"
                 )
 
-            assert algorithm_id is not None  # narrowed by log_action check
+            # Resolve manual_v1.id ONLY after validation passes (CI-failure
+            # fix: previously resolved before the cursor block, which forced
+            # the helper's get_cursor() call to fire BEFORE self-transition /
+            # matrix / LookupError validation could short-circuit.  Mocked
+            # unit tests for self_transition_approved/rejected and
+            # missing-review-id failed in fresh CI workers where the
+            # _MANUAL_V1_ID_CACHE was unpopulated; locally the cache was
+            # populated by a prior test in the same process.  Moving the
+            # resolution inside the post-validation branch ensures unit tests
+            # patching `get_cursor` at the reviews-module level can short-
+            # circuit the entire path before any DB call is attempted.
+            # The helper opens its own cursor only on the first call per
+            # process; subsequent calls return the cached id with zero DB
+            # cost — nesting is bounded to first call.)
+            algorithm_id = get_manual_v1_algorithm_id()
             _append_match_log_row_in_cursor(
                 cur,
                 link_id=link_id,
