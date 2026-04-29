@@ -94,31 +94,94 @@ carve-out rationale.
 """
 
 
+REVIEW_STATE_VALUES: Final[tuple[str, ...]] = (
+    "pending",
+    "approved",
+    "rejected",
+    "needs_info",
+)
+"""Canonical 4-value vocabulary for ``canonical_match_reviews.review_state``.
+
+Authoritative per ADR-118 v2.41 amendment + Cohort 3 design council L14 +
+session-80 S82 council Section 4 (review state machine) +
+session-82 slot-0074 build spec § 3.
+
+Migration 0074 enforces this list at the DDL layer via an inline CHECK
+constraint on ``canonical_match_reviews.review_state``.  Adding a new state
+requires lockstep update of both this constant AND a migration ALTERing
+the CHECK constraint — drift between Python and DDL would produce silent
+state-machine bugs.
+
+State-machine semantics (S82 council Section 4):
+    ``pending``     — review row created; no operator action yet.
+                      Surfaces in the operator alert query (``WHERE
+                      review_state = 'pending'``); partial index supports it.
+    ``approved``    — operator has reviewed and confirmed the link is
+                      correct.  Triggers a canonical_match_log row with
+                      action='review_approve'.
+    ``rejected``    — operator has reviewed and confirmed the link is
+                      INCORRECT.  Triggers a canonical_match_log row with
+                      action='review_reject'.  Rejected reviews typically
+                      pair with a subsequent operator-driven retire_link()
+                      on the underlying canonical_market_links row, but
+                      the schema does not enforce the pairing.
+    ``needs_info``  — operator has reviewed but cannot decide; flags the
+                      link for further investigation (e.g., requires data
+                      from another source).  Treated like 'pending' by the
+                      alert query but with reviewer + reviewed_at populated
+                      to record that someone has looked.
+
+Per CLAUDE.md Critical Pattern #8 (Pattern 73 SSOT): the
+``crud_canonical_match_reviews`` CRUD module uses this constant in
+*real-guard* validation (not side-effect-only import) per #1085 finding
+#2 inheritance from slot 0073 — ``if review_state not in REVIEW_STATE_VALUES:
+raise ValueError(...)``.
+
+Pattern 81 carve-out: this is intentionally NOT a lookup table.  The
+state set is closed (every value binds to code branches per Pattern 81 §
+"When NOT to Apply"); same carve-out rationale as ``LINK_STATE_VALUES`` /
+``ACTION_VALUES``.  See ``Migration 0074`` docstring for the full
+Pattern 81 non-application explanation.
+"""
+
+
 POLARITY_VALUES: Final[tuple[str, ...]] = (
     "MUST_MATCH",
     "MUST_NOT_MATCH",
 )
-"""Canonical 2-value vocabulary for ``canonical_match_overrides.polarity``
-(slot 0074, queued).
+"""Canonical 2-value vocabulary for ``canonical_match_overrides.polarity``.
 
-Pre-positioned in slot 0072 per S82 council Section 4 recommendation: when
-slot 0074 lands, the constant is already at its canonical home and the
-migration's CHECK constraint can cite the constant from day 1 (rather than
-requiring a Pattern 73 retrofit).
+Pre-positioned in slot 0072 per S82 council Section 4 recommendation; slot
+0074 finally USES it in real-guard validation inside the
+``crud_canonical_match_overrides`` module (per #1085 finding #2
+strengthening).  Migration 0074 enforces this list at the DDL layer via an
+inline CHECK constraint on ``canonical_match_overrides.polarity``.
 
-Authoritative per ADR-118 v2.41 amendment + Cohort 3 design council L34.
+Authoritative per ADR-118 v2.41 amendment + Cohort 3 design council L34 +
+session-82 slot-0074 build spec § 3.
 
 Semantics:
     ``MUST_MATCH``      — operator-asserted positive override; the matcher
                           MUST emit an active link for this (canonical,
                           platform) pair regardless of algorithm score.
+                          Pairs with NON-NULL ``canonical_market_id`` per
+                          ``ck_canonical_match_overrides_polarity_pairing``.
     ``MUST_NOT_MATCH``  — operator-asserted negative override; the matcher
                           MUST NOT emit an active link for this pair, even
-                          if algorithm score crosses the threshold.
+                          if algorithm score crosses the threshold.  Pairs
+                          with NULL ``canonical_market_id`` per the same
+                          pairing CHECK.
 
-Per CLAUDE.md Critical Pattern #8 (Pattern 73 SSOT): when slot 0074
-ships ``canonical_match_overrides``, its CRUD module + tests + state-
-machine code MUST import from this constant rather than hardcoding.
+Per CLAUDE.md Critical Pattern #8 (Pattern 73 SSOT): the
+``crud_canonical_match_overrides`` CRUD module uses this constant in
+*real-guard* validation per the slot-0074 #1085 finding #2 strengthening
+discipline — ``if polarity not in POLARITY_VALUES: raise ValueError(...)``.
+
+Pattern 81 carve-out: this is intentionally NOT a lookup table.  The
+polarity set is closed (every value binds to code branches per Pattern 81
+§ "When NOT to Apply"); same carve-out rationale as ``LINK_STATE_VALUES``
+/ ``ACTION_VALUES`` / ``REVIEW_STATE_VALUES``.  See ``Migration 0074``
+docstring for the full Pattern 81 non-application explanation.
 """
 
 
