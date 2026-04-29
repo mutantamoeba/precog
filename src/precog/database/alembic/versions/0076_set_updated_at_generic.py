@@ -271,6 +271,13 @@ def upgrade() -> None:
     # Body verbatim from Migrations 0069 + 0072 per-table bodies.  Three
     # lines of PL/pgSQL; Pattern 73 SSOT canonical home for the
     # ``updated_at`` maintenance contract.
+    #
+    # WARNING: body whitespace (heredoc indentation) is load-bearing for
+    # the PR #1081 round-trip CI gate, which snapshots
+    # ``pg_get_functiondef()`` output.  Reformatting the heredoc
+    # indentation (e.g., via ruff format or hand-edit) will break the
+    # snapshot oracle even though the function behaves identically.
+    # Glokta slot 0076 review P2 finding.
     # ------------------------------------------------------------------
     op.execute(
         """
@@ -288,7 +295,7 @@ def upgrade() -> None:
     # Step 2: Attach COMMENT ON FUNCTION (Uhura-1).
     #
     # Documents the semantic shift to operators inspecting via
-    # ``\df+ set_updated_at`` or ``\\dffunctions``.  Pattern 73 SSOT pointer:
+    # ``\df+ set_updated_at``.  Pattern 73 SSOT pointer:
     # the canonical home for the ``updated_at`` semantic contract is here +
     # the schema doc V2.3 § canonical_events column-level table.
     # ------------------------------------------------------------------
