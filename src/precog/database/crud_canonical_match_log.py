@@ -182,6 +182,52 @@ logger = logging.getLogger(__name__)
 _DECIDED_BY_MAX_LENGTH = 64
 
 
+# Lazy per-process cache for the manual_v1 algorithm_id resolution.  The seed
+# row is immutable post-Migration-0071, so caching the lookup at module level
+# is safe and keeps the per-call DB cost zero after the first resolution.
+# See ``get_manual_v1_algorithm_id()`` for the resolution logic.
+_MANUAL_V1_ID_CACHE: int | None = None
+
+
+# =============================================================================
+# CROSS-MODULE HELPER — manual_v1 algorithm_id resolution (Glokta F2 P1)
+# =============================================================================
+
+
+def get_manual_v1_algorithm_id() -> int:
+    """Resolve the canonical manual_v1 algorithm_id (lazy-cached per-process).
+
+    Per the manual_v1-on-human-decided-actions convention (slot 0073 origin,
+    slot 0074 scope-extended): override + review_approve + review_reject log
+    rows all use algorithm_id=manual_v1.id as a category-fit placeholder.
+
+    Centralized here (slot-0073 origin module) per Glokta F2 P1 finding on
+    the slot 0074 review — closes the helper-triplication that PR #1092
+    fixed at the test-helper level one slot earlier.
+
+    Lazy resolution (Glokta F6 Nit deferred but addressed structurally):
+    cached at module level on first call, returned cached value on subsequent
+    calls.  Module imports cleanly in environments where the DB is not yet
+    at head; first call hits the DB once per process.
+    """
+    global _MANUAL_V1_ID_CACHE
+    if _MANUAL_V1_ID_CACHE is not None:
+        return _MANUAL_V1_ID_CACHE
+    with get_cursor(commit=False) as cur:
+        cur.execute(
+            "SELECT id FROM match_algorithm WHERE name = %s AND version = %s",
+            ("manual_v1", "1.0.0"),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise RuntimeError(
+                "manual_v1 algorithm row not found in match_algorithm table — "
+                "ensure migration 0071 has run and the seed row is present"
+            )
+    _MANUAL_V1_ID_CACHE = cast("int", row["id"])
+    return _MANUAL_V1_ID_CACHE
+
+
 # =============================================================================
 # CANONICAL MATCH LOG — APPEND-ONLY WRITE PATH
 # =============================================================================
@@ -301,11 +347,47 @@ def append_match_log_row(
         - #1085 finding #3 (boundary validation lesson from slot 0072
           ``retire_reason``)
     """
-    # ---- Pattern 73 SSOT real-guard validation -------------------------------
-    # action must be in the canonical 7-value vocabulary.  ValueError raised
-    # before SQL so callers see a clear validation message rather than a
-    # CheckViolation from psycopg2 (which would still fire if validation here
-    # somehow passed — that's the lockstep guarantee Pattern 73 SSOT provides).
+    # Validate BEFORE opening the cursor so callers see a clear validation
+    # message rather than a CheckViolation from psycopg2.  The cursor-aware
+    # variant (_append_match_log_row_in_cursor) re-runs validation as
+    # defense-in-depth for sibling-module callers (slot 0074 + future).
+    _validate_append_match_log_args(action=action, confidence=confidence, decided_by=decided_by)
+
+    with get_cursor(commit=True) as cur:
+        return _append_match_log_row_in_cursor(
+            cur,
+            link_id=link_id,
+            platform_market_id=platform_market_id,
+            canonical_market_id=canonical_market_id,
+            action=action,
+            confidence=confidence,
+            algorithm_id=algorithm_id,
+            features=features,
+            prior_link_id=prior_link_id,
+            decided_by=decided_by,
+            note=note,
+        )
+
+
+def _validate_append_match_log_args(
+    *,
+    action: str,
+    confidence: Decimal | None,
+    decided_by: str,
+) -> None:
+    """Pattern 73 SSOT + boundary + Decimal-Pattern-#1 validation for log-append args.
+
+    Extracted so both ``append_match_log_row`` (validates BEFORE opening
+    its own cursor) AND ``_append_match_log_row_in_cursor`` (validates as
+    defense-in-depth for sibling-module callers) can share the same
+    canonical validation logic.
+
+    Centralizing the validation here keeps ``append_match_log_row``'s
+    "no SQL on validation failure" contract intact (callers asserting
+    ``mock_get_cursor.assert_not_called()`` still pass) while letting
+    the cursor-aware variant validate without re-implementing the rules.
+    """
+    # action must be in the canonical 7-value vocabulary.  Pattern 73 SSOT.
     if action not in ACTION_VALUES:
         raise ValueError(
             f"action {action!r} not in canonical ACTION_VALUES "
@@ -322,9 +404,7 @@ def append_match_log_row(
             "pattern 73 SSOT vocabulary violation"
         )
 
-    # decided_by length boundary per #1085 finding #3: surface a clear error
-    # at the CRUD layer rather than letting psycopg2 raise the generic
-    # StringDataRightTruncation when the value exceeds VARCHAR(64).
+    # decided_by length boundary per #1085 finding #3.
     if len(decided_by) > _DECIDED_BY_MAX_LENGTH:
         raise ValueError(
             f"decided_by length {len(decided_by)} exceeds "
@@ -333,13 +413,9 @@ def append_match_log_row(
 
     # confidence bound check — CRUD-layer parity with DDL CHECK constraint.
     # CLAUDE.md Critical Pattern #1 (Decimal Precision) enforced at the CRUD
-    # boundary: float silently satisfies >= 0 and <= 1 (Python comparison
-    # operators happily compare float vs Decimal), so without an explicit
-    # isinstance check a caller passing `confidence=0.5` would slip past the
-    # validation entirely; worse, `confidence.is_nan()` on a float raises
-    # AttributeError (cryptic exception type, no boundary signal). The
-    # isinstance guard surfaces the type violation as a clear TypeError before
-    # any value-level check runs. (Ripley P1 sentinel finding, session 81.)
+    # boundary: float silently satisfies >= 0 and <= 1, so explicit
+    # isinstance guard surfaces the type violation as TypeError before any
+    # value-level check runs. (Ripley P1 sentinel finding, session 81.)
     # Decimal('NaN') silently passes >= and <= comparisons, so explicit guard.
     if confidence is not None:
         if not isinstance(confidence, Decimal):
@@ -352,6 +428,56 @@ def append_match_log_row(
             raise ValueError(f"confidence must not be Decimal('NaN'); got {confidence!r}")
         if confidence < Decimal("0") or confidence > Decimal("1"):
             raise ValueError(f"confidence must be in [0, 1] or None; got {confidence!r}")
+
+
+def _append_match_log_row_in_cursor(
+    cur: Any,
+    *,
+    link_id: int | None,
+    platform_market_id: int,
+    canonical_market_id: int | None,
+    action: str,
+    confidence: Decimal | None,
+    algorithm_id: int,
+    features: dict[str, Any] | None,
+    prior_link_id: int | None,
+    decided_by: str,
+    note: str | None = None,
+) -> int:
+    """Cursor-aware variant of ``append_match_log_row`` — caller owns the transaction.
+
+    Used by sibling CRUD modules (overrides, reviews) that need the log
+    INSERT to commit atomically with their primary table write.  Performs
+    identical validation to ``append_match_log_row()`` (Pattern 73 SSOT
+    vocabularies, decided_by prefix + length, confidence bound + NaN
+    guard) via the shared ``_validate_append_match_log_args`` helper;
+    does NOT open a cursor and does NOT commit.
+
+    Glokta F1 P1 + Ripley F4 P1 (convergent, slot 0074 review): collapses
+    the create_override / delete_override / transition_review two-table
+    writes into a single transaction — both INSERTs (or UPDATE + log
+    INSERT) commit atomically or both roll back.  Closes the silent
+    audit-trail-loss window that the prior get_cursor-per-call shape
+    admitted.
+
+    Args:
+        cur: psycopg2 cursor under an active transaction (the caller's
+            ``with get_cursor(commit=True)`` block).
+        (remaining args identical to ``append_match_log_row``)
+
+    Returns:
+        The BIGSERIAL ``id`` of the newly-inserted log row.
+
+    Raises:
+        ValueError / TypeError: validation failures identical to
+            ``append_match_log_row``.
+    """
+    # Defense-in-depth: validate every time the cursor-aware path is
+    # invoked, even though the public ``append_match_log_row`` already
+    # validated before opening its cursor.  Sibling-module callers
+    # (slot 0074 CRUD) reach this path directly; the validation cost
+    # is trivial and surfaces drift early.
+    _validate_append_match_log_args(action=action, confidence=confidence, decided_by=decided_by)
 
     # ---- The append (single INSERT, RETURNING id) ----------------------------
     # No UPDATE / DELETE / UPSERT — this is the ONLY sanctioned write path.
@@ -373,23 +499,22 @@ def append_match_log_row(
         )
         RETURNING id
     """
-    with get_cursor(commit=True) as cur:
-        cur.execute(
-            query,
-            (
-                link_id,
-                platform_market_id,
-                canonical_market_id,
-                action,
-                confidence,
-                algorithm_id,
-                features_param,
-                prior_link_id,
-                decided_by,
-                note,
-            ),
-        )
-        row = cur.fetchone()
+    cur.execute(
+        query,
+        (
+            link_id,
+            platform_market_id,
+            canonical_market_id,
+            action,
+            confidence,
+            algorithm_id,
+            features_param,
+            prior_link_id,
+            decided_by,
+            note,
+        ),
+    )
+    row = cur.fetchone()
     return cast("int", row["id"])
 
 
