@@ -128,6 +128,64 @@ from precog.database.crud_strategies import create_strategy  # noqa: E402
 from precog.utils.logger import setup_logging  # noqa: E402
 
 # =============================================================================
+# MODULE-LEVEL LAZY CACHE RESET (Test Isolation — session 82, PR #1094)
+# =============================================================================
+# Some production modules use module-level globals as lazy-initialized caches
+# (e.g., ``crud_canonical_match_log._MANUAL_V1_ID_CACHE`` — populated on first
+# call to ``get_manual_v1_algorithm_id()`` and reused thereafter).  Efficient
+# for production but a test-isolation hazard: if test A populates the cache
+# via a real DB call and test B mocks ``get_cursor()`` expecting NO DB call,
+# test B's expectation depends on whether test A ran first in the same worker
+# process.  Locally this manifests as "tests pass when run together but fail
+# in isolation" (or vice versa); in CI's fresh worker processes it manifests
+# as failures that don't reproduce locally.
+#
+# Slot 0074's mid-session CI failure (PR #1094, session 82) was the canonical
+# instance: 3 ``test_crud_canonical_match_reviews_unit.py`` tests passed
+# locally (an earlier integration test had populated the cache) but failed in
+# CI's fresh worker (no DB credentials → cache-population attempt raised
+# ``ValueError: Database password not found`` instead of the expected
+# ValueError on self-transition / LookupError on missing review).  The
+# implementation-side fix (resolve the cached id INSIDE the post-validation
+# branch) closed the immediate failure; this fixture closes the BUG CLASS by
+# guaranteeing every test starts with cleared caches regardless of run order.
+#
+# Cost: one ``setattr`` per test per registered cache (microseconds).  Cheap.
+#
+# Adding a new cache: append a ``(module_dotted_path, attribute_name)`` tuple
+# to ``_LAZY_CACHE_GLOBALS`` below.  The fixture discovers and resets it
+# automatically.  No other changes needed.
+# =============================================================================
+
+_LAZY_CACHE_GLOBALS: tuple[tuple[str, str], ...] = (
+    # (module_dotted_path, global_attribute_name)
+    ("precog.database.crud_canonical_match_log", "_MANUAL_V1_ID_CACHE"),
+)
+
+
+@pytest.fixture(autouse=True)
+def _reset_module_lazy_caches() -> None:
+    """Reset module-level lazy-init caches before every test (autouse).
+
+    See the comment block above for rationale.  This fixture exists to close
+    the local-pass / CI-fail divergence class that surfaced via slot 0074's
+    PR #1094 mid-session CI failure (session 82).
+    """
+    import importlib
+
+    for module_path, attr_name in _LAZY_CACHE_GLOBALS:
+        try:
+            module = importlib.import_module(module_path)
+        except ImportError:
+            # Module may not exist in older branches / partial test runs;
+            # silent skip is correct — the fixture's contract is "reset what
+            # exists", not "all listed modules must exist".
+            continue
+        if hasattr(module, attr_name):
+            setattr(module, attr_name, None)
+
+
+# =============================================================================
 # DATABASE FIXTURES
 # =============================================================================
 
