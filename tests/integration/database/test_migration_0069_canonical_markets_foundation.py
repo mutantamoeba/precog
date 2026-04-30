@@ -345,8 +345,13 @@ def test_canonical_markets_update_trigger_exists(db_pool: Any) -> None:
     assert row is not None, "trg_canonical_markets_updated_at must exist post-0069"
     trigger_def = row["def"]
     assert "BEFORE UPDATE" in trigger_def, f"Must be a BEFORE UPDATE trigger; got: {trigger_def}"
-    assert "update_canonical_markets_updated_at" in trigger_def, (
-        f"Must call update_canonical_markets_updated_at(); got: {trigger_def}"
+    # Migration 0076 retrofit (#1074, ADR-118 V2.42 sub-amendment A): the
+    # per-table ``update_canonical_markets_updated_at()`` function was
+    # rewired to the generic ``set_updated_at()`` chokepoint.  Trigger NAME
+    # preserved (Migration 0072 carry-forward); only the EXECUTE FUNCTION
+    # target name changed.
+    assert "set_updated_at" in trigger_def, (
+        f"Must call set_updated_at() (post-Migration-0076); got: {trigger_def}"
     )
 
 
