@@ -92,9 +92,15 @@ def _seed_game(suffix: str) -> int:
             )
             RETURNING id
             """,
+            # Team codes truncate to 10 chars; keep `77` slot marker + H/A
+            # differentiator FIRST so the suffix entropy survives. The naive
+            # `f"TEST-0077-HOME-{suffix}"[:10]` form yields `"TEST-0077-"`
+            # for both home and away (suffix dropped), which would collide
+            # under pytest-xdist multi-worker runs of this test on the same
+            # game_date (CURRENT_DATE) — uq_games_matchup violates.
             (
-                f"TEST-0077-HOME-{suffix}"[:10],
-                f"TEST-0077-AWAY-{suffix}"[:10],
+                f"77H{suffix[:7]}",
+                f"77A{suffix[:7]}",
                 f"GAME-TEST-0077-{suffix}",
             ),
         )
@@ -102,9 +108,17 @@ def _seed_game(suffix: str) -> int:
 
 
 def _cleanup_game(game_id: int) -> None:
-    """Best-effort delete of a games row seeded by ``_seed_game``."""
-    with get_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM games WHERE id = %s", (game_id,))
+    """Best-effort delete of a games row seeded by ``_seed_game``.
+
+    Swallows exceptions so a cleanup failure (e.g., orphaned child row from
+    a prior crashed test) doesn't mask the original test failure when called
+    from a finally block.
+    """
+    try:
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM games WHERE id = %s", (game_id,))
+    except Exception:
+        pass
 
 
 def _seed_series(suffix: str) -> int:
@@ -133,9 +147,17 @@ def _seed_series(suffix: str) -> int:
 
 
 def _cleanup_series(series_id: int) -> None:
-    """Best-effort delete of a series row seeded by ``_seed_series``."""
-    with get_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM series WHERE id = %s", (series_id,))
+    """Best-effort delete of a series row seeded by ``_seed_series``.
+
+    Swallows exceptions so a cleanup failure (e.g., orphaned child row from
+    a prior crashed test) doesn't mask the original test failure when called
+    from a finally block.
+    """
+    try:
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM series WHERE id = %s", (series_id,))
+    except Exception:
+        pass
 
 
 def _seed_canonical_event(
