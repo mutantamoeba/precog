@@ -1,10 +1,9 @@
-# NOTE: The `name:` field below ("CI/CD Pipeline") is a Pattern 73 SSOT —
-# external workflows may reference it via `workflow_run.workflows:`.
-# Renaming without a lockstep update across .github/workflows/ silently
-# decouples the trigger reference: per session 81 PR #1088 (later reverted
-# by PR #1091), this exact failure mode caused claude-review to silently
-# stop firing on PRs. See claude-code-review.yml's design note for the
-# empirical workflow_run finding. Issue #1086 tracks this drift gate.
+# NOTE: The `name:` field below ("CI/CD Pipeline") is a Pattern 73 SSOT.
+# If any workflow uses `workflow_run.workflows:` to trigger on this pipeline,
+# renaming `name:` here without a lockstep update silently breaks the trigger:
+# the workflow keeps running, but the dependent workflow_run trigger stops
+# firing with no error. See claude-code-review.yml for the canonical design
+# note on this constraint.
 name: CI/CD Pipeline
 
 on:
