@@ -1,3 +1,10 @@
+# NOTE: The `name:` field below ("CI/CD Pipeline") is a Pattern 73 SSOT —
+# external workflows may reference it via `workflow_run.workflows:`.
+# Renaming without a lockstep update across .github/workflows/ silently
+# decouples the trigger reference: per session 81 PR #1088 (later reverted
+# by PR #1091), this exact failure mode caused claude-review to silently
+# stop firing on PRs. See claude-code-review.yml's design note for the
+# empirical workflow_run finding. Issue #1086 tracks this drift gate.
 name: CI/CD Pipeline
 
 on:
