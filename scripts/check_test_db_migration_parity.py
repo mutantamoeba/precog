@@ -16,11 +16,11 @@ Behavior:
   automatically and exit 0 on success. Falls through to the existing
   BEHIND error message on failure or when auto-upgrade is unsafe (dirty
   alembic versions tree, --no-auto-upgrade flag).
-- If the test DB is AHEAD (delta < 0): never auto-upgrade — the developer
-  is on a branch with newer migrations than `main`. Falls through to the
-  existing error reporting.
-- Exits 1 with an actionable error message if behind/ahead and auto-upgrade
-  did not resolve the gap.
+- If the test DB is AHEAD (delta < 0): never auto-upgrade. Falls through
+  to a direction-aware error message that points at the branch-switch
+  recovery dance documented in feedback_test_db_branch_drift.md.
+- Exits 1 with a direction-aware actionable error message if out of sync
+  and auto-upgrade did not resolve the gap.
 
 Mirrors the UserPromptSubmit dev-DB hook (scripts/check_migration_parity_hook.py)
 but (a) targets the test DB and (b) blocks instead of warning.
@@ -168,8 +168,13 @@ def main(argv: list[str] | None = None) -> int:
 
     # Mismatch detected. Determine direction and decide whether to auto-upgrade.
     # versions_behind: positive = BEHIND (DB < head), negative = AHEAD (DB > head),
-    # None = unknown (non-numeric versions).
+    # None = unknown (non-numeric versions). For BEHIND: attempt auto-upgrade.
+    # For AHEAD or unknown: fall through to the direction-aware error reporting
+    # (#1101). Auto-upgrade is unsafe in those directions because the branch
+    # may lack the migration files needed to downgrade in place.
     delta = status.versions_behind
+    db_ver = status.db_version or "<empty>"
+    head_ver = status.head_version or "<unknown>"
 
     if delta is not None and delta > 0:
         # BEHIND. Attempt auto-upgrade unless disabled or unsafe.
@@ -203,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
                 print("=" * 72)
                 return 0
             # Auto-upgrade attempted and failed. Surface the failure detail
-            # to stderr, then fall through to the standard BEHIND error.
+            # to stderr, then fall through to the direction-aware BEHIND error.
             print("", file=sys.stderr)
             print(
                 "AUTO-UPGRADE FAILED: alembic upgrade head returned non-zero. "
@@ -215,18 +220,31 @@ def main(argv: list[str] | None = None) -> int:
                 print(up_stderr, end="" if up_stderr.endswith("\n") else "\n", file=sys.stderr)
                 print("--- end alembic stderr ---", file=sys.stderr)
 
-    # Fall through: render the existing actionable error message. This block
-    # currently formats as "behind" for both BEHIND and AHEAD; PR #1104
-    # (#1101) introduces direction-aware branching here. Until that lands,
-    # we keep the message body unchanged so this PR's diff stays scoped to
-    # the auto-upgrade behavior.
-    db_ver = status.db_version or "<empty>"
-    head_ver = status.head_version or "<unknown>"
-    behind = status.versions_behind
-    gap = f" ({behind} behind)" if behind else ""
+    # Out of sync — block the push with a direction-aware actionable message
+    # (#1101). Reached for BEHIND-after-failed-auto-upgrade, AHEAD, and unknown.
 
+    if delta is not None and delta < 0:
+        # AHEAD: test DB carries migrations the branch doesn't ship. Branch lacks
+        # the files needed to downgrade in place, so the recovery path differs from
+        # BEHIND. See feedback_test_db_branch_drift.md.
+        ahead = -delta
+        print("")
+        print(f"ERROR: Test DB AHEAD of branch head by {ahead}.")
+        print(f"  Test DB version: {db_ver}")
+        print(f"  Alembic head:    {head_ver}")
+        print("")
+        print("Branch lacks the migration files needed to downgrade in place.")
+        print("Recovery: switch to a branch with higher head, run alembic downgrade")
+        print(f"          to {head_ver}, switch back, push.")
+        print("See memory file feedback_test_db_branch_drift.md for the full dance.")
+        print("")
+        print("Reference: #867 (test DB migration parity hook), #1101 (directional message)")
+        return 1
+
+    # BEHIND (or unknown direction) — original behavior.
+    gap = f" ({delta} behind)" if delta else ""
     print("")
-    print("ERROR: Test DB is behind alembic head.")
+    print("ERROR: Test DB BEHIND alembic head.")
     print(f"  Test DB version: {db_ver}")
     print(f"  Alembic head:    {head_ver}{gap}")
     print("")

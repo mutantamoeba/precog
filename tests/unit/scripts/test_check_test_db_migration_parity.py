@@ -83,6 +83,36 @@ class TestMainExitCodes:
         assert "#867" in out
 
     @patch("precog.database.migration_check.check_migration_parity")
+    def test_ahead_returns_one_with_branch_switch_recovery(self, mock_check, capsys):
+        """AHEAD: test DB carries migrations the branch doesn't ship.
+
+        Recovery differs from BEHIND — branch lacks the migration files needed
+        to downgrade in place, so `alembic upgrade head` is the wrong answer.
+        Message must distinguish direction and point at the recovery dance
+        in feedback_test_db_branch_drift.md. Source: session 83 hit this 2x
+        on PRs #1099 + #1100; #1101 closes the misleading-message gap.
+        """
+        mock_check.return_value = MigrationStatus(
+            is_current=False,
+            db_version="0076",
+            head_version="0074",
+        )
+
+        rc = hook_mod.main()
+
+        assert rc == 1
+        out = capsys.readouterr().out
+        assert "ERROR" in out
+        assert "AHEAD" in out
+        assert "0076" in out
+        assert "0074" in out
+        assert "2" in out
+        assert "upgrade head" not in out
+        assert "feedback_test_db_branch_drift.md" in out
+        assert "#867" in out
+        assert "#1101" in out
+
+    @patch("precog.database.migration_check.check_migration_parity")
     def test_unreachable_db_skips_with_warning(self, mock_check, capsys):
         mock_check.return_value = MigrationStatus(
             is_current=False,
