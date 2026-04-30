@@ -95,6 +95,12 @@ restore_branch() {
     if [[ -n "${CANDIDATES_FILE:-}" ]] && [[ -f "${CANDIDATES_FILE}" ]]; then
         rm -f "${CANDIDATES_FILE}"
     fi
+    if [[ -n "${PY_OUT_FILE:-}" ]] && [[ -f "${PY_OUT_FILE}" ]]; then
+        rm -f "${PY_OUT_FILE}"
+    fi
+    if [[ -n "${PY_ERR_FILE:-}" ]] && [[ -f "${PY_ERR_FILE}" ]]; then
+        rm -f "${PY_ERR_FILE}"
+    fi
     if [[ -n "${FINAL_OUT_FILE:-}" ]] && [[ -f "${FINAL_OUT_FILE}" ]]; then
         rm -f "${FINAL_OUT_FILE}"
     fi
@@ -199,6 +205,17 @@ if ! git rev-parse --verify --quiet "${TARGET_BRANCH}" >/dev/null; then
     err "Target branch does not exist locally: ${TARGET_BRANCH}"
     err "Try: git fetch origin ${TARGET_BRANCH} && git checkout ${TARGET_BRANCH}"
     exit 1
+fi
+
+# Source branch (if user passed --source-branch) must also exist. Validate
+# upfront so a typo'd value fails fast on MATCH/BEHIND paths instead of
+# only surfacing later when the AHEAD path is reached.
+if [[ -n "${SOURCE_BRANCH:-}" ]]; then
+    if ! git rev-parse --verify --quiet "${SOURCE_BRANCH}" >/dev/null; then
+        err "Source branch does not exist locally: ${SOURCE_BRANCH}"
+        err "Pass an existing local branch name to --source-branch."
+        exit 1
+    fi
 fi
 
 # Install trap NOW that ORIGINAL_BRANCH is set.
@@ -306,11 +323,8 @@ echo ""
 # We must leave TARGET_BRANCH (which has only up to ${TARGET_HEAD}) and
 # go to a branch where revision ${TEST_DB_VERSION}'s file actually exists.
 if [[ -n "${SOURCE_BRANCH}" ]]; then
+    # Existence already validated upfront (line 213-220). Just use the value.
     info "Using user-specified --source-branch ${SOURCE_BRANCH}"
-    if ! git rev-parse --verify --quiet "${SOURCE_BRANCH}" >/dev/null; then
-        err "Source branch does not exist locally: ${SOURCE_BRANCH}"
-        exit 1
-    fi
     DOWNGRADE_BRANCH="${SOURCE_BRANCH}"
 else
     # Auto-detect: find branches that contain the migration file for ${TEST_DB_VERSION}.
@@ -371,7 +385,14 @@ if ! (cd "${ALEMBIC_DIR_REL}" && PRECOG_ENV=test python -m alembic downgrade "${
 fi
 echo ""
 info "Downgrade complete. Switching to target branch ${TARGET_BRANCH}..."
-git checkout --quiet "${TARGET_BRANCH}"
+# If the checkout fails mid-flight (file conflict, disk full, etc.), the test
+# DB IS at TARGET_HEAD already — the failure is purely in returning the user
+# to the right branch. Tell them so they don't conclude the alignment failed.
+if ! git checkout --quiet "${TARGET_BRANCH}"; then
+    warn "Downgrade succeeded but final checkout to ${TARGET_BRANCH} failed."
+    warn "Test DB IS aligned to ${TARGET_HEAD}. Manually run: git checkout ${TARGET_BRANCH}"
+    exit 1
+fi
 
 # Verify final state matches. Mirror the initial-read pattern (lines 204-222):
 # capture stderr separately so a verification failure surfaces the underlying
@@ -381,6 +402,10 @@ FINAL_ERR_FILE="$(mktemp)"
 if ! PRECOG_ENV=test python -c "
 from precog.database.migration_check import check_migration_parity
 s = check_migration_parity()
+if s.error and s.fatal:
+    raise SystemExit('FATAL: ' + s.error)
+if s.error:
+    raise SystemExit('ERROR: ' + s.error)
 print('ALIGN_TEST_DB_VERSION=' + (s.db_version or ''))
 " >"${FINAL_OUT_FILE}" 2>"${FINAL_ERR_FILE}"; then
     err "Post-downgrade verification call failed:"
