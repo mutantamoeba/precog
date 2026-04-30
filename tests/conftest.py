@@ -168,9 +168,12 @@ from precog.utils.logger import setup_logging  # noqa: E402
 _LAZY_CACHE_GLOBALS: tuple[tuple[str, str, object], ...] = (
     # (module_dotted_path, global_attribute_name, reset_value)
     ("precog.database.crud_canonical_match_log", "_MANUAL_V1_ID_CACHE", None),
-    # When the override-side cache lands (per #1095 forward-thinking note),
-    # append:
-    # ("precog.database.crud_canonical_match_overrides", "_MANUAL_V1_ID_CACHE", None),
+    # Note: crud_canonical_match_overrides + crud_canonical_match_reviews do
+    # NOT maintain their own _MANUAL_V1_ID_CACHE — both modules import and
+    # call crud_canonical_match_log.get_manual_v1_algorithm_id(), so they
+    # share the cache registered above rather than duplicating it.  No
+    # separate entry needed (corrected per Brawne + Ripley reviews on
+    # #1095 close-out bundle).
 )
 
 
