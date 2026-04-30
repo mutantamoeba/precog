@@ -724,7 +724,7 @@ by name in a SQL comment; CRUD modules import + USE the constants in real-guard
 
 | Constant | Values | Source migration | DDL consumers |
 |---|---|---|---|
-| `CANONICAL_EVENT_LIFECYCLE_PHASES` | 8 (`proposed`, `listed`, `pre_event`, `live`, `suspended`, `settling`, `resolved`, `voided`) | 0070 (V2.40 carry-forward) | `canonical_events.lifecycle_phase` CHECK; future `canonical_event_phase_log.phase` CHECK (slot 0077) |
+| `CANONICAL_EVENT_LIFECYCLE_PHASES` | 8 (`proposed`, `listed`, `pre_event`, `live`, `suspended`, `settling`, `resolved`, `voided`) | 0070 (V2.40 carry-forward) | `canonical_events.lifecycle_phase` CHECK; future `canonical_event_phase_log.phase` CHECK (future cohort) |
 | `LINK_STATE_VALUES` | 3 (`active`, `retired`, `quarantined`) | 0072 (slot 2) | `canonical_market_links.link_state` CHECK; `canonical_event_links.link_state` CHECK |
 | `ACTION_VALUES` | 7 (`link`, `unlink`, `relink`, `quarantine`, `override`, `review_approve`, `review_reject`) | 0073 (slot 3) | `canonical_match_log.action` CHECK |
 | `DECIDED_BY_PREFIXES` | 3 prefixes (`human:`, `service:`, `system:`) | 0073 (slot 3) | `canonical_match_log.decided_by` (free-text; CRUD-layer real-guard); `canonical_market_links.decided_by`; `canonical_event_links.decided_by`; `canonical_match_reviews.reviewer`; `canonical_match_overrides.created_by` |

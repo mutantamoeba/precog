@@ -411,6 +411,20 @@ def test_canonical_events_survives_when_both_fks_set_null(db_pool: Any) -> None:
         series_id = _seed_series(suffix)
         canonical_event_id = _seed_canonical_event(suffix, game_id=game_id, series_id=series_id)
 
+        # Pre-condition: both FKs bound to their parents before the DELETE.
+        # Mirrors the single-FK cascade tests' pre-state assertion so a
+        # silent seed-helper failure to bind one of the two FKs would
+        # surface here, not as a misleading post-state pass.
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT game_id, series_id FROM canonical_events WHERE id = %s",
+                (canonical_event_id,),
+            )
+            pre_row = cur.fetchone()
+        assert pre_row is not None
+        assert pre_row["game_id"] == game_id
+        assert pre_row["series_id"] == series_id
+
         # Delete both parents.
         with get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM games WHERE id = %s", (game_id,))
