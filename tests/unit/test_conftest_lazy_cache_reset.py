@@ -16,8 +16,17 @@ clear message pointing back at the fixture.
 The two tests below MUST run in the same worker process for the regression
 to surface — if pytest-xdist distributes them across workers, the cache
 state isn't shared and the test silently passes.  Both tests live in the
-same class to guarantee co-location under ``--dist=loadscope`` (pytest-xdist
-default).
+same class AND share an ``xdist_group`` marker so they co-locate under
+``--dist=loadgroup``.
+
+Note (corrected per claude-review on PR #1096 — #1095 close-out item 15):
+pytest-xdist's DEFAULT distribution is ``--dist=load`` (load-balancing,
+which CAN split same-class tests across workers); the ``xdist_group``
+marker pins both tests to the same worker only when xdist is run with
+``--dist=loadgroup``.  An earlier draft of this docstring claimed
+``loadscope`` was the default — both the default name AND the marker's
+binding mode were wrong.  See the class-level docstring for the
+load-balancing failure mode the marker prevents.
 """
 
 from __future__ import annotations
@@ -36,15 +45,17 @@ class TestModuleLazyCacheResetFixture:
     ``_a`` runs before ``_b`` reliably.
 
     The ``xdist_group`` marker pins both tests to the same worker process
-    under pytest-xdist parallel execution.  Without it, xdist's default
-    ``LoadScheduling`` would distribute the two tests across separate
-    worker processes — ``_b`` would observe a clean cache because its
-    worker never ran ``_a`` (each xdist worker is a fresh Python process
-    with its own module-state copy).  Under that distribution, ``_b``
-    would pass even if the fixture were broken — silently false-pass.
-    The xdist_group marker forces both tests to the same worker so the
-    cross-test pollution-vs-reset behavior is actually exercised under
-    parallel CI.
+    under pytest-xdist parallel execution with ``--dist=loadgroup``.
+    Without the marker (or under xdist's default ``--dist=load`` /
+    ``LoadScheduling``), the two tests could be distributed across
+    separate worker processes — ``_b`` would observe a clean cache
+    because its worker never ran ``_a`` (each xdist worker is a fresh
+    Python process with its own module-state copy).  Under that
+    distribution, ``_b`` would pass even if the fixture were broken —
+    silently false-pass.  The xdist_group marker forces both tests to
+    the same worker so the cross-test pollution-vs-reset behavior is
+    actually exercised under parallel CI when ``--dist=loadgroup`` is
+    in effect.
     """
 
     def test_cache_reset_between_tests_a_pollutes(self) -> None:

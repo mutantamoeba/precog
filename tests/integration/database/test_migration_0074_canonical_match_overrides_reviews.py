@@ -238,8 +238,23 @@ def test_canonical_match_overrides_column_shape(
 # =============================================================================
 
 
-def test_review_state_check_fires_on_invalid_value(db_pool: Any) -> None:
-    """INSERT with review_state='not_a_real_state' raises CheckViolation."""
+@pytest.mark.parametrize(
+    "bad_review_state",
+    # All values stay <= 16 chars (the VARCHAR(16) column boundary) so
+    # the CheckViolation is the failure mode under test, not a
+    # StringDataRightTruncation pre-empt.
+    ["bad_state", "PENDING", "done", "draft", "rev_pending", ""],
+    ids=lambda s: f"bad_review_state_{s or 'EMPTY'}",
+)
+def test_review_state_check_fires_on_invalid_value(db_pool: Any, bad_review_state: str) -> None:
+    """INSERT with various invalid review_state values raises CheckViolation.
+
+    Per Ripley F6 P2 (#1095 close-out): parametrized over multiple bad
+    values for defense-in-depth alongside the bidirectional oracle in
+    Group 5.  Catches a hypothetical world where the DDL CHECK accepts
+    a single value the test happens to feed (extreme edge case but the
+    parametrize cost is trivial).
+    """
     suffix = uuid.uuid4().hex[:8]
     seeded_event_id = _seed_canonical_event(suffix)
     seeded_market_id = _seed_canonical_market(seeded_event_id, suffix)
@@ -257,7 +272,7 @@ def test_review_state_check_fires_on_invalid_value(db_pool: Any) -> None:
                     INSERT INTO canonical_match_reviews (link_id, review_state)
                     VALUES (%s, %s)
                     """,
-                    (seeded_link_id, "not_a_real_state"),
+                    (seeded_link_id, bad_review_state),
                 )
     finally:
         _cleanup_canonical_market_link(seeded_link_id)
@@ -266,8 +281,21 @@ def test_review_state_check_fires_on_invalid_value(db_pool: Any) -> None:
         _cleanup_canonical_event(seeded_event_id)
 
 
-def test_polarity_check_fires_on_invalid_value(db_pool: Any) -> None:
-    """INSERT with polarity='WRONG' raises CheckViolation."""
+@pytest.mark.parametrize(
+    "bad_polarity",
+    # All values stay <= 16 chars (the VARCHAR(16) column boundary) so
+    # the CheckViolation is the failure mode under test, not a
+    # StringDataRightTruncation pre-empt.
+    ["WRONG", "must_match", "MUST", "match", "either", ""],
+    ids=lambda s: f"bad_polarity_{s or 'EMPTY'}",
+)
+def test_polarity_check_fires_on_invalid_value(db_pool: Any, bad_polarity: str) -> None:
+    """INSERT with various invalid polarity values raises CheckViolation.
+
+    Per Ripley F6 P2 (#1095 close-out): parametrized over multiple bad
+    values for defense-in-depth alongside the bidirectional oracle in
+    Group 5.
+    """
     suffix = uuid.uuid4().hex[:8]
     seeded_event_id = _seed_canonical_event(suffix)
     seeded_market_id = _seed_canonical_market(seeded_event_id, suffix)
@@ -286,7 +314,7 @@ def test_polarity_check_fires_on_invalid_value(db_pool: Any) -> None:
                     (
                         seeded_platform_market_id,
                         seeded_market_id,
-                        "WRONG",
+                        bad_polarity,
                         "test reason",
                         "human:test",
                     ),
@@ -369,7 +397,14 @@ def test_polarity_pairing_check_fires_must_not_match_with_non_null_canonical(
 def test_polarity_pairing_check_passes_must_match_with_canonical(
     db_pool: Any,
 ) -> None:
-    """Happy path: polarity='MUST_MATCH' + canonical_market_id NOT NULL succeeds."""
+    """Happy path: polarity='MUST_MATCH' + canonical_market_id NOT NULL succeeds.
+
+    Per Ripley F5 P2 (#1095 close-out): happy-path INSERT is followed by
+    a SELECT-back of (polarity, canonical_market_id) to verify the
+    persisted row matches the input — closes the false-pass surface
+    where an INSERT with mis-bound parameters could succeed at the SQL
+    level but persist a different row than the test inputs intended.
+    """
     suffix = uuid.uuid4().hex[:8]
     seeded_event_id = _seed_canonical_event(suffix)
     seeded_market_id = _seed_canonical_market(seeded_event_id, suffix)
@@ -398,6 +433,29 @@ def test_polarity_pairing_check_passes_must_match_with_canonical(
             "happy path INSERT with MUST_MATCH + canonical_market_id NOT NULL "
             "should succeed; got no row id"
         )
+
+        # Round-trip SELECT-back to verify the persisted polarity +
+        # canonical_market_id exactly match the inputs (Ripley F5 P2).
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                SELECT polarity, canonical_market_id
+                FROM canonical_match_overrides
+                WHERE id = %s
+                """,
+                (override_id,),
+            )
+            persisted = cur.fetchone()
+        assert persisted is not None, (
+            f"SELECT-back failed: override id={override_id} should exist immediately after INSERT"
+        )
+        assert persisted["polarity"] == "MUST_MATCH", (
+            f"persisted polarity drift: expected 'MUST_MATCH', got {persisted['polarity']!r}"
+        )
+        assert persisted["canonical_market_id"] == seeded_market_id, (
+            f"persisted canonical_market_id drift: expected "
+            f"{seeded_market_id}, got {persisted['canonical_market_id']!r}"
+        )
     finally:
         if override_id is not None:
             with get_cursor(commit=True) as cur:
@@ -413,7 +471,15 @@ def test_polarity_pairing_check_passes_must_match_with_canonical(
 def test_polarity_pairing_check_passes_must_not_match_with_null_canonical(
     db_pool: Any,
 ) -> None:
-    """Happy path: polarity='MUST_NOT_MATCH' + canonical_market_id IS NULL succeeds."""
+    """Happy path: polarity='MUST_NOT_MATCH' + canonical_market_id IS NULL succeeds.
+
+    Per Ripley F5 P2 (#1095 close-out): SELECT-back round-trip verifies
+    polarity + canonical_market_id exactly.  Per Glokta Nit 8 (#1095
+    close-out): canonical_market is intentionally NOT seeded for this
+    test branch — MUST_NOT_MATCH overrides have canonical_market_id=NULL
+    by design, so seeding a canonical_market here would be cosmetic
+    asymmetry not a load-bearing precondition.
+    """
     suffix = uuid.uuid4().hex[:8]
     seeded_platform_market_id = _seed_platform_market(suffix)
     override_id: int | None = None
@@ -434,6 +500,28 @@ def test_polarity_pairing_check_passes_must_not_match_with_null_canonical(
         assert override_id is not None, (
             "happy path INSERT with MUST_NOT_MATCH + NULL canonical_market_id "
             "should succeed; got no row id"
+        )
+
+        # Round-trip SELECT-back (Ripley F5 P2).
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                SELECT polarity, canonical_market_id
+                FROM canonical_match_overrides
+                WHERE id = %s
+                """,
+                (override_id,),
+            )
+            persisted = cur.fetchone()
+        assert persisted is not None, (
+            f"SELECT-back failed: override id={override_id} should exist immediately after INSERT"
+        )
+        assert persisted["polarity"] == "MUST_NOT_MATCH", (
+            f"persisted polarity drift: expected 'MUST_NOT_MATCH', got {persisted['polarity']!r}"
+        )
+        assert persisted["canonical_market_id"] is None, (
+            f"persisted canonical_market_id drift: MUST_NOT_MATCH polarity "
+            f"requires NULL, got {persisted['canonical_market_id']!r}"
         )
     finally:
         if override_id is not None:
@@ -804,6 +892,25 @@ def test_canonical_match_overrides_canonical_market_id_restrict_blocks_canonical
             f"{seeded_market_id}, got {pre_row['canonical_market_id']!r}"
         )
 
+        # Pre-condition: canonical_markets row exists immediately before
+        # DELETE attempt (Ripley F10 P2 — symmetric pre-condition pattern
+        # per #1085 #14 inheritance).  Without this, the test could
+        # silently false-pass if the canonical_markets row was already
+        # gone — the DELETE would match 0 rows but RESTRICT only fires
+        # when there IS a row to delete.
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT id FROM canonical_markets WHERE id = %s",
+                (seeded_market_id,),
+            )
+            canonical_row = cur.fetchone()
+        assert canonical_row is not None, (
+            f"pre-condition: canonical_markets row id={seeded_market_id} "
+            f"should exist immediately before RESTRICT DELETE attempt; got "
+            f"NULL.  Without this row, DELETE would silently match 0 rows "
+            f"and the test would false-pass on a no-op."
+        )
+
         # DELETE canonical_markets row — RESTRICT must fire.
         with pytest.raises(
             (psycopg2.errors.ForeignKeyViolation, psycopg2.errors.RestrictViolation)
@@ -902,19 +1009,22 @@ def test_canonical_match_overrides_replace_via_delete_then_insert_atomic(
     override_a_id: int | None = None
     override_b_id: int | None = None
 
-    # Capture log row count BEFORE the test starts so we can assert
-    # delta=3 after the create-A + delete-A + create-B flow completes.
-    with get_cursor() as cur:
-        cur.execute(
-            """
-            SELECT COUNT(*) AS cnt FROM canonical_match_log
-            WHERE platform_market_id = %s AND action = 'override'
-            """,
-            (seeded_platform_market_id,),
-        )
-        log_count_before = int(cur.fetchone()["cnt"])
-
     try:
+        # Capture log row count BEFORE the test starts so we can assert
+        # delta=3 after the create-A + delete-A + create-B flow completes.
+        # Per Ripley Nit 1 (#1095 close-out): COUNT query lives INSIDE the
+        # try block so a query failure (e.g., aborted transaction state)
+        # routes to the finally cleanup rather than bypassing it.
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) AS cnt FROM canonical_match_log
+                WHERE platform_market_id = %s AND action = 'override'
+                """,
+                (seeded_platform_market_id,),
+            )
+            log_count_before = int(cur.fetchone()["cnt"])
+
         # Create override A (MUST_NOT_MATCH).
         override_a_id = create_override(
             platform_market_id=seeded_platform_market_id,
@@ -1316,10 +1426,25 @@ def test_canonical_match_reviews_transition_to_rejected_writes_log_with_manual_v
 # =============================================================================
 
 
-def test_canonical_match_log_get_match_log_for_link_include_orphans_round_trip(
+def test_canonical_match_log_post_link_delete_orphan_recovery_via_platform_market_id(
     db_pool: Any,
 ) -> None:
     """**LOAD-BEARING** per #1085 #12 deferral inheritance.
+
+    Renamed from
+    ``test_canonical_match_log_get_match_log_for_link_include_orphans_round_trip``
+    per Ripley F9 P2 (#1095 close-out): the prior name overclaimed
+    "include_orphans round trip" but this test exclusively exercises the
+    orphan-recovery path via ``get_match_log_for_platform_market`` /
+    direct-SQL on platform_market_id (the canonical query template from
+    slot 0073's module docstring).  ``get_match_log_for_link`` with
+    ``include_orphans=True`` returns 0 rows here BY DESIGN because the
+    link row is deleted, breaking the attribution-tuple anchor.
+
+    The companion test
+    ``test_get_match_log_for_link_include_orphans_with_live_link_returns_them``
+    below exercises the actual ``include_orphans=True`` path against a
+    live link.
 
     INTEGRATION test (not unit); uses real DB:
         - create_review() (slot 0074) + transition_review('approved') →
@@ -1327,8 +1452,9 @@ def test_canonical_match_log_get_match_log_for_link_include_orphans_round_trip(
         - DELETE the link row → log rows survive with link_id=NULL via
           v2.42 sub-amendment B SET NULL.
         - get_match_log_for_link(link_id, include_orphans=True) returns
-          the orphan rows via the OR canonical_market_id+platform_market_id
-          lookup template.
+          0 rows by design (link row gone, attribution tuple lost).
+        - SELECT directly by platform_market_id (the canonical query
+          template) returns the orphan rows.
 
     Particularly relevant in slot 0074 because the override surface
     introduces nullable canonical_market_id (MUST_NOT_MATCH polarity)
@@ -1453,6 +1579,119 @@ def test_canonical_match_log_get_match_log_for_link_include_orphans_round_trip(
                 WHERE platform_market_id = %s
                 """,
                 (seeded_platform_market_id,),
+            )
+        _cleanup_platform_market(seeded_platform_market_id)
+        _cleanup_canonical_market(seeded_market_id)
+        _cleanup_canonical_event(seeded_event_id)
+
+
+def test_get_match_log_for_link_include_orphans_with_live_link_returns_them(
+    db_pool: Any,
+) -> None:
+    """**LOAD-BEARING** per Ripley F9 P2 (#1095 close-out).
+
+    Companion to ``test_canonical_match_log_post_link_delete_orphan_recovery
+    _via_platform_market_id`` above which exercises the post-DELETE path.
+    This test exercises the actual ``include_orphans=True`` mode against
+    a LIVE link row — the path the docstring on ``get_match_log_for_link``
+    promises (the link row's attribution tuple anchors the orphan
+    lookup).
+
+    Setup:
+        1. Seed link L1 + write log row R1 (action='link') tied to L1.
+        2. Write log row R2 directly with link_id=NULL but matching
+           (platform_market_id, canonical_market_id) = L1's tuple — this
+           simulates an orphan row whose original link was deleted before
+           L1 was seeded (e.g., a re-link rebuild scenario where the
+           historical orphan tuple persists).
+        3. Call ``get_match_log_for_link(L1.id, include_orphans=True)`` —
+           the live-branch returns R1; the UNION's orphan-branch joins
+           on (platform_market_id, canonical_market_id) = L1's tuple
+           AND link_id IS NULL → returns R2.
+        4. Assert both R1 + R2 are present in the result.
+    """
+    suffix = uuid.uuid4().hex[:8]
+    seeded_event_id = _seed_canonical_event(suffix)
+    seeded_market_id = _seed_canonical_market(seeded_event_id, suffix)
+    seeded_platform_market_id = _seed_platform_market(suffix)
+    algorithm_id = _get_manual_v1_algorithm_id()
+    seeded_link_id = _seed_canonical_market_link(
+        seeded_market_id, seeded_platform_market_id, algorithm_id
+    )
+
+    try:
+        # R1: live-link log row.
+        r1_id = append_match_log_row(
+            link_id=seeded_link_id,
+            platform_market_id=seeded_platform_market_id,
+            canonical_market_id=seeded_market_id,
+            action="link",
+            confidence=None,
+            algorithm_id=algorithm_id,
+            features=None,
+            prior_link_id=None,
+            decided_by="system:test",
+        )
+
+        # R2: orphan-tuple log row (link_id=NULL, but attribution tuple
+        # matches L1).  Direct INSERT since the public CRUD requires a
+        # valid link_id; the orphan is the post-DELETE shape that
+        # surfaces here pre-DELETE for the integration test.
+        with get_cursor(commit=True) as cur:
+            cur.execute(
+                """
+                INSERT INTO canonical_match_log (
+                    link_id, platform_market_id, canonical_market_id,
+                    action, confidence, algorithm_id, features,
+                    prior_link_id, decided_by, note
+                ) VALUES (
+                    NULL, %s, %s, 'unlink', NULL, %s, NULL, NULL,
+                    'system:test', 'pre-existing orphan tuple'
+                )
+                RETURNING id
+                """,
+                (seeded_platform_market_id, seeded_market_id, algorithm_id),
+            )
+            r2_id = int(cur.fetchone()["id"])
+
+        # Pre-condition: include_orphans=False returns ONLY R1 (link_id-keyed).
+        live_only = get_match_log_for_link(seeded_link_id, include_orphans=False)
+        live_only_ids = {row["id"] for row in live_only}
+        assert r1_id in live_only_ids, (
+            f"include_orphans=False should return R1 (link_id-keyed live row); "
+            f"got ids {live_only_ids!r}"
+        )
+        assert r2_id not in live_only_ids, (
+            f"include_orphans=False MUST exclude R2 (orphan with link_id=NULL); "
+            f"got ids {live_only_ids!r}"
+        )
+
+        # The actual include_orphans=True contract: live link → returns R1
+        # via the link_id branch AND R2 via the UNION orphan-tuple branch.
+        all_rows = get_match_log_for_link(seeded_link_id, include_orphans=True)
+        all_ids = {row["id"] for row in all_rows}
+        assert r1_id in all_ids, (
+            f"include_orphans=True should return R1 (live link branch); got ids {all_ids!r}"
+        )
+        assert r2_id in all_ids, (
+            f"include_orphans=True should return R2 via the UNION orphan-tuple "
+            f"branch (link_id IS NULL + (platform_market_id, "
+            f"canonical_market_id) matches the live link); got ids {all_ids!r}"
+        )
+    finally:
+        # Clean up all log rows the test created.
+        with get_cursor(commit=True) as cur:
+            cur.execute(
+                """
+                DELETE FROM canonical_match_log
+                WHERE platform_market_id = %s
+                """,
+                (seeded_platform_market_id,),
+            )
+        with get_cursor(commit=True) as cur:
+            cur.execute(
+                "DELETE FROM canonical_market_links WHERE id = %s",
+                (seeded_link_id,),
             )
         _cleanup_platform_market(seeded_platform_market_id)
         _cleanup_canonical_market(seeded_market_id)
