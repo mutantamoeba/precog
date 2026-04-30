@@ -157,9 +157,20 @@ from precog.utils.logger import setup_logging  # noqa: E402
 # automatically.  No other changes needed.
 # =============================================================================
 
-_LAZY_CACHE_GLOBALS: tuple[tuple[str, str], ...] = (
-    # (module_dotted_path, global_attribute_name)
-    ("precog.database.crud_canonical_match_log", "_MANUAL_V1_ID_CACHE"),
+# Registry shape: (module_dotted_path, global_attribute_name, reset_value).
+#
+# The third element (reset_value) was added per claude-review on PR #1096
+# (#1095 close-out item 14): today's lone entry initializes its cache to
+# ``None`` so the previous 2-tuple-with-implicit-None form was correct
+# for the current registry, but a future cache initialized to ``{}`` or
+# ``[]`` would reset to ``None`` and crash on first access.  Carrying the
+# canonical reset-value through the tuple makes the registry future-proof.
+_LAZY_CACHE_GLOBALS: tuple[tuple[str, str, object], ...] = (
+    # (module_dotted_path, global_attribute_name, reset_value)
+    ("precog.database.crud_canonical_match_log", "_MANUAL_V1_ID_CACHE", None),
+    # When the override-side cache lands (per #1095 forward-thinking note),
+    # append:
+    # ("precog.database.crud_canonical_match_overrides", "_MANUAL_V1_ID_CACHE", None),
 )
 
 
@@ -173,7 +184,13 @@ def _reset_module_lazy_caches() -> None:
     """
     import importlib
 
-    for module_path, attr_name in _LAZY_CACHE_GLOBALS:
+    # Pre-test reset only (no yield/teardown).  Post-test reset is unnecessary:
+    # the next test's pre-fixture fires before anything observes the state,
+    # and adding a teardown here would double the per-test reset cost without
+    # closing any additional bug class.  Documented per claude-review on
+    # PR #1096 (#1095 close-out item 16) so a future "to be safe" addition
+    # is informed rather than reflexive.
+    for module_path, attr_name, reset_value in _LAZY_CACHE_GLOBALS:
         try:
             module = importlib.import_module(module_path)
         except ImportError:
@@ -182,7 +199,7 @@ def _reset_module_lazy_caches() -> None:
             # exists", not "all listed modules must exist".
             continue
         if hasattr(module, attr_name):
-            setattr(module, attr_name, None)
+            setattr(module, attr_name, reset_value)
 
 
 # =============================================================================

@@ -158,7 +158,7 @@ from typing import Any, cast
 from .connection import fetch_all, fetch_one, get_cursor
 from .constants import DECIDED_BY_PREFIXES, POLARITY_VALUES
 from .crud_canonical_match_log import (
-    _append_match_log_row_in_cursor,
+    append_match_log_row_in_cursor,
     get_manual_v1_algorithm_id,
 )
 
@@ -221,6 +221,16 @@ def _validate_human_only_actor(*, param_name: str, value: str) -> None:
     Raises ValueError if value does not start with 'human:'.  Length-bound
     enforcement (``len(value) <= 64`` matching VARCHAR(64) column boundary)
     is also at the CRUD boundary per #1085 finding #3.
+
+    Validation order note (Glokta Nit 4 — slot 0074 review): the prefix
+    check fires BEFORE the length check.  If a caller passes a value that
+    is BOTH wrong-prefix AND too long, only the prefix-error message
+    surfaces.  This is intentional — the prefix violation is the primary
+    contract failure (overrides are human-decided by definition); the
+    length bound is a secondary boundary check.  Callers seeing the
+    prefix error should fix the prefix first, then re-run; if the length
+    is also wrong, the second pass surfaces it.  Documented here so the
+    ordering is explicit rather than implicit.
     """
     if not value.startswith(_HUMAN_ONLY_PREFIX):
         raise ValueError(
@@ -257,7 +267,7 @@ def create_override(
     canonical_match_log INSERT commit in a SINGLE transaction — both
     succeed or both roll back.  Previously sequential per Glokta F1
     (slot 0074 review); refactored to atomic via the cursor-aware
-    ``_append_match_log_row_in_cursor`` helper exposed by slot 0073's
+    ``append_match_log_row_in_cursor`` helper exposed by slot 0073's
     crud_canonical_match_log module.
 
     Per build spec § 4b: every override-touching event lands a log row in
@@ -370,9 +380,18 @@ def create_override(
     # in the SAME cursor / transaction — both commit or both roll back.
     # See Glokta F1 P1 (slot 0074 review) for the prior sequential-cursor
     # incident this refactor closes.
-    algorithm_id = get_manual_v1_algorithm_id()
 
     with get_cursor(commit=True) as cur:
+        # Resolve manual_v1.id INSIDE the cursor block (validate-before-side-
+        # effect — same shape as transition_review per #1095 close-out).
+        # The helper opens its own cursor only on the first call per
+        # process; subsequent calls return the cached id with zero DB cost.
+        # Resolving HERE (not before the cursor block) keeps unit tests that
+        # patch ``get_manual_v1_algorithm_id`` independent of cache state in
+        # the worker process — the same CI-failure shape that bit slot 0074's
+        # transition_review path (PR #1094 commit 9b6f9c6).
+        algorithm_id = get_manual_v1_algorithm_id()
+
         cur.execute(
             """
             INSERT INTO canonical_match_overrides (
@@ -397,7 +416,7 @@ def create_override(
         # Audit-ledger write — manual_v1-on-human-decided-actions
         # convention.  In-cursor variant per Glokta F1: log INSERT runs
         # on the SAME transaction as the override INSERT above.
-        _append_match_log_row_in_cursor(
+        append_match_log_row_in_cursor(
             cur,
             link_id=None,  # overrides are independent of any link
             platform_market_id=platform_market_id,
@@ -482,9 +501,13 @@ def delete_override(
     # Glokta F1 P1 (slot 0074 review): pre-DELETE attribution read, the
     # DELETE itself, and the audit log INSERT either all commit or all
     # roll back.
-    algorithm_id = get_manual_v1_algorithm_id()
 
     with get_cursor(commit=True) as cur:
+        # Resolve manual_v1.id INSIDE the cursor block AFTER the SELECT
+        # short-circuits via LookupError when override_id is missing
+        # (validate-before-side-effect — same shape as transition_review per
+        # #1095 close-out).  See create_override comment for the CI-failure
+        # rationale (PR #1094 commit 9b6f9c6).
         # Resolve attribution from the existing row before DELETE.
         cur.execute(
             """
@@ -502,6 +525,11 @@ def delete_override(
         platform_market_id = cast("int", existing["platform_market_id"])
         canonical_market_id = cast("int | None", existing["canonical_market_id"])
 
+        # Resolve manual_v1.id only after the existing-row check passes (no
+        # work spent if the LookupError will fire).  See create_override
+        # comment for the same-shape rationale.
+        algorithm_id = get_manual_v1_algorithm_id()
+
         cur.execute(
             "DELETE FROM canonical_match_overrides WHERE id = %s",
             (override_id,),
@@ -510,7 +538,7 @@ def delete_override(
         # Audit-ledger write — manual_v1-on-human-decided-actions
         # convention.  Note column carries the "deleted: <reason>"
         # discriminator prefix.  In-cursor variant per Glokta F1.
-        _append_match_log_row_in_cursor(
+        append_match_log_row_in_cursor(
             cur,
             link_id=None,
             platform_market_id=platform_market_id,
@@ -598,12 +626,26 @@ def get_overrides_by_polarity(polarity: str, limit: int = 100) -> list[dict[str,
 
 
 # =============================================================================
-# Sentinel: POLARITY_VALUES + DECIDED_BY_PREFIXES are imported and USED above
-# in real-guard ``ValueError``-raising validation (create_override + module-
-# load `_HUMAN_ONLY_PREFIX in DECIDED_BY_PREFIXES` assertion +
-# get_overrides_by_polarity).  If a future refactor drops the validation,
-# the imports become unused and ruff (F401) will fire — closing the side-
-# effect-only-import drift surface that #1085 finding #2 strengthening
-# prevents.  This is the canonical strengthening of slot-0072's
-# LINK_STATE_VALUES side-effect-only-import convention.
+# Sentinel (Glokta Nit 7 clarification — slot 0074 review):
+#
+# POLARITY_VALUES is imported and USED above in real-guard
+# ``ValueError``-raising validation (create_override polarity check +
+# get_overrides_by_polarity).  This is the slot-0073-style strengthening
+# of slot-0072's side-effect-only LINK_STATE_VALUES convention.
+#
+# DECIDED_BY_PREFIXES is imported and USED above in the MODULE-LOAD-TIME
+# ``assert _HUMAN_ONLY_PREFIX in DECIDED_BY_PREFIXES`` statement only.
+# This is INTENTIONALLY WEAKER than the reviews module's true real-guard:
+# crud_canonical_match_reviews iterates DECIDED_BY_PREFIXES inside
+# transition_review's reviewer-prefix validation (any-prefix accepted);
+# this module restricts to the ``human:`` prefix only and uses
+# DECIDED_BY_PREFIXES merely to prove ``human:`` is a member of the
+# canonical taxonomy at module-load time.  The narrowing is by design
+# (overrides are human-decided by definition); the canonical taxonomy
+# import documents the relationship to the broader vocabulary.
+#
+# Either usage pattern keeps the import live: a future refactor dropping
+# the assertion OR the iteration would surface as ruff F401 (unused
+# import), closing the side-effect-only-import drift surface that #1085
+# finding #2 strengthening prevents.
 # =============================================================================

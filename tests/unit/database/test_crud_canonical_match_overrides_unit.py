@@ -37,22 +37,7 @@ from precog.database.crud_canonical_match_overrides import (
     create_override,
     delete_override,
 )
-
-
-def _wire_get_cursor_mock(mock_get_cursor_factory: MagicMock, returning_id: int = 99) -> MagicMock:
-    """Wire a @patch-supplied get_cursor mock so it acts as a context manager.
-
-    Returns the inner ``mock_cursor`` that the SUT sees as the yielded
-    cursor object.  Pattern 43 fidelity: ``fetchone()`` returns a
-    RealDictCursor-style dict (``{"id": <int>}``) matching the real
-    INSERT ... RETURNING id shape.
-    """
-    mock_cursor = MagicMock()
-    mock_cursor.fetchone.return_value = {"id": returning_id}
-    mock_get_cursor_factory.return_value.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_get_cursor_factory.return_value.__exit__ = MagicMock(return_value=False)
-    return mock_cursor
-
+from tests.unit.database._crud_unit_helpers import wire_get_cursor_mock
 
 # =============================================================================
 # create_override — happy paths
@@ -64,7 +49,7 @@ class TestCreateOverrideHappyPaths:
     """Happy paths exercise both polarity branches per Ripley false-pass-hunt frame."""
 
     @patch("precog.database.crud_canonical_match_overrides.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_overrides._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_overrides.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_overrides.get_cursor")
     def test_create_override_must_match_with_canonical_id_valid(
         self, mock_get_cursor_factory, mock_append_log, mock_get_manual_v1
@@ -72,7 +57,7 @@ class TestCreateOverrideHappyPaths:
         """polarity='MUST_MATCH' + canonical_market_id=<int> succeeds."""
         mock_get_manual_v1.return_value = 1
         mock_append_log.return_value = 99
-        mock_cursor = _wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
+        mock_cursor = wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
 
         result = create_override(
             platform_market_id=10,
@@ -94,7 +79,7 @@ class TestCreateOverrideHappyPaths:
         assert params[4] == "human:eric"
 
     @patch("precog.database.crud_canonical_match_overrides.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_overrides._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_overrides.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_overrides.get_cursor")
     def test_create_override_must_not_match_with_null_canonical_id_valid(
         self, mock_get_cursor_factory, mock_append_log, mock_get_manual_v1
@@ -102,7 +87,7 @@ class TestCreateOverrideHappyPaths:
         """polarity='MUST_NOT_MATCH' + canonical_market_id=None succeeds."""
         mock_get_manual_v1.return_value = 1
         mock_append_log.return_value = 99
-        mock_cursor = _wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
+        mock_cursor = wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
 
         result = create_override(
             platform_market_id=10,
@@ -128,7 +113,7 @@ class TestCreateOverrideRejectsInvalidPolarityPairing:
     """Both wrong-pairing branches MUST be exercised per Ripley false-pass-hunt frame."""
 
     @patch("precog.database.crud_canonical_match_overrides.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_overrides._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_overrides.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_overrides.get_cursor")
     def test_rejects_must_match_with_null_canonical_id(
         self, mock_get_cursor_factory, mock_append_log, mock_get_manual_v1
@@ -146,7 +131,7 @@ class TestCreateOverrideRejectsInvalidPolarityPairing:
         mock_append_log.assert_not_called()
 
     @patch("precog.database.crud_canonical_match_overrides.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_overrides._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_overrides.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_overrides.get_cursor")
     def test_rejects_must_not_match_with_non_null_canonical_id(
         self, mock_get_cursor_factory, mock_append_log, mock_get_manual_v1
@@ -174,7 +159,7 @@ class TestCreateOverrideRejectsInvalidPolarity:
     """Pattern 73 SSOT real-guard validation on polarity."""
 
     @patch("precog.database.crud_canonical_match_overrides.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_overrides._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_overrides.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_overrides.get_cursor")
     def test_rejects_invalid_polarity(
         self, mock_get_cursor_factory, mock_append_log, mock_get_manual_v1
@@ -220,7 +205,7 @@ class TestCreateOverrideRejectsNonHumanCreatedByPrefix:
     """
 
     @patch("precog.database.crud_canonical_match_overrides.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_overrides._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_overrides.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_overrides.get_cursor")
     def test_rejects_non_human_created_by_prefix_no_log_row_written(
         self, mock_get_cursor_factory, mock_append_log, mock_get_manual_v1
@@ -258,7 +243,7 @@ class TestCreateOverrideRejectsCreatedByOver64Chars:
     """Boundary validation per #1085 finding #3 — VARCHAR(64) discipline at CRUD layer."""
 
     @patch("precog.database.crud_canonical_match_overrides.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_overrides._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_overrides.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_overrides.get_cursor")
     def test_rejects_created_by_over_64_chars(
         self, mock_get_cursor_factory, mock_append_log, mock_get_manual_v1
@@ -288,7 +273,7 @@ class TestCreateOverrideRejectsEmptyReason:
     """#1085 finding #7 inheritance — slot-0072 retire_reason='' empty-string-acceptance pattern."""
 
     @patch("precog.database.crud_canonical_match_overrides.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_overrides._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_overrides.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_overrides.get_cursor")
     def test_rejects_empty_reason(
         self, mock_get_cursor_factory, mock_append_log, mock_get_manual_v1
@@ -306,7 +291,7 @@ class TestCreateOverrideRejectsEmptyReason:
         mock_append_log.assert_not_called()
 
     @patch("precog.database.crud_canonical_match_overrides.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_overrides._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_overrides.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_overrides.get_cursor")
     def test_rejects_whitespace_only_reason(
         self, mock_get_cursor_factory, mock_append_log, mock_get_manual_v1
@@ -336,18 +321,40 @@ class TestCreateOverrideWritesLogRowWithManualV1AlgorithmId:
     Per Holden Item 1 (P1) bidirectional anchoring: the convention is
     observable from BOTH the CRUD-call site (this test) AND the LOG
     read-back side (the parallel integration test).
+
+    Per Ripley F8 (#1095 close-out): this unit test verifies that the
+    manual_v1.id resolved by ``get_manual_v1_algorithm_id`` is passed
+    through as the ``algorithm_id`` kwarg to
+    ``append_match_log_row_in_cursor``.  The integration-test counterpart
+    that anchors the convention via real DB JOIN is
+    ``test_canonical_match_overrides_create_writes_log_with_manual_v1_join``
+    in ``tests/integration/database/test_migration_0074_*.py`` —
+    that test exercises the full round-trip (CRUD → log row → JOIN to
+    match_algorithm) which this unit test cannot since it patches
+    everything below the public CRUD function.
     """
 
     @patch("precog.database.crud_canonical_match_overrides.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_overrides._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_overrides.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_overrides.get_cursor")
-    def test_create_override_writes_log_row_with_manual_v1_algorithm_id(
+    def test_create_override_passes_manual_v1_id_arg_through_to_append_match_log_row_kwargs(
         self, mock_get_cursor_factory, mock_append_log, mock_get_manual_v1
     ):
-        """create_override writes log row with manual_v1.id + action='override' + decided_by=human:..."""
+        """create_override passes manual_v1.id through to append_match_log_row_in_cursor kwargs.
+
+        Renamed from ``test_create_override_writes_log_row_with_manual_v1_algorithm_id``
+        per Ripley F8 (#1095 close-out): the prior name overclaimed
+        "writes log row" but the test exclusively asserts the kwargs
+        passed to the (mocked) helper.  The integration test named
+        above is the one that anchors the actual log-row write.
+
+        Asserts: action='override', decided_by='human:...',
+        algorithm_id=<manual_v1 id from mock>, link_id=None,
+        confidence=None.
+        """
         mock_get_manual_v1.return_value = 1
         mock_append_log.return_value = 99
-        _wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
+        wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
 
         create_override(
             platform_market_id=10,
@@ -394,7 +401,7 @@ class TestDeleteOverrideValidation:
         mock_get_cursor_factory.assert_not_called()
 
     @patch("precog.database.crud_canonical_match_overrides.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_overrides._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_overrides.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_overrides.get_cursor")
     def test_raises_lookup_error_on_missing_override_id(
         self,
@@ -429,7 +436,7 @@ class TestDeleteOverrideWritesLogRow:
     """delete_override writes a log row with action='override' + 'deleted: ' note prefix."""
 
     @patch("precog.database.crud_canonical_match_overrides.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_overrides._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_overrides.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_overrides.get_cursor")
     def test_delete_override_writes_log_row_shape(
         self,
@@ -484,7 +491,18 @@ class TestDeleteOverrideWritesLogRow:
 
 @pytest.mark.unit
 def test_imports_used_as_real_guards():
-    """Pattern 73 SSOT lockstep meta-test: POLARITY_VALUES contains the canonical 2-value set."""
+    """Pattern 73 SSOT lockstep meta-test: POLARITY_VALUES contains the canonical 2-value set.
+
+    Per Ripley Nit 2 (#1095 close-out): the literal value set
+    ``{"MUST_MATCH", "MUST_NOT_MATCH"}`` IS authoritative here BY DESIGN.
+    This test is the reverse-drift oracle — if the Python constant grows
+    a third polarity (or shrinks to one), this test fails loudly so the
+    schema-side CHECK and the slot-0074 build spec § 3 vocabulary are
+    re-examined together rather than letting the constant drift silently.
+    The literal-set form is intentional; do not replace with
+    ``set(POLARITY_VALUES) == set(POLARITY_VALUES)`` (would tautologically
+    pass).
+    """
     assert set(POLARITY_VALUES) == {"MUST_MATCH", "MUST_NOT_MATCH"}
     # human-only invariant relies on 'human:' being a member of the broader taxonomy.
     assert "human:" in DECIDED_BY_PREFIXES

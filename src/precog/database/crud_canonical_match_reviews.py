@@ -149,7 +149,7 @@ from typing import Any, cast
 from .connection import fetch_all, fetch_one, get_cursor
 from .constants import DECIDED_BY_PREFIXES, REVIEW_STATE_VALUES
 from .crud_canonical_match_log import (
-    _append_match_log_row_in_cursor,
+    append_match_log_row_in_cursor,
     get_manual_v1_algorithm_id,
 )
 
@@ -324,6 +324,19 @@ def transition_review(
           Item 3 P2: self-transition rule beats the matrix on the
           diagonal).
 
+    Known limitation — concurrent-operator transitions (claude-review
+    minor finding, slot 0074 review; #1095 close-out):
+        The state-read SELECT does NOT use ``SELECT ... FOR UPDATE``.
+        Two operators transitioning the same review simultaneously will
+        both see ``current_state``, both pass ``_validate_transition``,
+        and the UPDATE is last-writer-wins.  Acceptable for the current
+        operator-facing workflow (concurrent same-review transitions are
+        unlikely in practice — operators triage from a queue, not the
+        same row).  ``SELECT FOR UPDATE`` retrofit deferred to a future
+        cohort if operational evidence justifies the row-lock cost; the
+        change is behavior-affecting and warrants its own design council
+        rather than landing in a polish bundle.
+
     Side-effects (atomic — same transaction):
         - SELECT review state + link attribution (via JOIN to
           canonical_market_links).
@@ -397,6 +410,22 @@ def transition_review(
     # attribution is not read in a separate transaction (which would
     # admit a TOCTOU window for concurrent CASCADE on link deletion
     # between the UPDATE commit and the link lookup).
+    #
+    # LEFT JOIN (vs INNER JOIN) — defensive design (Comment 2 item 5,
+    # slot 0074 review): canonical_match_reviews.link_id is NOT NULL FK
+    # on canonical_market_links.id, AND canonical_market_links is the
+    # parent of canonical_match_reviews via CASCADE — so an INNER JOIN
+    # would in practice always match.  The LEFT JOIN is intentional
+    # defense-in-depth: if a future schema-invariant violation lands
+    # the link row in an inconsistent state (e.g., a partial CASCADE,
+    # a manual DELETE bypassing the FK), the LEFT JOIN surfaces NULL
+    # platform_market_id at the post-validation guard below — which
+    # raises an explicit RuntimeError naming the schema-invariant
+    # violation rather than silently inserting a NULL into
+    # canonical_match_log.platform_market_id (NOT NULL column → opaque
+    # IntegrityError) or returning empty.  The "unreachable in practice"
+    # comment on the guard documents this; the LEFT JOIN is the upstream
+    # half of the same defensive pair.
     with get_cursor(commit=True) as cur:
         cur.execute(
             """
@@ -467,7 +496,7 @@ def transition_review(
             # process; subsequent calls return the cached id with zero DB
             # cost — nesting is bounded to first call.)
             algorithm_id = get_manual_v1_algorithm_id()
-            _append_match_log_row_in_cursor(
+            append_match_log_row_in_cursor(
                 cur,
                 link_id=link_id,
                 platform_market_id=platform_market_id,
