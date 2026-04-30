@@ -84,10 +84,25 @@ ok() {
 }
 
 restore_branch() {
-    # Trap handler: restore the working branch the user started on.
-    # Runs on success, failure, and signals. Best-effort — if the
+    # Trap handler: clean up tempfiles + restore the working branch the user
+    # started on. Runs on success, failure, and signals. Best-effort — if the
     # checkout itself fails, log loudly but don't recurse.
-    if [[ -z "${ORIGINAL_BRANCH}" ]]; then
+    #
+    # Tempfile cleanup is done from globals so the trap can be registered ONCE
+    # (line 190, after ORIGINAL_BRANCH is captured) and tempfile assignments
+    # later in the script are immediately covered without a re-register race
+    # window. Use ${VAR:-} default so unset globals don't trip `set -u`.
+    if [[ -n "${CANDIDATES_FILE:-}" ]] && [[ -f "${CANDIDATES_FILE}" ]]; then
+        rm -f "${CANDIDATES_FILE}"
+    fi
+    if [[ -n "${FINAL_OUT_FILE:-}" ]] && [[ -f "${FINAL_OUT_FILE}" ]]; then
+        rm -f "${FINAL_OUT_FILE}"
+    fi
+    if [[ -n "${FINAL_ERR_FILE:-}" ]] && [[ -f "${FINAL_ERR_FILE}" ]]; then
+        rm -f "${FINAL_ERR_FILE}"
+    fi
+
+    if [[ -z "${ORIGINAL_BRANCH:-}" ]]; then
         return 0
     fi
     local current
@@ -301,9 +316,10 @@ else
     # Auto-detect: find branches that contain the migration file for ${TEST_DB_VERSION}.
     # We look for files matching ${TEST_DB_VERSION}_*.py in the alembic versions dir.
     info "Auto-detecting branch containing migration file ${TEST_DB_VERSION}_*.py..."
+    # Tempfile is cleaned up by the existing restore_branch trap (registered
+    # at line 190); see the global-state cleanup logic in restore_branch().
+    # No trap re-registration needed.
     CANDIDATES_FILE="$(mktemp)"
-    # shellcheck disable=SC2064
-    trap "rm -f '${CANDIDATES_FILE}'; restore_branch" EXIT INT TERM
 
     # Search local branches.
     while IFS= read -r br; do
@@ -357,15 +373,24 @@ echo ""
 info "Downgrade complete. Switching to target branch ${TARGET_BRANCH}..."
 git checkout --quiet "${TARGET_BRANCH}"
 
-# Verify final state matches. Same sentinel pattern as the initial read.
+# Verify final state matches. Mirror the initial-read pattern (lines 204-222):
+# capture stderr separately so a verification failure surfaces the underlying
+# cause to the user rather than silently producing an empty FINAL_VERSION.
 FINAL_OUT_FILE="$(mktemp)"
-PRECOG_ENV=test python -c "
+FINAL_ERR_FILE="$(mktemp)"
+if ! PRECOG_ENV=test python -c "
 from precog.database.migration_check import check_migration_parity
 s = check_migration_parity()
 print('ALIGN_TEST_DB_VERSION=' + (s.db_version or ''))
-" >"${FINAL_OUT_FILE}" 2>/dev/null || true
+" >"${FINAL_OUT_FILE}" 2>"${FINAL_ERR_FILE}"; then
+    err "Post-downgrade verification call failed:"
+    cat "${FINAL_ERR_FILE}" >&2
+    cat "${FINAL_OUT_FILE}" >&2
+    rm -f "${FINAL_OUT_FILE}" "${FINAL_ERR_FILE}"
+    exit 1
+fi
 FINAL_VERSION="$(grep '^ALIGN_TEST_DB_VERSION=' "${FINAL_OUT_FILE}" | head -n 1 | sed 's/^ALIGN_TEST_DB_VERSION=//' | tr -d '[:space:]')"
-rm -f "${FINAL_OUT_FILE}"
+rm -f "${FINAL_OUT_FILE}" "${FINAL_ERR_FILE}"
 if [[ "${FINAL_VERSION}" != "${TARGET_HEAD}" ]]; then
     err "Post-downgrade verification failed: test DB at ${FINAL_VERSION}, expected ${TARGET_HEAD}."
     exit 1
