@@ -54,19 +54,22 @@ Finding 10 and Slice B deferrals):
     ad-hoc UPDATE SQL (Pattern 73 violation -- drift across consumers); file
     an issue or add the helper here first.
 
-Note on ``updated_at`` (BEFORE UPDATE trigger status -- #1007):
-    ``canonical_events.updated_at`` was migrated with ``DEFAULT now()`` but
-    Migration 0067 did NOT install a generic BEFORE UPDATE trigger to
-    refresh it on UPDATE -- the column is currently a static creation
-    timestamp.  ``retire_canonical_event`` therefore writes ``retired_at =
-    now()`` ONLY (mirrors the deliberate Cohort 2 Pattern 73 carve-out for
-    canonical_markets, where the BEFORE UPDATE trigger DOES exist via
-    ``trg_canonical_markets_updated_at``).  When #1007 (the generic
-    ``set_updated_at()`` BEFORE UPDATE trigger retrofit) ships, this
-    function's behavior automatically picks up the trigger via the existing
-    UPDATE statement -- no helper-level change required (Pattern 73 SSOT:
-    the trigger is the canonical source for ``updated_at`` semantics; this
-    module trusts it once installed).
+Note on ``updated_at`` (BEFORE UPDATE trigger status -- shipped in
+Migration 0076):
+    ``canonical_events.updated_at`` was migrated with ``DEFAULT now()`` in
+    Migration 0067 but the BEFORE UPDATE trigger that refreshes it on
+    UPDATE was not installed until Migration 0076 (generic
+    ``set_updated_at()`` retrofit, ADR-118 V2.42 sub-amendment A).
+    Pre-Migration-0076 the column was a static creation timestamp;
+    post-Migration-0076 the trigger ``trg_canonical_events_updated_at``
+    advances ``updated_at`` automatically on every UPDATE.
+    ``retire_canonical_event`` writes ``retired_at = now()`` ONLY and
+    relies on the trigger to refresh ``updated_at`` (Pattern 73 SSOT:
+    the trigger is the canonical source for ``updated_at`` semantics;
+    this module trusts it).  Post-retrofit, ``updated_at`` reflects any
+    DB-side row modification, including FK-NULL cascades from upstream
+    DELETEs (per ADR-118 V2.42 sub-amendment B / Migration 0077) -- it
+    is NOT a "last canonical content change" timestamp.
 
 Slice C scope (this module) -- exactly these tables:
     - ``canonical_events`` (CRUD: create + 2 lookups + retire);
@@ -226,11 +229,12 @@ def create_canonical_event(
         transitions rows to ``'matched'`` / ``'resolved'`` / ``'voided'``
         as the event lifecycle progresses.
 
-        ``updated_at`` is currently a static creation timestamp -- the
-        BEFORE UPDATE trigger retrofit lands in #1007.  Once the trigger
-        is installed, this column will refresh automatically on every
-        UPDATE; callers should NOT write ``updated_at`` themselves either
-        before or after the trigger lands (Pattern 73 SSOT compliance).
+        ``updated_at`` is maintained automatically by the
+        ``trg_canonical_events_updated_at`` BEFORE UPDATE trigger (shipped
+        in Migration 0076 -- generic ``set_updated_at()`` retrofit per
+        ADR-118 V2.42 sub-amendment A).  Callers MUST NOT write
+        ``updated_at`` themselves; the trigger is the canonical source
+        for the column (Pattern 73 SSOT compliance).
 
     Reference:
         - ``docs/foundation/ARCHITECTURE_DECISIONS.md`` ADR-118 V2.38+
@@ -408,13 +412,13 @@ def retire_canonical_event(canonical_event_id: int) -> bool:
         platform-tier tables (Patterns 18, 80) -- the canonical tier is
         identity, not history.
 
-        Note that ``canonical_events`` does NOT have a ``trg_canonical_events_
-        updated_at`` BEFORE UPDATE trigger yet (#1007 retrofit pending).  This
-        function therefore writes ``retired_at = now()`` ONLY; ``updated_at``
-        will refresh automatically once #1007 ships.  The behavior is forward-
-        compatible: when the trigger lands, no helper-level change is needed
-        (Pattern 73 SSOT -- the trigger is the canonical source for
-        ``updated_at`` semantics; this module trusts it once installed).
+        ``canonical_events`` carries the ``trg_canonical_events_updated_at``
+        BEFORE UPDATE trigger (shipped in Migration 0076 -- generic
+        ``set_updated_at()`` retrofit per ADR-118 V2.42 sub-amendment A).
+        This function therefore writes ``retired_at = now()`` ONLY;
+        ``updated_at`` refreshes automatically via the trigger.  Pattern 73
+        SSOT compliance: the trigger is the canonical source for
+        ``updated_at`` semantics; this module relies on it.
 
         This function is idempotent in effect: retiring an already-retired
         row simply refreshes ``retired_at`` to the current timestamp.  If
@@ -423,9 +427,10 @@ def retire_canonical_event(canonical_event_id: int) -> bool:
 
     Reference:
         - Migration 0067 (table DDL)
+        - Migration 0076 (generic ``set_updated_at()`` BEFORE UPDATE
+          trigger retrofit per ADR-118 V2.42 sub-amendment A)
         - ``crud_canonical_markets.retire_canonical_market`` (sibling
           retire-tier pattern)
-        - #1007 (BEFORE UPDATE trigger retrofit -- forward-pointer)
     """
     query = """
         UPDATE canonical_events
