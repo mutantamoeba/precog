@@ -71,6 +71,22 @@ Migration 0076):
     DELETEs (per ADR-118 V2.42 sub-amendment B / Migration 0077) -- it
     is NOT a "last canonical content change" timestamp.
 
+Note on ``game_id`` / ``series_id`` (FK ON DELETE SET NULL -- shipped in
+Migration 0077):
+    Both columns are FKs into the platform tier (``games.id`` /
+    ``series.id``) with ``ON DELETE SET NULL`` per ADR-118 V2.42 sub-
+    amendment B.  Callers reading these columns from any row dict MAY
+    observe NULL on either column due to upstream DELETE cascade --
+    a canonical_events row that originally had ``game_id = 42`` will
+    have ``game_id = NULL`` after the corresponding games row is
+    deleted (the canonical row itself survives; only the link is
+    severed).  This realizes the canonical-outlives-platform contract
+    of ADR-118 V2.38: the canonical tier is identity-stable across
+    platform-row turnover (replays, retracted seasons, schedule
+    corrections).  Cohort 5+ matcher code that resolves canonical_event
+    by game_id MUST NOT cache the column -- it can silently transition
+    to NULL between cache fill and read.
+
 Slice C scope (this module) -- exactly these tables:
     - ``canonical_events`` (CRUD: create + 2 lookups + retire);
     - ``canonical_event_domains`` (read-only resolver helper);
@@ -161,9 +177,17 @@ def create_canonical_event(
             Dolphins, Week 1").  ``VARCHAR`` -- NOT NULL.
         description: Optional human-readable description.  ``TEXT``.
         game_id: Optional FK into platform-sports ``games.id``.  NULLABLE --
-            most non-sports-domain events have NULL ``game_id``.
+            most non-sports-domain events have NULL ``game_id``.  Post-
+            Migration-0077, the FK carries ``ON DELETE SET NULL`` per
+            ADR-118 V2.42 sub-amendment B; callers reading ``game_id``
+            from a row dict MAY observe NULL on a row that originally
+            had a non-NULL value, due to upstream ``DELETE FROM games``
+            cascading to SET NULL.  Code that branches on ``game_id IS
+            NOT NULL`` MUST tolerate the column transitioning to NULL
+            asynchronously.
         series_id: Optional FK into platform-sports ``series.id``.  NULLABLE
-            -- mirrors ``game_id`` semantics.
+            -- mirrors ``game_id`` semantics, including the post-Migration-
+            0077 ``ON DELETE SET NULL`` cascade behavior described above.
         lifecycle_phase: Closed-enum-like string.  Defaults to ``'proposed'``
             per ADR-118 V2.38 Phase B.5 state machine.  Migration 0067
             ships this as ``VARCHAR(32) NOT NULL DEFAULT 'proposed'`` with
@@ -291,6 +315,12 @@ def get_canonical_event_by_id(canonical_event_id: int) -> dict[str, Any] | None:
             game_id, series_id, lifecycle_phase, metadata, created_at,
             updated_at, retired_at
 
+        Post-Migration-0077, the returned ``game_id`` / ``series_id`` MAY
+        be NULL even on a row that originally had non-NULL values, due to
+        upstream ``DELETE FROM games``/``DELETE FROM series`` cascading to
+        SET NULL per ADR-118 V2.42 sub-amendment B.  Callers MUST tolerate
+        these columns being NULL.
+
     Example:
         >>> row = get_canonical_event_by_id(7)
         >>> if row:
@@ -340,7 +370,11 @@ def get_canonical_event_by_natural_key_hash(
 
     Returns:
         Full row dict if found, ``None`` otherwise.  Same keys as
-        ``get_canonical_event_by_id``.
+        ``get_canonical_event_by_id``, including the post-Migration-0077
+        SET NULL caveat on ``game_id`` / ``series_id``: callers MUST
+        tolerate either column being NULL even on rows that originally
+        had non-NULL values (upstream ``DELETE FROM games``/``DELETE FROM
+        series`` cascades to SET NULL per ADR-118 V2.42 sub-amendment B).
 
     Example:
         >>> import hashlib

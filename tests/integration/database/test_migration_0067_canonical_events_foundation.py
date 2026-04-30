@@ -386,22 +386,27 @@ def test_canonical_events_natural_key_hash_unique(db_pool: Any) -> None:
 
 
 # =============================================================================
-# Group 5: ON DELETE clauses on canonical_events FKs (#1044 item 2)
+# Group 5: ON DELETE clauses on canonical_events FKs (#1044 item 2 + #1075)
 #
-# Mirrors the ON DELETE RESTRICT assertion in test_0069 against
-# ``canonical_markets_canonical_event_id_fkey``.  Both ``game_id`` and
-# ``series_id`` FKs default to ON DELETE NO ACTION (the migration does not
-# specify an action; PG default = NO ACTION).  This pins that intent so a
-# future migration that quietly upgrades to CASCADE / SET NULL is forced
-# to update this test alongside.
+# Both ``game_id`` and ``series_id`` FKs were retrofitted from default
+# ON DELETE NO ACTION to ON DELETE SET NULL in Migration 0077 (ADR-118
+# V2.42 sub-amendment B).  This test pins the SET NULL polarity so any
+# future migration that quietly reverts to NO ACTION/CASCADE/RESTRICT is
+# forced to update this test alongside.
+#
+# Per Galadriel's slot-0077 cross-module review: the test was restructured
+# to assert the SET NULL clause is PRESENT (positive assertion) rather
+# than absence-of-other-clauses (negative assertion).  Positive assertions
+# are less brittle to PG textual reformatting and surface drift more
+# clearly when they fail.
 # =============================================================================
 
 
 @pytest.mark.parametrize(
     ("constraint_name", "expected_clause"),
     [
-        ("canonical_events_game_id_fkey", "ON DELETE NO ACTION"),
-        ("canonical_events_series_id_fkey", "ON DELETE NO ACTION"),
+        ("canonical_events_game_id_fkey", "ON DELETE SET NULL"),
+        ("canonical_events_series_id_fkey", "ON DELETE SET NULL"),
     ],
 )
 def test_canonical_events_fk_on_delete_clause(
@@ -411,11 +416,13 @@ def test_canonical_events_fk_on_delete_clause(
 ) -> None:
     """Pin the ON DELETE clause on canonical_events FKs (game_id, series_id).
 
-    PG ``pg_get_constraintdef`` only emits an explicit ``ON DELETE`` clause
-    when the action is non-default; ``NO ACTION`` is the default and is
-    therefore typically OMITTED from the textual rendering.  We accept
-    either an explicit ``ON DELETE NO ACTION`` substring OR no ON DELETE
-    substring at all (which means PG defaulted to NO ACTION).
+    Post-Migration-0077 (ADR-118 V2.42 sub-amendment B), both FKs carry
+    ``ON DELETE SET NULL``.  PG's ``pg_get_constraintdef`` emits the
+    explicit ``ON DELETE SET NULL`` substring whenever the action is non-
+    default (NO ACTION is the only default that gets omitted from the
+    rendering).  This test asserts the SET NULL clause is PRESENT in the
+    constraint definition -- a positive assertion that surfaces drift
+    cleanly if any future migration reverts the polarity.
     """
     with get_cursor() as cur:
         cur.execute(
@@ -430,21 +437,11 @@ def test_canonical_events_fk_on_delete_clause(
         row = cur.fetchone()
     assert row is not None, f"{constraint_name} must exist on canonical_events"
     fk_def = row["def"]
-    if expected_clause == "ON DELETE NO ACTION":
-        # NO ACTION is PG default; pg_get_constraintdef OMITS it.  Accept
-        # either explicit text or absence-of-other-clauses.
-        forbidden_clauses = ("ON DELETE CASCADE", "ON DELETE SET NULL", "ON DELETE RESTRICT")
-        for forbidden in forbidden_clauses:
-            assert forbidden not in fk_def, (
-                f"{constraint_name} must be ON DELETE NO ACTION (default); "
-                f"found unexpected {forbidden!r} in: {fk_def}"
-            )
-    else:
-        # Future-extensibility branch: handles explicit ON DELETE CASCADE /
-        # SET NULL / RESTRICT if a third canonical_events FK is added with
-        # non-default action.  Currently no parametrize value reaches here;
-        # leaving in place so adding a non-default-action FK is a one-line
-        # parametrize update.
-        assert expected_clause in fk_def, (
-            f"{constraint_name} must include {expected_clause!r}; got: {fk_def}"
-        )
+    # Positive assertion: the SET NULL clause must be present.  Galadriel
+    # restructure -- pre-#1075 the assertion was absence-of-other-clauses
+    # because NO ACTION was the default and PG omits the textual rendering;
+    # post-#1075 the SET NULL action is non-default and PG emits it
+    # explicitly, which makes the positive assertion the cleaner shape.
+    assert expected_clause in fk_def, (
+        f"{constraint_name} must include {expected_clause!r}; got: {fk_def}"
+    )
