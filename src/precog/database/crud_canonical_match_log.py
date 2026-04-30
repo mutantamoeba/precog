@@ -349,12 +349,12 @@ def append_match_log_row(
     """
     # Validate BEFORE opening the cursor so callers see a clear validation
     # message rather than a CheckViolation from psycopg2.  The cursor-aware
-    # variant (_append_match_log_row_in_cursor) re-runs validation as
+    # variant (append_match_log_row_in_cursor) re-runs validation as
     # defense-in-depth for sibling-module callers (slot 0074 + future).
     _validate_append_match_log_args(action=action, confidence=confidence, decided_by=decided_by)
 
     with get_cursor(commit=True) as cur:
-        return _append_match_log_row_in_cursor(
+        return append_match_log_row_in_cursor(
             cur,
             link_id=link_id,
             platform_market_id=platform_market_id,
@@ -378,7 +378,7 @@ def _validate_append_match_log_args(
     """Pattern 73 SSOT + boundary + Decimal-Pattern-#1 validation for log-append args.
 
     Extracted so both ``append_match_log_row`` (validates BEFORE opening
-    its own cursor) AND ``_append_match_log_row_in_cursor`` (validates as
+    its own cursor) AND ``append_match_log_row_in_cursor`` (validates as
     defense-in-depth for sibling-module callers) can share the same
     canonical validation logic.
 
@@ -430,7 +430,7 @@ def _validate_append_match_log_args(
             raise ValueError(f"confidence must be in [0, 1] or None; got {confidence!r}")
 
 
-def _append_match_log_row_in_cursor(
+def append_match_log_row_in_cursor(
     cur: Any,
     *,
     link_id: int | None,

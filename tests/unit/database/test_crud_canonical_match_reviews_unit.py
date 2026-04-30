@@ -34,24 +34,11 @@ import pytest
 
 from precog.database.constants import DECIDED_BY_PREFIXES, REVIEW_STATE_VALUES
 from precog.database.crud_canonical_match_reviews import (
+    _REVIEW_STATE_TRANSITIONS,
     create_review,
     transition_review,
 )
-
-
-def _wire_get_cursor_mock(mock_get_cursor_factory: MagicMock, returning_id: int = 99) -> MagicMock:
-    """Wire a @patch-supplied get_cursor mock so it acts as a context manager.
-
-    Returns the inner ``mock_cursor`` that the SUT sees as the yielded
-    cursor object.  Pattern 43 fidelity: ``fetchone()`` returns a
-    RealDictCursor-style dict (``{"id": <int>}``) matching the real
-    INSERT ... RETURNING id shape.
-    """
-    mock_cursor = MagicMock()
-    mock_cursor.fetchone.return_value = {"id": returning_id}
-    mock_get_cursor_factory.return_value.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_get_cursor_factory.return_value.__exit__ = MagicMock(return_value=False)
-    return mock_cursor
+from tests.unit.database._crud_unit_helpers import wire_get_cursor_mock
 
 
 def _wire_transition_cursor_mock(
@@ -93,7 +80,7 @@ class TestCreateReviewValidInputs:
     @patch("precog.database.crud_canonical_match_reviews.get_cursor")
     def test_create_review_valid_inputs(self, mock_get_cursor_factory):
         """create_review INSERTs and returns the id when all inputs valid."""
-        mock_cursor = _wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
+        mock_cursor = wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
 
         result = create_review(link_id=100, flagged_reason="low confidence")
 
@@ -109,7 +96,7 @@ class TestCreateReviewValidInputs:
     @patch("precog.database.crud_canonical_match_reviews.get_cursor")
     def test_create_review_flagged_reason_none_passes_through(self, mock_get_cursor_factory):
         """flagged_reason=None is forwarded as NULL."""
-        mock_cursor = _wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
+        mock_cursor = wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
 
         create_review(link_id=100)  # default flagged_reason=None
 
@@ -132,7 +119,7 @@ class TestCreateReviewRejectsFlaggedReasonOver256Chars:
     @patch("precog.database.crud_canonical_match_reviews.get_cursor")
     def test_create_review_accepts_flagged_reason_exactly_256_chars(self, mock_get_cursor_factory):
         """flagged_reason exactly 256 chars is the boundary — accepted, not rejected."""
-        mock_cursor = _wire_get_cursor_mock(mock_get_cursor_factory, returning_id=1)
+        mock_cursor = wire_get_cursor_mock(mock_get_cursor_factory, returning_id=1)
 
         exactly_256 = "x" * 256
         create_review(link_id=100, flagged_reason=exactly_256)
@@ -235,7 +222,7 @@ class TestTransitionReviewRejectsSelfTransition:
         list(REVIEW_STATE_VALUES),
         ids=lambda s: f"self_transition_{s}",
     )
-    @patch("precog.database.crud_canonical_match_reviews._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_reviews.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_reviews.get_cursor")
     def test_rejects_self_transition(self, mock_get_cursor_factory, mock_append_log, state):
         """Self-transition <state> -> <state> raises ValueError for every state.
@@ -266,6 +253,25 @@ class TestTransitionReviewRejectsSelfTransition:
 # =============================================================================
 
 
+# Pre-compute the disallowed-transition list by introspecting the
+# ``_REVIEW_STATE_TRANSITIONS`` matrix from the SUT (Ripley F7 #1095
+# close-out).  Closes the matrix-vs-test drift surface: if the matrix
+# grows or shrinks (e.g., a new ``deferred`` state, or relaxed
+# ``approved -> pending`` semantics), the test list updates automatically
+# rather than requiring a parallel edit to a hardcoded pair list.
+#
+# The list is the cross-product of REVIEW_STATE_VALUES minus
+# self-transitions (which are exercised by
+# TestTransitionReviewRejectsSelfTransition above) minus the allowed
+# transitions in _REVIEW_STATE_TRANSITIONS[current].
+_DISALLOWED_NON_SELF_TRANSITIONS: list[tuple[str, str]] = [
+    (current, new)
+    for current in REVIEW_STATE_VALUES
+    for new in REVIEW_STATE_VALUES
+    if current != new and new not in _REVIEW_STATE_TRANSITIONS[current]
+]
+
+
 @pytest.mark.unit
 class TestTransitionReviewRejectsDisallowedStateTransitions:
     """State-machine matrix is enforced beyond the self-transition rule.
@@ -276,19 +282,17 @@ class TestTransitionReviewRejectsDisallowedStateTransitions:
         'approved'   -> {'rejected', 'needs_info'}
         'rejected'   -> {'approved', 'needs_info'}
 
-    Notable disallowed transitions exercised here:
+    Notable disallowed transitions exercised here (introspected from the
+    matrix per Ripley F7 — #1095 close-out):
         'approved'   -> 'pending'  (cannot rewind to pending after approval)
         'rejected'   -> 'pending'  (cannot rewind to pending after rejection)
     """
 
     @pytest.mark.parametrize(
         ("current_state", "new_state"),
-        [
-            ("approved", "pending"),  # cannot rewind to pending
-            ("rejected", "pending"),  # cannot rewind to pending
-        ],
+        _DISALLOWED_NON_SELF_TRANSITIONS,
     )
-    @patch("precog.database.crud_canonical_match_reviews._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_reviews.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_reviews.get_cursor")
     def test_rejects_disallowed_transition(
         self,
@@ -333,7 +337,7 @@ class TestTransitionReviewRejectsDisallowedStateTransitions:
         ],
     )
     @patch("precog.database.crud_canonical_match_reviews.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_reviews._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_reviews.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_reviews.get_cursor")
     def test_accepts_allowed_transition(
         self,
@@ -371,7 +375,7 @@ class TestTransitionReviewLogRowCoupling:
     """approve/reject transitions write a log row; pending/needs_info do NOT."""
 
     @patch("precog.database.crud_canonical_match_reviews.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_reviews._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_reviews.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_reviews.get_cursor")
     def test_transition_to_approved_writes_log_row(
         self,
@@ -403,7 +407,7 @@ class TestTransitionReviewLogRowCoupling:
         assert call_kwargs["decided_by"] == "human:eric"
 
     @patch("precog.database.crud_canonical_match_reviews.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_reviews._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_reviews.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_reviews.get_cursor")
     def test_transition_to_rejected_writes_log_row(
         self,
@@ -427,7 +431,7 @@ class TestTransitionReviewLogRowCoupling:
         assert call_kwargs["action"] == "review_reject"
 
     @patch("precog.database.crud_canonical_match_reviews.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_reviews._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_reviews.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_reviews.get_cursor")
     def test_transition_to_needs_info_does_not_write_log_row(
         self,
@@ -452,7 +456,7 @@ class TestTransitionReviewLogRowCoupling:
         mock_append_log.assert_not_called()
 
     @patch("precog.database.crud_canonical_match_reviews.get_manual_v1_algorithm_id")
-    @patch("precog.database.crud_canonical_match_reviews._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_reviews.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_reviews.get_cursor")
     def test_transition_to_pending_does_not_write_log_row(
         self,
@@ -482,7 +486,7 @@ class TestTransitionReviewLogRowCoupling:
 class TestTransitionReviewLookupErrorOnMissingReviewId:
     """LookupError surfaces before SQL UPDATE silently affects 0 rows."""
 
-    @patch("precog.database.crud_canonical_match_reviews._append_match_log_row_in_cursor")
+    @patch("precog.database.crud_canonical_match_reviews.append_match_log_row_in_cursor")
     @patch("precog.database.crud_canonical_match_reviews.get_cursor")
     def test_raises_lookup_error_on_missing_review_id(
         self, mock_get_cursor_factory, mock_append_log

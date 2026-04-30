@@ -27,7 +27,7 @@ Reference:
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -38,6 +38,7 @@ from precog.database.crud_canonical_match_log import (
     get_match_log_for_link,
     get_match_log_for_platform_market,
 )
+from tests.unit.database._crud_unit_helpers import wire_get_cursor_mock
 
 
 def _full_log_row_dict(
@@ -101,20 +102,6 @@ _ALL_COLUMNS = (
 )
 
 
-def _wire_get_cursor_mock(mock_get_cursor_factory: MagicMock, returning_id: int = 99) -> MagicMock:
-    """Wire a @patch-supplied get_cursor mock so it acts as a context manager.
-
-    Returns the inner ``mock_cursor`` that the SUT sees as the yielded cursor
-    object.  Pattern 43 fidelity: ``fetchone()`` returns a RealDictCursor-style
-    dict (``{"id": <int>}``) matching the real INSERT ... RETURNING id shape.
-    """
-    mock_cursor = MagicMock()
-    mock_cursor.fetchone.return_value = {"id": returning_id}
-    mock_get_cursor_factory.return_value.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_get_cursor_factory.return_value.__exit__ = MagicMock(return_value=False)
-    return mock_cursor
-
-
 # =============================================================================
 # append_match_log_row — happy path
 # =============================================================================
@@ -127,7 +114,7 @@ class TestAppendMatchLogRowValidInputs:
     @patch("precog.database.crud_canonical_match_log.get_cursor")
     def test_append_match_log_row_valid_inputs(self, mock_get_cursor_factory):
         """append_match_log_row INSERTs and returns the id when all inputs valid."""
-        mock_cursor = _wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
+        mock_cursor = wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
 
         result = append_match_log_row(
             link_id=100,
@@ -178,7 +165,7 @@ class TestAppendMatchLogRowValidInputs:
     @patch("precog.database.crud_canonical_match_log.get_cursor")
     def test_append_match_log_row_features_none_passes_through(self, mock_get_cursor_factory):
         """features=None is forwarded as NULL (not the JSON string "null")."""
-        mock_cursor = _wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
+        mock_cursor = wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
 
         append_match_log_row(
             link_id=None,
@@ -199,7 +186,7 @@ class TestAppendMatchLogRowValidInputs:
     @patch("precog.database.crud_canonical_match_log.get_cursor")
     def test_append_match_log_row_confidence_none_passes_through(self, mock_get_cursor_factory):
         """confidence=None is forwarded as NULL (human override convention)."""
-        mock_cursor = _wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
+        mock_cursor = wire_get_cursor_mock(mock_get_cursor_factory, returning_id=42)
 
         append_match_log_row(
             link_id=None,
@@ -258,7 +245,7 @@ class TestAppendMatchLogRowRejectsInvalidAction:
         If this fails, the constant and the validation drifted apart —
         which is exactly the failure mode Pattern 73 SSOT prevents.
         """
-        mock_cursor = _wire_get_cursor_mock(mock_get_cursor_factory, returning_id=1)
+        mock_cursor = wire_get_cursor_mock(mock_get_cursor_factory, returning_id=1)
 
         for canonical_action in ACTION_VALUES:
             # Should NOT raise.
@@ -312,7 +299,7 @@ class TestAppendMatchLogRowRejectsInvalidDecidedByPrefix:
     @patch("precog.database.crud_canonical_match_log.get_cursor")
     def test_accepts_every_canonical_prefix(self, mock_get_cursor_factory):
         """Every prefix in DECIDED_BY_PREFIXES is accepted (Pattern 73 lockstep)."""
-        mock_cursor = _wire_get_cursor_mock(mock_get_cursor_factory, returning_id=1)
+        mock_cursor = wire_get_cursor_mock(mock_get_cursor_factory, returning_id=1)
 
         for prefix in DECIDED_BY_PREFIXES:
             append_match_log_row(
@@ -364,7 +351,7 @@ class TestAppendMatchLogRowRejectsDecidedByOver64Chars:
     @patch("precog.database.crud_canonical_match_log.get_cursor")
     def test_accepts_decided_by_exactly_64_chars(self, mock_get_cursor_factory):
         """decided_by exactly 64 chars is the boundary — accepted, not rejected."""
-        mock_cursor = _wire_get_cursor_mock(mock_get_cursor_factory, returning_id=1)
+        mock_cursor = wire_get_cursor_mock(mock_get_cursor_factory, returning_id=1)
 
         exactly_64 = "human:" + ("x" * 58)
         assert len(exactly_64) == 64
