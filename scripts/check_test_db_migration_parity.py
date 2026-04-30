@@ -61,10 +61,14 @@ def _alembic_versions_tree_dirty() -> bool:
         ["git", "diff", "--cached", "--quiet", _ALEMBIC_VERSIONS_DIR],
     ):
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            # `git diff --quiet` should be near-instant; 10s is a generous bound
+            # that still bounds a hung-git failure mode. TimeoutExpired is a
+            # SubprocessError subclass and falls into the conservative-True path.
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         except (OSError, subprocess.SubprocessError):
-            # git unavailable or some unexpected failure — block auto-upgrade
-            # rather than silently proceeding with possibly-stale code.
+            # git unavailable, hung, or some unexpected failure — block
+            # auto-upgrade rather than silently proceeding with possibly-stale
+            # code.
             return True
         if result.returncode != 0:
             return True
@@ -81,11 +85,16 @@ def _attempt_alembic_upgrade() -> tuple[bool, str, str]:
     env = os.environ.copy()
     env["PRECOG_ENV"] = "test"
     try:
+        # 5 min ceiling: a multi-migration upgrade can legitimately take
+        # tens of seconds, but should never run for minutes. A hang here
+        # blocks the developer's pre-push indefinitely. TimeoutExpired is a
+        # SubprocessError subclass and is caught by the existing handler.
         result = subprocess.run(
             [sys.executable, "-m", "alembic", "-c", _ALEMBIC_INI, "upgrade", "head"],
             capture_output=True,
             text=True,
             env=env,
+            timeout=300,
         )
     except (OSError, subprocess.SubprocessError) as e:
         return False, "", f"subprocess invocation failed: {e}"
