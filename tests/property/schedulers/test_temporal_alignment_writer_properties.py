@@ -22,9 +22,8 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from precog.database.crud_ledger import VALID_ALIGNMENT_QUALITIES
 from precog.schedulers.temporal_alignment_writer import _classify_quality
-
-VALID_QUALITIES = {"exact", "good", "fair", "poor", "stale"}
 
 
 @pytest.mark.property
@@ -43,7 +42,7 @@ class TestClassifyQualityInvariants:
     def test_classification_is_total(self, delta: Decimal) -> None:
         """Every non-negative Decimal delta returns one of the 5 quality levels."""
         result = _classify_quality(delta)
-        assert result in VALID_QUALITIES
+        assert result in VALID_ALIGNMENT_QUALITIES
 
     @given(
         delta_a=st.decimals(

@@ -11952,7 +11952,7 @@ The `match_algorithm` and `observation_source` lookup tables are the precedents 
 
 ### The Pattern / Rule
 
-**Canonical decision context lives in [ADR-118 v2.38](../foundation/ARCHITECTURE_DECISIONS.md) decision #10 (Open canonical enums are lookup tables, not CHECK constraints; v2.39 Cohort 2 amendment adds explicit Pattern 81 non-application case for `canonical_markets.market_type_general`)**. Per Pattern 73, this pattern does not restate the per-table decisions — it codifies the *general rule*:
+**Canonical decision context lives in [ADR-118](../foundation/ARCHITECTURE_DECISIONS.md) decision #10 (Open canonical enums are lookup tables, not CHECK constraints; v2.39 Cohort 2 amendment adds explicit Pattern 81 non-application case for `canonical_markets.market_type_general`)**. Per Pattern 73, this pattern does not restate the per-table decisions — it codifies the *general rule*:
 
 > Any enum whose value set is expected to grow (domains, event types, entity kinds, participant roles, platform names, observation sources, match algorithms, etc.) MUST be encoded as a **lookup table** with FK + seed data, NOT as a `CHECK (value IN (...))` constraint on a text column. New values land as `INSERT` rows in a (typically seed-only) migration; never as `ALTER TABLE`.
 

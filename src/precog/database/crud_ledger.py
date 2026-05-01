@@ -287,7 +287,7 @@ def get_running_balance(platform_id: str) -> Decimal | None:
 #   - alignment_quality categorizes the time delta between the two sources.
 # =============================================================================
 
-_VALID_ALIGNMENT_QUALITIES = frozenset({"exact", "good", "fair", "poor", "stale"})
+VALID_ALIGNMENT_QUALITIES = frozenset({"exact", "good", "fair", "poor", "stale"})
 
 # Quality ordering for filtering (higher index = better)
 _ALIGNMENT_QUALITY_ORDER = ["stale", "poor", "fair", "good", "exact"]
@@ -379,9 +379,9 @@ def insert_temporal_alignment(
         spread = validate_decimal(spread, "spread")
 
     # Runtime enum-like validation
-    if alignment_quality not in _VALID_ALIGNMENT_QUALITIES:
+    if alignment_quality not in VALID_ALIGNMENT_QUALITIES:
         raise ValueError(
-            f"alignment_quality must be one of {_VALID_ALIGNMENT_QUALITIES}, "
+            f"alignment_quality must be one of {VALID_ALIGNMENT_QUALITIES}, "
             f"got '{alignment_quality}'"
         )
 
@@ -513,9 +513,9 @@ def insert_temporal_alignment_batch(alignments: list[dict]) -> int:
             sprd = validate_decimal(sprd, f"alignments[{i}].spread")
 
         quality = row.get("alignment_quality", "good")
-        if quality not in _VALID_ALIGNMENT_QUALITIES:
+        if quality not in VALID_ALIGNMENT_QUALITIES:
             raise ValueError(
-                f"alignment_quality must be one of {_VALID_ALIGNMENT_QUALITIES}, "
+                f"alignment_quality must be one of {VALID_ALIGNMENT_QUALITIES}, "
                 f"got '{quality}' in alignments[{i}]"
             )
 
@@ -615,9 +615,9 @@ def get_alignments_by_market(
     params: list = [market_id]
 
     if min_quality is not None:
-        if min_quality not in _VALID_ALIGNMENT_QUALITIES:
+        if min_quality not in VALID_ALIGNMENT_QUALITIES:
             raise ValueError(
-                f"min_quality must be one of {_VALID_ALIGNMENT_QUALITIES}, got '{min_quality}'"
+                f"min_quality must be one of {VALID_ALIGNMENT_QUALITIES}, got '{min_quality}'"
             )
         # Filter to entries at min_quality or better
         quality_index = _ALIGNMENT_QUALITY_ORDER.index(min_quality)

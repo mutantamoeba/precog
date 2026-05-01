@@ -21,6 +21,7 @@ from decimal import Decimal
 
 import pytest
 
+from precog.database.crud_ledger import VALID_ALIGNMENT_QUALITIES
 from precog.schedulers.temporal_alignment_writer import _classify_quality
 
 _is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
@@ -56,7 +57,7 @@ class TestClassifyQualityStress:
 
         for d in extreme_deltas:
             result = _classify_quality(d)
-            assert result in {"exact", "good", "fair", "poor", "stale"}, (
+            assert result in VALID_ALIGNMENT_QUALITIES, (
                 f"Classification of {d} returned unexpected value: {result}"
             )
 
@@ -75,4 +76,4 @@ class TestClassifyQualityStress:
 
         assert len(results) == 10_000
         for r in results:
-            assert r in {"exact", "good", "fair", "poor", "stale"}
+            assert r in VALID_ALIGNMENT_QUALITIES

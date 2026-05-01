@@ -48,7 +48,7 @@ def _sample_natural_key_hash(suffix: bytes = b"sample") -> bytes:
 
 def _full_row_dict(
     *,
-    id: int = 7,
+    row_id: int = 7,
     canonical_event_id: int = 42,
     market_type_general: str = "binary",
     outcome_label: str | None = "Yes",
@@ -71,7 +71,7 @@ def _full_row_dict(
     if updated_at is None:
         updated_at = datetime(2026, 4, 24, 12, 0, 0, tzinfo=UTC)
     return {
-        "id": id,
+        "id": row_id,
         "canonical_event_id": canonical_event_id,
         "market_type_general": market_type_general,
         "outcome_label": outcome_label,
@@ -97,7 +97,7 @@ class TestCreateCanonicalMarket:
         """Returns the full row dict from RETURNING projection."""
         nk = _sample_natural_key_hash()
         expected_row = _full_row_dict(
-            id=7,
+            row_id=7,
             canonical_event_id=42,
             market_type_general="binary",
             outcome_label="Yes",
@@ -306,7 +306,7 @@ class TestGetCanonicalMarketById:
     @patch("precog.database.crud_canonical_markets.fetch_one")
     def test_returns_row_dict_when_found(self, mock_fetch_one):
         """Returns the full row dict when a row matches the id."""
-        expected_row = _full_row_dict(id=7)
+        expected_row = _full_row_dict(row_id=7)
         mock_fetch_one.return_value = expected_row
 
         result = get_canonical_market_by_id(7)
@@ -355,33 +355,6 @@ class TestGetCanonicalMarketById:
             "retired_at",
         ):
             assert col in sql, f"Column {col!r} missing from SELECT projection"
-
-    @patch("precog.database.crud_canonical_markets.fetch_one")
-    def test_natural_key_hash_query_selects_all_canonical_markets_columns(self, mock_fetch_one):
-        """Pattern 43 fidelity: the natural-key-hash lookup's SELECT projection must
-        include all 9 canonical_markets columns. Closes Glokta Finding 7 + Ripley
-        Finding 5 -- without this test, a future refactor that drops a column from
-        the natural-key-hash SELECT would silently pass because the mock dict (built
-        by _full_row_dict()) has all keys regardless.
-        """
-        from precog.database.crud_canonical_markets import get_canonical_market_by_natural_key_hash
-
-        mock_fetch_one.return_value = None
-        get_canonical_market_by_natural_key_hash(b"\xaa\xbb\xcc\xdd")
-
-        sql = mock_fetch_one.call_args[0][0]
-        for col in (
-            "id",
-            "canonical_event_id",
-            "market_type_general",
-            "outcome_label",
-            "natural_key_hash",
-            "metadata",
-            "created_at",
-            "updated_at",
-            "retired_at",
-        ):
-            assert col in sql, f"Column {col!r} missing from natural-key-hash SELECT projection"
 
 
 # =============================================================================
@@ -439,6 +412,33 @@ class TestGetCanonicalMarketByNaturalKeyHash:
         assert result is None
         params = mock_fetch_one.call_args[0][1]
         assert params == (b"",)
+
+    @patch("precog.database.crud_canonical_markets.fetch_one")
+    def test_natural_key_hash_query_selects_all_canonical_markets_columns(self, mock_fetch_one):
+        """Pattern 43 fidelity: the natural-key-hash lookup's SELECT projection must
+        include all 9 canonical_markets columns. Closes Glokta Finding 7 + Ripley
+        Finding 5 -- without this test, a future refactor that drops a column from
+        the natural-key-hash SELECT would silently pass because the mock dict (built
+        by _full_row_dict()) has all keys regardless.
+        """
+        from precog.database.crud_canonical_markets import get_canonical_market_by_natural_key_hash
+
+        mock_fetch_one.return_value = None
+        get_canonical_market_by_natural_key_hash(b"\xaa\xbb\xcc\xdd")
+
+        sql = mock_fetch_one.call_args[0][0]
+        for col in (
+            "id",
+            "canonical_event_id",
+            "market_type_general",
+            "outcome_label",
+            "natural_key_hash",
+            "metadata",
+            "created_at",
+            "updated_at",
+            "retired_at",
+        ):
+            assert col in sql, f"Column {col!r} missing from natural-key-hash SELECT projection"
 
 
 # =============================================================================
