@@ -181,6 +181,154 @@ class TestMainExitCodes:
         assert os.environ["PRECOG_ENV"] == "test"
 
 
+class TestAutoUpgradeOnBehind:
+    """#1103: when the test DB is BEHIND, attempt `alembic upgrade head` automatically.
+
+    These tests pin the auto-upgrade behavior at every branch:
+    - BEHIND + clean tree + flag absent -> attempt + success -> exit 0
+    - BEHIND + clean tree + flag absent -> attempt + failure -> fall through
+    - BEHIND + dirty tree -> skip attempt -> fall through with INFO
+    - BEHIND + --no-auto-upgrade -> skip attempt -> fall through with INFO
+    - AHEAD -> never attempt -> existing error path
+    """
+
+    @patch("check_test_db_migration_parity._alembic_versions_tree_dirty", return_value=False)
+    @patch("check_test_db_migration_parity._attempt_alembic_upgrade")
+    @patch("precog.database.migration_check.check_migration_parity")
+    def test_behind_triggers_auto_upgrade_by_default(
+        self, mock_check, mock_upgrade, mock_dirty, capsys
+    ):
+        mock_check.return_value = MigrationStatus(
+            is_current=False, db_version="0056", head_version="0063"
+        )
+        mock_upgrade.return_value = (True, "alembic upgrade ok\n", "")
+
+        rc = hook_mod.main([])
+
+        assert rc == 0
+        assert mock_upgrade.called
+        out = capsys.readouterr().out
+        assert "AUTO-UPGRADE" in out
+        assert "success" in out.lower()
+
+    @patch("check_test_db_migration_parity._alembic_versions_tree_dirty", return_value=False)
+    @patch("check_test_db_migration_parity._attempt_alembic_upgrade")
+    @patch("precog.database.migration_check.check_migration_parity")
+    def test_behind_with_no_auto_upgrade_flag_skips_attempt(
+        self, mock_check, mock_upgrade, mock_dirty, capsys
+    ):
+        mock_check.return_value = MigrationStatus(
+            is_current=False, db_version="0056", head_version="0063"
+        )
+
+        rc = hook_mod.main(["--no-auto-upgrade"])
+
+        assert rc == 1  # falls through to standard BEHIND error
+        assert not mock_upgrade.called
+        captured = capsys.readouterr()
+        # Standard BEHIND remediation must still appear
+        assert "ERROR" in captured.out
+        assert "alembic" in captured.out
+        # And the INFO about the flag
+        assert "--no-auto-upgrade" in captured.out
+
+    @patch("check_test_db_migration_parity._alembic_versions_tree_dirty", return_value=True)
+    @patch("check_test_db_migration_parity._attempt_alembic_upgrade")
+    @patch("precog.database.migration_check.check_migration_parity")
+    def test_behind_with_dirty_alembic_tree_skips_attempt(
+        self, mock_check, mock_upgrade, mock_dirty, capsys
+    ):
+        mock_check.return_value = MigrationStatus(
+            is_current=False, db_version="0056", head_version="0063"
+        )
+
+        rc = hook_mod.main([])
+
+        assert rc == 1  # falls through to standard BEHIND error
+        assert not mock_upgrade.called
+        out = capsys.readouterr().out
+        # INFO about the dirty-tree skip
+        assert "uncommitted changes" in out
+        # Original BEHIND error still rendered
+        assert "ERROR" in out
+        assert "behind" in out.lower()
+
+    @patch("check_test_db_migration_parity._alembic_versions_tree_dirty", return_value=False)
+    @patch("check_test_db_migration_parity._attempt_alembic_upgrade")
+    @patch("precog.database.migration_check.check_migration_parity")
+    def test_ahead_does_not_attempt_upgrade(self, mock_check, mock_upgrade, mock_dirty, capsys):
+        # AHEAD: db_version > head_version -> versions_behind is negative.
+        mock_check.return_value = MigrationStatus(
+            is_current=False, db_version="0063", head_version="0056"
+        )
+
+        rc = hook_mod.main([])
+
+        assert rc == 1
+        assert not mock_upgrade.called  # Never auto-upgrade on AHEAD
+
+    @patch("check_test_db_migration_parity._alembic_versions_tree_dirty", return_value=False)
+    @patch("check_test_db_migration_parity._attempt_alembic_upgrade")
+    @patch("precog.database.migration_check.check_migration_parity")
+    def test_failed_auto_upgrade_falls_through_with_both_messages(
+        self, mock_check, mock_upgrade, mock_dirty, capsys
+    ):
+        mock_check.return_value = MigrationStatus(
+            is_current=False, db_version="0056", head_version="0063"
+        )
+        mock_upgrade.return_value = (
+            False,
+            "running migrations...\n",
+            "alembic.util.exc.CommandError: boom\n",
+        )
+
+        rc = hook_mod.main([])
+
+        assert rc == 1
+        assert mock_upgrade.called
+        captured = capsys.readouterr()
+        # Failure detail on stderr
+        assert "AUTO-UPGRADE FAILED" in captured.err
+        assert "boom" in captured.err
+        # Original BEHIND error on stdout
+        assert "ERROR" in captured.out
+        assert "behind" in captured.out.lower()
+        assert "0056" in captured.out
+        assert "0063" in captured.out
+
+
+class TestAlembicVersionsTreeDirty:
+    """Cover the helper directly so the integration tests can mock it."""
+
+    @patch("subprocess.run")
+    def test_clean_tree_returns_false(self, mock_run):
+        # Both `git diff --quiet` invocations return 0 -> clean.
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
+        assert hook_mod._alembic_versions_tree_dirty() is False
+        # Two calls: unstaged + cached
+        assert mock_run.call_count == 2
+
+    @patch("subprocess.run")
+    def test_unstaged_changes_return_true(self, mock_run):
+        # First call (unstaged) returns 1 -> dirty; short-circuits.
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=1)
+        assert hook_mod._alembic_versions_tree_dirty() is True
+
+    @patch("subprocess.run")
+    def test_staged_changes_return_true(self, mock_run):
+        # Unstaged clean, staged dirty.
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=0),
+            subprocess.CompletedProcess(args=[], returncode=1),
+        ]
+        assert hook_mod._alembic_versions_tree_dirty() is True
+
+    @patch("subprocess.run", side_effect=OSError("git not found"))
+    def test_git_failure_blocks_auto_upgrade(self, mock_run):
+        # Conservative: if git itself fails, treat as dirty (block auto-upgrade).
+        assert hook_mod._alembic_versions_tree_dirty() is True
+
+
 class TestScriptInvocation:
     """End-to-end: run the script as a subprocess and verify exit code."""
 
