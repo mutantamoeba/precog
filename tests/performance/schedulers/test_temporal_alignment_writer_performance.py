@@ -57,17 +57,17 @@ class TestClassifyQualityPerformance:
         # much faster than this; budget is intentionally loose for slow CI.
         assert elapsed < 1.0, f"10K classifications took {elapsed:.3f}s (expected < 1s)"
 
-    def test_classification_does_not_allocate_excessively(self) -> None:
-        """Repeated classification with the same input should not balloon memory.
+    def test_classification_is_consistent_under_repeated_invocation(self) -> None:
+        """Classifying the same delta 100K times returns the same result every call.
 
-        Loose check: classifying the same delta 100K times should not noticeably
-        increase resident memory (the function returns interned strings; no
-        intermediate Decimal allocation expected beyond constants).
+        Functional regression guard: catches a future change that introduces
+        per-call state (e.g., LRU cache with eviction, accidental random
+        component) which would surface as occasional non-deterministic returns.
+        Memory profiling was the original framing but was never actually
+        measured (memory is heavyweight + platform-dependent at this tier);
+        the load-bearing assertion is the per-call equality check. (#1028 F4.)
         """
         d = Decimal("15.5")
-        # Just verify it completes; memory profiling is heavyweight and
-        # platform-dependent. Functional verification is sufficient at this
-        # tier.
         for _ in range(100_000):
             result = _classify_quality(d)
             assert result == "fair"

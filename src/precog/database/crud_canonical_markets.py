@@ -308,6 +308,9 @@ def retire_canonical_market(canonical_market_id: int) -> bool:
     """
     with get_cursor(commit=True) as cur:
         cur.execute(query, (canonical_market_id,))
+        # cast is load-bearing for mypy: cur.rowcount resolves to Any through
+        # the context manager, so `> 0` returns Any. Function is typed -> bool.
+        # Looks like a runtime no-op but is the type-narrowing chokepoint here.
         return cast("bool", cur.rowcount > 0)
 
 

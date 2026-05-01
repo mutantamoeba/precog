@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from precog.database.crud_ledger import (
-    _VALID_ALIGNMENT_QUALITIES,
+    VALID_ALIGNMENT_QUALITIES,
     get_alignments_by_market,
     insert_temporal_alignment,
     insert_temporal_alignment_batch,
@@ -185,7 +185,7 @@ class TestInsertTemporalAlignment:
         mock_cursor = _mock_cursor_context(mock_get_cursor)
         mock_cursor.fetchone.return_value = {"id": 1}
 
-        for quality in _VALID_ALIGNMENT_QUALITIES:
+        for quality in VALID_ALIGNMENT_QUALITIES:
             kwargs = _default_alignment_kwargs()
             kwargs["alignment_quality"] = quality
             result = insert_temporal_alignment(**kwargs)
@@ -433,7 +433,7 @@ class TestGetAlignmentsByMarket:
         get_alignments_by_market(42, min_quality="stale")
 
         params = mock_fetch_all.call_args[0][1]
-        for quality in _VALID_ALIGNMENT_QUALITIES:
+        for quality in VALID_ALIGNMENT_QUALITIES:
             assert quality in params
 
     def test_validates_invalid_min_quality(self):
