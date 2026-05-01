@@ -156,7 +156,7 @@ def get_team_elo_rating(team_id: int) -> Decimal | None:
 
     Example:
         >>> rating = get_team_elo_rating(team_id=42)
-        >>> if rating:
+        >>> if rating is not None:  # Pattern 45: explicit None, not falsy guard
         ...     print(f"Team Elo: {rating}")
     """
     result = fetch_one(
