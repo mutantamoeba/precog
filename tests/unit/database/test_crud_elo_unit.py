@@ -77,6 +77,26 @@ class TestGetTeamEloRating:
 
         assert result is None
 
+    @patch("precog.database.crud_elo.fetch_one")
+    def test_returns_zero_decimal_when_rating_is_zero(self, mock_fetch_one):
+        """Elo rating of 0 should return Decimal('0'), not None.
+
+        Pattern 45 (None-preserving sanitization): falsy 0 must not be
+        conflated with missing rating. Pinned via #1027.
+
+        Pattern 43 (mock fidelity): RealDictCursor returns native Decimal
+        objects for DECIMAL columns, so the mock returns Decimal('0') here.
+        Decimal('0') is falsy in Python — that is what the buggy guard
+        `if result and result.get("current_elo_rating"):` conflates with
+        "missing rating".
+        """
+        mock_fetch_one.return_value = {"current_elo_rating": Decimal("0.0000")}
+
+        result = get_team_elo_rating(team_id=42)
+
+        assert result == Decimal("0")  # NOT None
+        assert isinstance(result, Decimal)
+
 
 # =============================================================================
 # get_team_elo_by_code
@@ -128,3 +148,23 @@ class TestGetTeamEloByCode:
 
         assert result == Decimal("1500.0000")  # first result
         assert any("Ambiguous team_code lookup" in rec.message for rec in caplog.records)
+
+    @patch("precog.database.crud_elo.fetch_all")
+    def test_returns_zero_decimal_when_rating_is_zero(self, mock_fetch_all):
+        """Elo rating of 0 should return Decimal('0'), not None.
+
+        Pattern 45 (None-preserving sanitization): falsy 0 must not be
+        conflated with missing rating. Pinned via #1027.
+
+        Pattern 43 (mock fidelity): RealDictCursor returns native Decimal
+        objects for DECIMAL columns, so the mock returns Decimal('0') here.
+        Decimal('0') is falsy in Python — that is what the buggy guard
+        `if result and result.get("current_elo_rating"):` conflates with
+        "missing rating".
+        """
+        mock_fetch_all.return_value = [{"current_elo_rating": Decimal("0.0000")}]
+
+        result = get_team_elo_by_code("KC", league="nfl")
+
+        assert result == Decimal("0")  # NOT None
+        assert isinstance(result, Decimal)
