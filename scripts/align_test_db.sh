@@ -344,8 +344,15 @@ else
             continue
         fi
         # Does this branch have the file?
+        # NOTE (#1112): use `:(glob)` magic prefix so git applies its own glob matching
+        # against the branch tree, rather than relying on bash's filename expansion of
+        # `*.py` against the current working directory (which is the target branch's
+        # checkout — typically does NOT contain the file we're searching for).
+        # The original `${...}_"*.py` shape glob-expanded in the wrong filesystem
+        # context and silently failed when the AHEAD branch existed but main did not
+        # carry a sibling .py at that revision number. See #1112 for repro.
         if git ls-tree -r --name-only "${br}" -- \
-            "${ALEMBIC_DIR_REL}/alembic/versions/${TEST_DB_VERSION}_"*.py 2>/dev/null \
+            ":(glob)${ALEMBIC_DIR_REL}/alembic/versions/${TEST_DB_VERSION}_*.py" 2>/dev/null \
             | grep -q .; then
             echo "${br}" >> "${CANDIDATES_FILE}"
         fi
