@@ -156,16 +156,22 @@ def get_team_elo_rating(team_id: int) -> Decimal | None:
 
     Example:
         >>> rating = get_team_elo_rating(team_id=42)
-        >>> if rating:
+        >>> if rating is not None:  # Pattern 45: explicit None, not falsy guard
         ...     print(f"Team Elo: {rating}")
     """
     result = fetch_one(
         "SELECT current_elo_rating FROM teams WHERE team_id = %s",
         (team_id,),
     )
-    if result and result.get("current_elo_rating"):
-        return Decimal(str(result["current_elo_rating"]))
-    return None
+    # Pattern 45 (None-preserving sanitization): explicit None check —
+    # do NOT use a falsy guard, which conflates rating=0 with missing rating.
+    # See #1027.
+    if not result:
+        return None
+    rating = result.get("current_elo_rating")
+    if rating is None:
+        return None
+    return Decimal(str(rating))
 
 
 def get_team_elo_by_code(
@@ -212,9 +218,15 @@ def get_team_elo_by_code(
             len(results),
         )
     result = results[0]
-    if result and result.get("current_elo_rating"):
-        return Decimal(str(result["current_elo_rating"]))
-    return None
+    # Pattern 45 (None-preserving sanitization): explicit None check —
+    # do NOT use a falsy guard, which conflates rating=0 with missing rating.
+    # See #1027.
+    if not result:
+        return None
+    rating = result.get("current_elo_rating")
+    if rating is None:
+        return None
+    return Decimal(str(rating))
 
 
 def insert_elo_calculation_log(
