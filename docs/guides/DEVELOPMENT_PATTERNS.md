@@ -1,13 +1,17 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.40
+**Version:** 1.41
 **Created:** 2025-11-13
-**Last Updated:** 2026-04-26
+**Last Updated:** 2026-05-02
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.41:**
+- **Added Pattern 88: Cohort 4 Partition DDL Idioms (ALWAYS for Partition-Side Index Naming + Ruff S608 on Partition DDL)** — consolidates two tightly-coupled rules originating from the same surface (PostgreSQL partitioned-parent tables + Python migration / test authoring): (88a) tests asserting that an index "propagates to partitions" MUST key on `pg_indexes.indexdef` column-list content, NOT `indexname` substring (PG truncates partition-side index names when parent+index combination exceeds 63-byte NAMEDATALEN limit, with numeric-suffix disambiguation that's not predictable from the parent name); (88b) f-string interpolation of PG identifiers (table / partition / column names) into DDL or DML is the only viable shape because PG parameter binding accepts only values not identifiers; suppress the resulting Ruff S608 with `# noqa: S608` + one-line comment citing the limitation, BUT NEVER suppress when the identifier source is user input.
+- Origin: Session 86 PR #1120 Tier 1 Momentum fix-pass (slot 0078 canonical_observations) — both rules surfaced the same day during partition-test design + DDL test authoring. Identified as paired promotion candidates by Jorge S80 sweep (session 87 audit memo `audit_s69_s80_session_87_jorge_memo.md`), Option A recommended given active Cohort 4 partition-heavy work (slots 0078 + 0080 + 0082 + 0083 all touch partitioned-data territory). Co-promoting them as a single Pattern entry (vs two siblings) avoids Pattern 73 SSOT drift between linked rules. Net: closes 2 feedback memos as feedback_pg_partition_index_name_truncation.md + feedback_ruff_s608_on_partition_ddl_fstrings.md (both retained as origin-reference, but Pattern 88 is now the canonical home).
+- Pair-with: Pattern 73 (SSOT — the column list IS the canonical content; the auto-generated partition name is a derived presentation surface — Pattern 73 says key tests on the canonical content, not the derived); Pattern 86 (Living-Doc Freshness Markers — partition-side DDL behavior is PG-version-stable but worth marking when relevant); Critical Pattern 1 (Decimal precision — analogous discipline: use the right tool for the right job; suppress static-analysis warnings only when you've reasoned about the false-positive shape).
 **Changes in V1.40:**
 - **Added Pattern 87: Append-Only Migration Files (ALWAYS Once a Migration is Committed to Main)** — codifies the rule that once an Alembic migration file is merged to main, its file contents are immutable. No edits to migration code, seed values, docstrings, or comments. The principle is structural: contributor dev DBs and CI ephemeral DBs have already executed the migration on its existing content; editing it creates ambiguity about what state any given DB is in (was your DB last migrated against the pre-edit text or the post-edit text? alembic_version doesn't know — only the file content does, and that content is now in flux). Stale text in a shipped migration is corrected in the canonical authority for that decision (ADR-118 amendments, DEVELOPMENT_PATTERNS revisions, or subsequent migration docstrings), not by editing the migration itself.
 - Origin: Session 79 PR #1063. Glokta's review proposed adding one-line forward-pointer comments to Migration 0069's docstring to reflect the v2.41 5-slot adjudication that displaced canonical_market_links from slot 0071 to slot 0072. Ripley caught Glokta's proposal as itself violating the append-only rule (the rule was project-folklore, not codified, so Glokta had no reference to cite against the proposal). Samwise correctly applied the rule via judgment to Migration 0070 (also stale post-v2.41) without proposing edits. Session 79 mid-session migration audit (Tyrion-frame, PM-direct) flagged the gap between "rule applied via judgment by Samwise" and "rule proposable for violation by Glokta" as the core failure mode — codifying the rule prevents the next reviewer/builder from reasonably proposing the same edit again. Closes Issue #1069 + naturally resolves #1064 (4-site forward-pointer cleanup → no-fix-per-Pattern-87 for the migration sites; ADR-side sweep already shipped in PR #1079).
@@ -12890,6 +12894,105 @@ immutable per Pattern 87.
 - ADR-118 v2.41 amendment (session 78) + v2.42 amendment (session 79) — the canonical authority documents that absorb the corrections that would otherwise be applied to shipped migrations
 - Pattern 62 — In-Repo Per-Migration Rationale Docs (the editable companion)
 - Pattern 73 — Single Source of Truth (the structural foundation)
+
+---
+
+## Pattern 88: Cohort 4 Partition DDL Idioms (ALWAYS for Partition-Side Index Naming + Ruff S608 on Partition DDL)
+
+**Status:** ALWAYS when authoring tests against partitioned-parent tables OR writing DDL/DML that interpolates PG identifiers (table / partition / column names) into f-strings.
+
+### Sub-Rule 88a — Index naming via `pg_indexes.indexdef`, never `indexname` substring
+
+When testing that an index "propagates to partitions" of a partitioned parent table, key the assertion on `pg_indexes.indexdef` column-list content, **NOT** `indexname` substring matching.
+
+**Why:** PostgreSQL's identifier limit is 63 bytes (NAMEDATALEN - 1). Partition-side index names are auto-generated as `<partition_name>_<index_name>_idx` (or similar pattern). For long parent names like `canonical_observations` (22 bytes) plus partition suffix `_2026_05` (8 bytes), an index name like `currently_valid_ingested_at` brings the total over 63 bytes. PG truncates and inserts numeric `_idx1` / `_idx2` suffixes to disambiguate. The truncation pattern is **not predictable from the parent name** — a substring like `currently_valid` may not even appear in the truncated name.
+
+A test that asserts `indexname LIKE %currently_valid%` will silently pass-vacuously when the partition-side name becomes `..._ingested__idx1`. The `indexdef` column carries the full DDL (column list + WHERE clause), which is stable across truncation.
+
+**Anti-pattern:**
+```python
+# WRONG — vacuous-pass when truncation kicks in
+cur.execute("""
+    SELECT 1 FROM pg_indexes
+    WHERE tablename = 'canonical_observations_2026_05'
+      AND indexname LIKE %s
+""", (f'%{partial_index_name}%',))
+assert cur.fetchone() is not None  # passes vacuously after truncation
+```
+
+**Correct:**
+```python
+# RIGHT — keys on canonical column-list content
+cur.execute("""
+    SELECT 1 FROM pg_indexes
+    WHERE tablename = 'canonical_observations_2026_05'
+      AND indexdef LIKE %s
+""", ('%(canonical_event_id, ingested_at DESC)%',))
+assert cur.fetchone() is not None  # passes only if the actual index propagated
+```
+
+**Diagnostic:** if a partition-test passes but you suspect the indexes aren't actually propagating, query manually:
+```sql
+SELECT indexname, indexdef FROM pg_indexes
+WHERE tablename LIKE 'canonical_observations_2026%'
+ORDER BY tablename, indexname;
+```
+Numeric `_idx1` / `_idx2` suffixes signal name-based tests are vacuously passing.
+
+**MCP-first development discipline:** when building partition-related tests, run `mcp__postgres-dev__query` BEFORE finalizing the assertion. The auto-generated partition object names are hard to predict; verify against live DB.
+
+### Sub-Rule 88b — Ruff S608 suppression for partition-DDL f-strings
+
+When writing migration code or tests that need to interpolate PG **identifiers** (table / partition / column names) into DDL or DML, an f-string is the only viable shape. Ruff S608 (hardcoded-SQL warning) will fire on these. Suppress with `# noqa: S608` + a one-line explanatory comment citing the PG identifier-binding limitation.
+
+**Why:** PostgreSQL parameter binding (`%s` / `?`) ONLY accepts **values**, not **identifiers**. `cur.execute("SELECT * FROM %s", (table_name,))` fails — PG quotes the table name as a string literal and the query becomes a syntax error. This is a SQL standard limitation, not PG-specific.
+
+For partitioned tables, identifier interpolation is genuinely needed:
+- `op.execute(f"CREATE TABLE canonical_observations_{partition_suffix} PARTITION OF ...")` — partition name MUST be an identifier
+- `cur.execute(f"SELECT count(*) FROM ONLY canonical_observations_{partition_suffix}")` — same
+
+Ruff S608 doesn't distinguish "hardcoded module-level tuple driving the f-string" from "user input flowing into the f-string" — both look like potential SQL injection sites to its static analysis.
+
+**Correct usage:**
+```python
+for partition_suffix in _INITIAL_PARTITIONS:
+    cur.execute(
+        f"SELECT count(*) FROM ONLY canonical_observations_{partition_suffix} WHERE id = %s",  # noqa: S608 — partition is hardcoded; PG identifier-binding limitation
+        (obs_id,)
+    )
+```
+
+**Conditions for suppression** (BOTH must hold):
+1. The f-string interpolates an IDENTIFIER (table / column / partition name), not a value.
+2. The source of the interpolated value is a module-level constant, hardcoded tuple, or other internally-controlled source.
+
+**NEVER suppress** S608 when the identifier source is user input (request body, env var, DB-loaded value, function argument from external call). That's the actual SQL injection vector S608 was designed to catch.
+
+**Alternative considered — `sa.text() / sa.DDL`:** SQLAlchemy `text("CREATE TABLE :name PARTITION OF ...").bindparams(name="...")` fails for the same reason — bindparams handle values, not identifiers. `sa.DDL` with format-style escaping works but adds complexity for no functional gain. The f-string + `# noqa: S608` is the project precedent.
+
+### How to Apply (combined)
+
+| Surface | Apply 88a | Apply 88b |
+|---|---|---|
+| Test asserts that index propagates to partition | ✅ key on `indexdef` column-list | ✅ if test issues partition-name f-string |
+| Migration creates per-partition tables | — | ✅ partition-name f-string in `CREATE TABLE PARTITION OF` |
+| Test issues per-partition SELECT | — | ✅ partition-name f-string in `FROM ONLY <partition>` |
+| User-facing API parameterizes table name from request | — | ❌ DO NOT suppress S608 — actual injection vector |
+
+### Project precedent
+
+- Slot 0072 (Migration 0072) — partition / table-name f-string interpolation in DDL with `# noqa: S608` + comment
+- Slot 0074 (Migration 0074) — same pattern
+- Slot 0078 (Migration 0078) — slot 0078 establishes both 88a + 88b within a single PR (R3 parametrized index propagation test on `indexdef` column-list keying + multiple partition-name f-strings in test fixtures with `# noqa: S608`)
+
+### Source
+
+- Session 86 PR #1120 Tier 1 Momentum fix-pass (slot 0078 canonical_observations) — both 88a + 88b surfaced the same fix-pass
+- `feedback_pg_partition_index_name_truncation.md` — origin memo for 88a (retained as origin-reference)
+- `feedback_ruff_s608_on_partition_ddl_fstrings.md` — origin memo for 88b (retained as origin-reference)
+- Jorge S80 sweep (session 87) — paired promotion identified as Option A; high urgency for active Cohort 4 partition-heavy work
+- Pattern 73 — Single Source of Truth (the column list IS the canonical content; the auto-generated partition name is a derived presentation surface)
+- Pattern 86 — Living-Doc Freshness Markers (PG version stability worth marking on partition-DDL docs as Cohort 4 progresses)
 
 ---
 
