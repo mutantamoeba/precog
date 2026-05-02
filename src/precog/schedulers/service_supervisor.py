@@ -55,6 +55,10 @@ from precog.database.crud_system import (
     get_active_breakers,
     upsert_system_health,
 )
+from precog.schedulers.canonical_observations_writer import (
+    CanonicalObservationsWriter,
+    create_canonical_observations_writer,
+)
 from precog.schedulers.espn_game_poller import ESPNGamePoller, create_espn_poller
 from precog.schedulers.kalshi_poller import KalshiMarketPoller, create_kalshi_poller
 from precog.schedulers.kalshi_websocket import KalshiWebSocketHandler, create_websocket_handler
@@ -82,12 +86,14 @@ SERVICE_TO_COMPONENT: dict[str, str] = {
     KalshiMarketPoller.SERVICE_KEY: KalshiMarketPoller.HEALTH_COMPONENT,
     KalshiWebSocketHandler.SERVICE_KEY: KalshiWebSocketHandler.HEALTH_COMPONENT,
     TemporalAlignmentWriter.SERVICE_KEY: TemporalAlignmentWriter.HEALTH_COMPONENT,
+    CanonicalObservationsWriter.SERVICE_KEY: CanonicalObservationsWriter.HEALTH_COMPONENT,
 }
 COMPONENT_TO_BREAKER_TYPE: dict[str, str] = {
     ESPNGamePoller.HEALTH_COMPONENT: ESPNGamePoller.BREAKER_TYPE,
     KalshiMarketPoller.HEALTH_COMPONENT: KalshiMarketPoller.BREAKER_TYPE,
     KalshiWebSocketHandler.HEALTH_COMPONENT: KalshiWebSocketHandler.BREAKER_TYPE,
     TemporalAlignmentWriter.HEALTH_COMPONENT: TemporalAlignmentWriter.BREAKER_TYPE,
+    CanonicalObservationsWriter.HEALTH_COMPONENT: CanonicalObservationsWriter.BREAKER_TYPE,
 }
 
 
@@ -1278,6 +1284,23 @@ def _create_temporal_alignment(
     )
 
 
+def _create_canonical_observations_writer(
+    **_kwargs: Any,
+) -> EventLoopService:
+    """Factory for Canonical Observations Writer (Cohort 4 skeleton).
+
+    Cohort 4 ships the registration shell; the factory returns a
+    poller whose ``_poll_once()`` is a no-op until Cohort 5+ source-
+    observation pipelines materialize.  Feature-flag-gated activation
+    keeps the writer inert in production until session 87 soak window
+    opens.
+    """
+    return cast(
+        "EventLoopService",
+        create_canonical_observations_writer(),
+    )
+
+
 # Registry mapping service names to factory callables.
 # To add a new service (e.g., Polymarket):
 #   1. Add SERVICE_KEY/HEALTH_COMPONENT/BREAKER_TYPE class vars to the poller
@@ -1289,6 +1312,7 @@ SERVICE_FACTORIES: dict[str, Callable[..., EventLoopService | None]] = {
     "kalshi_rest": _create_kalshi_rest,
     "kalshi_ws": _create_kalshi_ws,
     "temporal_alignment": _create_temporal_alignment,
+    "canonical_observations_writer": _create_canonical_observations_writer,
 }
 
 
