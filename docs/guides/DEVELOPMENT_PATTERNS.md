@@ -1,13 +1,18 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.41
+**Version:** 1.42
 **Created:** 2025-11-13
 **Last Updated:** 2026-05-02
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.42:**
+- **Extended Pattern 84 from CHECK constraints to FK constraints on populated tables, by analogy.** The two-phase `ADD CONSTRAINT ... NOT VALID` + `VALIDATE CONSTRAINT ...` shape has identical lock-isolation properties for an FK on a populated *referencing (child)* table as it does for a CHECK on a populated table — Phase 1 brief `ACCESS EXCLUSIVE` for metadata registration; Phase 2 `SHARE UPDATE EXCLUSIVE` for the row-scan against the predicate (FK target lookup). Pattern 84 now has two parallel applications (CHECK on populated tables, FK on populated tables) sharing identical phase-1 / phase-2 lock-isolation logic; the existing CHECK guidance is unchanged.
+- **N=2 origin:** slot 0080 (PR #1130, `game_states` + `games` `canonical_event_id` nullable FKs to `canonical_events`) and slot 0082 (PR #1134, `temporal_alignment` `canonical_event_id` nullable FK to `canonical_events`) both shipped applying the NOT VALID + VALIDATE shape to FK constraints on populated tables, with convergent reviewer sign-off (Glokta APPROVE + Ripley CLEAR-TO-MERGE in both cases). Two cold-context applications + convergent reviewer signal is the same canonical-promotion criterion that promoted Pattern 84 itself from PR #1031 (the V1.38 origin) — see § Source.
+- **Lock-attribution clarification + Pattern 87 + Pattern 73 dogfood.** The session-89 S68 audit surfaced self-contradictory wording in the slot 0080 + slot 0082 migration docstrings: lines correctly stating "we don't acquire ACCESS EXCLUSIVE on canonical_events" coexist with lines incorrectly attributing a brief ACCESS EXCLUSIVE to the *referenced* (parent) table. The metadata-write `ACCESS EXCLUSIVE` is on the **referencing (child)** table — the table named in the `ALTER TABLE` statement — not on the referenced parent. Per Pattern 87 (append-only migrations), the shipped 0080/0082 docstrings are immutable; per Pattern 73 (SSOT), the canonical correction lives in one place — Pattern 84 V1.42 — and future readers comparing the two migrations against PostgreSQL docs will find the canonical answer here. This V1.42 entry is the dogfood case: Pattern 87 says shipped migration text is frozen, Pattern 73 says canonical truth lives in one place, and Pattern 84 V1.42 is now the SSOT for both CHECK and FK lock semantics on populated tables.
+- New subsection: "FK by Analogy: NOT VALID + VALIDATE for FK Constraints on Populated Tables" with parallel SQL examples + a Lock Semantics for FK by Analogy clarification. § Pattern 84 title extended to "for CHECK and FK on Populated Tables (ALWAYS for Constraints Where Rows May Exist at Deploy Time)". § When to Apply, § Decision Checklist, § Concrete Instances, and § Source extended; existing CHECK material untouched.
 **Changes in V1.41:**
 - **Added Pattern 88: Cohort 4 Partition DDL Idioms (ALWAYS for Partition-Side Index Naming + Ruff S608 on Partition DDL)** — consolidates two tightly-coupled rules originating from the same surface (PostgreSQL partitioned-parent tables + Python migration / test authoring): (88a) tests asserting that an index "propagates to partitions" MUST key on `pg_indexes.indexdef` column-list content, NOT `indexname` substring (PG truncates partition-side index names when parent+index combination exceeds 63-byte NAMEDATALEN limit, with numeric-suffix disambiguation that's not predictable from the parent name); (88b) f-string interpolation of PG identifiers (table / partition / column names) into DDL or DML is the only viable shape because PG parameter binding accepts only values not identifiers; suppress the resulting Ruff S608 with `# noqa: S608` + one-line comment citing the limitation, BUT NEVER suppress when the identifier source is user input.
 - Origin: Session 86 PR #1120 Tier 1 Momentum fix-pass (slot 0078 canonical_observations) — both rules surfaced the same day during partition-test design + DDL test authoring. Identified as paired promotion candidates by Jorge S80 sweep (session 87 audit memo `audit_s69_s80_session_87_jorge_memo.md`), Option A recommended given active Cohort 4 partition-heavy work (slots 0078 + 0080 + 0082 + 0083 all touch partitioned-data territory). Co-promoting them as a single Pattern entry (vs two siblings) avoids Pattern 73 SSOT drift between linked rules. Net: closes 2 feedback memos as feedback_pg_partition_index_name_truncation.md + feedback_ruff_s608_on_partition_ddl_fstrings.md (both retained as origin-reference, but Pattern 88 is now the canonical home).
@@ -12385,7 +12390,7 @@ Pattern 81 (lookup table — Pattern 83 protects the seed integrity of Pattern 8
 
 ---
 
-## Pattern 84: Two-Phase `NOT VALID` + `VALIDATE CONSTRAINT` for CHECK on Populated Tables (ALWAYS for CHECKs Where Rows May Exist at Deploy Time)
+## Pattern 84: Two-Phase `NOT VALID` + `VALIDATE CONSTRAINT` for CHECK and FK on Populated Tables (ALWAYS for Constraints Where Rows May Exist at Deploy Time)
 
 **Severity:** HIGH — single-phase `ALTER TABLE ... ADD CONSTRAINT ... CHECK (...)` on a populated table acquires `ACCESS EXCLUSIVE` for the duration of the validating table scan. On a production table of any size, that means *all reads AND writes block* until the scan completes. A 100M-row table can lock for tens of minutes. The two-phase form is a one-extra-statement change that eliminates the lock surface entirely and costs nothing when the table is small.
 
@@ -12489,6 +12494,7 @@ ALWAYS, with one defensible carve-out. Specifically:
 - **Table is *expected* to have rows by deploy time** — even if the table is empty when the migration is authored, if a sibling migration in the same release seeds it, the lock is held during the seeded validation.
 - **Table is on a path read by long-running transactions** — pollers, schedulers, the trade pipeline — where blocking for even a few seconds is a customer-visible event.
 - **Migration is in a Cohort that runs against a production-like dataset** — Cohort 6+ canonical-layer seeders fall into this category once Migration 0085 lands the 1:1 canonical_events ↔ games seeding.
+- **FK constraint added to a populated *referencing (child)* table** — same logic as CHECK by analogy. The validation scan runs over child rows (each row's FK column resolved against the parent's PK index) and locks the **child** during the scan in single-phase form. The FK target (parent / referenced table) is essentially uninvolved during the scan; see § FK by Analogy below for the lock semantics. The "target table" in items 3-5 of the Decision Checklist below means the *referencing* table for an FK case.
 
 ### When NOT to Apply (Defensible Single-Phase Use)
 
@@ -12501,12 +12507,14 @@ The carve-out is narrow and must be explicitly justified in the migration docstr
 
 If only one of the two criteria holds — or if the criteria hold by accident rather than by design — use the two-phase form. The default answer is two-phase.
 
-### Decision Checklist Before Adding a CHECK Constraint
+### Decision Checklist Before Adding a CHECK or FK Constraint
 
-1. **Is the column eligible for Pattern 81 (open-canonical-enum → lookup table)?** If yes → don't use CHECK at all; use the FK form. Pattern 84 is silent in that branch.
-2. **Does Pattern 81 §"When NOT to Apply (Keep CHECK)" route this column to a CHECK?** (Closed enum, fixed business meaning, values bound to code branches.) If yes → continue.
-3. **Does any environment that will receive the migration have non-zero rows in the target table TODAY?** If yes → two-phase. If no → continue.
-4. **Will any sibling migration in the same release populate the target table BEFORE this CHECK lands?** If yes → two-phase. If no → continue.
+For CHECK constraints, work through items 1-5 in order. For FK constraints, skip items 1-2 (they are CHECK-specific — Pattern 81 routes "should this be a CHECK?" not "should this be an FK?") and start at item 3, treating "target table" as the **referencing (child)** table — the table named in the `ALTER TABLE` statement.
+
+1. **(CHECK only)** **Is the column eligible for Pattern 81 (open-canonical-enum → lookup table)?** If yes → don't use CHECK at all; use the FK form (and re-enter this checklist at item 3 with the FK as the constraint under consideration). Pattern 84 is silent in that branch — but see § FK by Analogy below: the FK form is itself subject to Pattern 84 when the *referencing* table is populated.
+2. **(CHECK only)** **Does Pattern 81 §"When NOT to Apply (Keep CHECK)" route this column to a CHECK?** (Closed enum, fixed business meaning, values bound to code branches.) If yes → continue.
+3. **Does any environment that will receive the migration have non-zero rows in the target table TODAY?** If yes → two-phase. If no → continue. (For an FK, "target table" = the referencing child, not the referenced parent.)
+4. **Will any sibling migration in the same release populate the target table BEFORE this constraint lands?** If yes → two-phase. If no → continue.
 5. **Is there a forward-known seeder migration in the next 1-2 cohorts that will populate the target table?** If yes → two-phase (the constraint outlives the empty-table state and the next deploy may be running against a populated table). If no → single-phase is defensible; document both carve-out criteria in the migration docstring.
 
 ### Concrete Instances (Forward-Pointers)
@@ -12515,6 +12523,9 @@ If only one of the two criteria holds — or if the criteria hold by accident ra
 |---|---|---|---|---|
 | 0070 | canonical_events | `lifecycle_phase IN (...)` | Single-phase | 0-row state in dev; seeder is Cohort 6 / Migration 0085 (ADR-118 v2.40 item 3) |
 | 0077 (planned) | canonical_event_phase_log | `phase IN (...)` (mirrors 0070) | Two-phase REQUIRED | Migration 0085 will have populated `canonical_events` before 0077 lands its mirror CHECK on the audit log; the audit log is co-populated by trigger |
+| 0080 | game_states + games | `canonical_event_id` FK to `canonical_events` | Two-phase by analogy (FK NOT VALID + VALIDATE) | Both tables populated (~41k + ~5k rows in dev at build time); first FK by-analogy use — convergent reviewer sign-off (Glokta APPROVE + claude-review APPROVE-WITH-NOTES) |
+| 0082 | temporal_alignment | `canonical_event_id` FK to `canonical_events` | Two-phase by analogy (FK NOT VALID + VALIDATE) | Empty in dev at build time but on the `temporal_alignment_writer` write-path — future-populated table treated as populated per § When to Apply bullet "expected to have rows by deploy time"; second FK by-analogy use — convergent reviewer sign-off (Glokta APPROVE-WITH-NITS + Ripley CLEAR-TO-MERGE) completing N=2 threshold for this V1.42 promotion |
+| 0083 (planned) | v_temporal_alignment view rewire | n/a — view, no `ALTER TABLE` | n/a | View rewire; Pattern 84 silent (no constraint to apply) |
 | 0085 (planned) | canonical_events (seeder) | n/a — INSERT-only | n/a | Lifecycle CHECK already in place from 0070; seed runs against the existing constraint |
 | 0095+ (planned) | weather_observations | temperature/humidity range CHECKs | Two-phase REQUIRED | Weather observations table is written-to by `weather_poller` from the moment Phase 1 weather lands (ADR-119) |
 | Cohort 8 (planned) | LLM-projection enrichment columns | various | Two-phase REQUIRED | Enrichment columns are added to existing populated canonical tables |
@@ -12562,20 +12573,116 @@ The two phases live behind **separate guards**: Phase 1 gates on constraint abse
 
 ### Pair With Pattern 81
 
-Pattern 81 covers the *which* (open-canonical-enum → lookup table FK; closed-enum → CHECK). Pattern 84 covers the *how* (when Pattern 81 routes to CHECK on a populated table, use two-phase). The two together encode the complete CHECK-application contract:
+Pattern 81 covers the *which* (open-canonical-enum → lookup table FK; closed-enum → CHECK). Pattern 84 covers the *how* (when Pattern 81 routes to CHECK on a populated table, use two-phase; **and**, by analogy as established in V1.42, when an FK is added to a populated *referencing* table, use two-phase). The two together encode the complete constraint-application contract:
 
-1. Pattern 81 asks: should this be a CHECK at all? (If no → FK, Pattern 84 is silent.)
-2. Pattern 84 asks: how do I apply this CHECK without locking the table? (Two-phase by default; single-phase only with both carve-out criteria documented.)
+1. Pattern 81 asks: should this be a CHECK or a lookup-table FK? (If lookup-table FK → CHECK guidance below is silent, but the FK-by-analogy guidance below applies whenever the *referencing* table is populated.)
+2. Pattern 84 asks: how do I apply this constraint without locking the table? (Two-phase by default for both CHECK and FK; single-phase only with both carve-out criteria documented.)
+
+### FK by Analogy: NOT VALID + VALIDATE for FK Constraints on Populated Tables
+
+**Added in V1.42.** The two-phase shape generalizes from CHECK to FK without modification. `ALTER TABLE child ADD CONSTRAINT ... FOREIGN KEY (col) REFERENCES parent (...) NOT VALID` followed by `ALTER TABLE child VALIDATE CONSTRAINT ...` has identical lock-isolation properties to the CHECK two-phase form, **applied to the referencing (child) table**. The validation predicate is the FK target lookup (each child row's FK column resolves to a row in `parent`); the lock surface is otherwise the same.
+
+#### Canonical FK Shape
+
+```sql
+-- Phase 1: register the FK with NOT VALID.
+-- Lock: ACCESS EXCLUSIVE briefly on the *referencing (child)* table
+--       (metadata write); brief ShareRowExclusiveLock on the *referenced
+--       (parent)* table (parent-pin so the parent cannot be dropped
+--       while constraint metadata is being written).
+-- Effect: new INSERT / UPDATE rows on `child` are FK-checked immediately;
+--         existing rows in `child` are NOT checked — the constraint
+--         exists but is in pg_catalog state convalidated = false.
+ALTER TABLE child
+  ADD CONSTRAINT fk_child_parent_id
+  FOREIGN KEY (parent_id)
+  REFERENCES parent (id)
+  ON DELETE SET NULL
+  NOT VALID;
+
+-- Phase 2: validate existing rows.
+-- Lock: SHARE UPDATE EXCLUSIVE on `child` (allows concurrent reads AND
+--       writes on `child`). Parent table is essentially uninvolved
+--       during Phase 2.
+-- Effect: PostgreSQL scans every existing row in `child`; for each
+--         non-NULL `parent_id`, looks it up in `parent` via the parent's
+--         PK index. On success, sets convalidated = true. On failure,
+--         raises and identifies the offending row.
+ALTER TABLE child
+  VALIDATE CONSTRAINT fk_child_parent_id;
+```
+
+#### Wrong (single-phase FK on a populated child)
+
+```sql
+-- Single-phase ADD CONSTRAINT FK on a populated referencing table:
+ALTER TABLE game_states
+  ADD CONSTRAINT fk_game_states_canonical_event_id
+  FOREIGN KEY (canonical_event_id)
+  REFERENCES canonical_events (id)
+  ON DELETE SET NULL;
+
+-- Lock: ACCESS EXCLUSIVE on `game_states` for the entire validation
+-- table scan (every game_states row's canonical_event_id is resolved
+-- against canonical_events.id). On a 41k-row game_states the scan is
+-- fast in dev, but the lock-class is the same on production-magnitude
+-- tables. Pollers writing to game_states stall during the scan.
+```
+
+#### Right (two-phase FK by analogy)
+
+```sql
+ALTER TABLE game_states
+  ADD CONSTRAINT fk_game_states_canonical_event_id
+  FOREIGN KEY (canonical_event_id)
+  REFERENCES canonical_events (id)
+  ON DELETE SET NULL
+  NOT VALID;
+
+ALTER TABLE game_states
+  VALIDATE CONSTRAINT fk_game_states_canonical_event_id;
+
+-- Phase 2 lock surface on game_states: SHARE UPDATE EXCLUSIVE.
+-- Concurrent reads on game_states: ALLOWED.
+-- Concurrent writes on game_states: ALLOWED.
+-- canonical_events (parent / referenced): essentially uninvolved
+-- during Phase 2 — concurrent reads AND writes proceed unaffected.
+-- (See Migration 0080 + 0082 for the canonical instances.)
+```
+
+#### Lock Semantics for FK by Analogy
+
+| Form | Phase 1 lock on *child* (referencing) | Phase 1 lock on *parent* (referenced) | Phase 2 lock on *child* | Phase 2 lock on *parent* |
+|---|---|---|---|---|
+| Single-phase `ADD CONSTRAINT FK` | `ACCESS EXCLUSIVE` (metadata + scan) | brief `ShareRowExclusiveLock` (parent-pin) | n/a | n/a |
+| Two-phase `NOT VALID` + `VALIDATE` | `ACCESS EXCLUSIVE` briefly (metadata only) | brief `ShareRowExclusiveLock` (parent-pin) | `SHARE UPDATE EXCLUSIVE` | `AccessShareLock` (transient, per-row index lookup; does not conflict with ordinary reads/writes/DDL-except-DROP) |
+
+The parent-side `ShareRowExclusiveLock` in Phase 1 is brief — constraint-metadata duration only, measured in milliseconds. It does NOT block ordinary `SELECT` on the parent (which uses `AccessShareLock`), but it DOES briefly block concurrent `INSERT` / `UPDATE` / `DELETE` on the parent (which acquire `RowExclusiveLock`, conflicting with `ShareRowExclusiveLock` per the PostgreSQL [explicit-locking conflict matrix](https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-TABLES)) and concurrent DDL. The window is the constraint-metadata write only — not the validation-scan duration. Pollers and writers reading parent rows proceed unaffected; pollers and writers *modifying* parent rows briefly wait (typically imperceptible at constraint-metadata duration) before proceeding.
+
+#### Common Misattribution Warning
+
+It is tempting to describe the heavier lock as falling on the *referenced* (parent) table — the intuition runs "FK points at the parent, so the parent is the constrained surface." This is incorrect. **`ALTER TABLE` always acts on the table named in the `ALTER` clause; for an FK `ADD CONSTRAINT`, that is the *referencing* (child) table** — the table being modified to gain the new constraint definition. The validation scan walks child rows; the metadata write registers the constraint on the child's `pg_constraint` row (with `confrelid` pointing at the parent for descriptive purposes only). The parent is on the read-side of the validation, not the locked-side.
+
+**Forward-pointer:** Migration 0080 (`game_states` + `games`) and Migration 0082 (`temporal_alignment`) docstrings contain residue of this misattribution that is preserved as-is per Pattern 87 (append-only migrations); the canonical answer for the lock semantics is **here** (Pattern 84 V1.42, this subsection). Both migrations correctly state elsewhere in their docstrings that "we don't acquire ACCESS EXCLUSIVE on canonical_events" and "only the referencing table sees a SHARE UPDATE EXCLUSIVE lock during the scan" — those statements are correct. The lines that attribute a brief ACCESS EXCLUSIVE to the *referenced* table are the residue; treat the table above as the canonical reference.
+
+#### Pattern 87 + Pattern 73 Dogfood
+
+This V1.42 promotion is the canonical demonstration of how Pattern 87 (append-only migrations) and Pattern 73 (single source of truth) compose. Pattern 87 says shipped migration text is immutable — no edits to 0080 or 0082 — and Pattern 73 says canonical truth lives in one place. The fan-in point is here: Pattern 84 V1.42 is the SSOT for both CHECK and FK lock semantics on populated tables. A future reader comparing 0080 / 0082 docstrings against PostgreSQL docs will encounter the contradictory wording in the migrations and reach Pattern 84 V1.42 for the canonical resolution. The migrations remain frozen; the truth is here.
 
 ### Source
 
-- PR #1031 (Migration 0070) claude-review § "Issues & Suggestions / 1. Missing NOT VALID on the CHECK constraint" — both review passes converged on identical wording (Pattern 70 convergent-reviewer signal)
+- PR #1031 (Migration 0070) claude-review § "Issues & Suggestions / 1. Missing NOT VALID on the CHECK constraint" — both review passes converged on identical wording (Pattern 70 convergent-reviewer signal); V1.38 origin
 - Issue #1037 — Pattern 84 promotion-candidate tracking issue
 - ADR-118 v2.40 Cohort 1 carry-forward item 3 — single-phase justified by 0-row state on `canonical_events.lifecycle_phase` (the explicit precedent for the "When NOT to Apply" carve-out)
 - Migration 0070 (`src/precog/database/alembic/versions/0070_cohort_1_carryforward_hardening.py`) — canonical instance of the carve-out (single-phase justified by both criteria documented inline)
+- **PR #1130 (Migration 0080)** — first FK by-analogy application (`game_states` + `games` → `canonical_events`); Glokta APPROVE + claude-review APPROVE-WITH-NOTES; Pattern 84 NOT VALID + VALIDATE applied to FK form on populated tables (~41k + ~5k rows)
+- **PR #1134 (Migration 0082)** — second FK by-analogy application (`temporal_alignment` → `canonical_events`); Glokta APPROVE-WITH-NITS + Ripley CLEAR-TO-MERGE; convergent reviewer sign-off completing the N=2 threshold that triggered this V1.42 promotion (matches Pattern 84's own V1.38 origin criterion: two cold-context reviewers + convergent wording)
+- **Session 89 S68 audit (this V1.42 PR)** — convergent claude-review finding on lock-attribution misattribution in 0080 + 0082 docstrings ("briefly takes ACCESS EXCLUSIVE on the *referenced* table" is the wrong-direction line); routed to V1.42 promotion per Pattern 87 (canonical correction in authority doc, not migration edits) + Pattern 73 (SSOT for lock-class semantics on populated-table constraint adds)
 - Pattern 81 § "When NOT to Apply (Keep CHECK)" — sibling pattern; routes "should this be a CHECK?" decision
-- Pattern 70 (Convergent-Reviewer Signal Rule) — origin discipline for promoting Pattern 84 (two cold-context reviewers arrived at the same wording independently)
-- PostgreSQL docs: [ALTER TABLE / NOT VALID](https://www.postgresql.org/docs/current/sql-altertable.html) — the canonical reference for the lock-surface guarantees cited above
+- Pattern 70 (Convergent-Reviewer Signal Rule) — origin discipline for promoting Pattern 84 V1.38 AND for ratifying the V1.42 FK-by-analogy extension (two cold-context reviewers arrived at the same FK shape independently across PRs #1130 and #1134)
+- Pattern 87 (Append-Only Migration Files) — explains why the lock-attribution clarification lives in this V1.42 entry rather than as edits to the shipped 0080 + 0082 migration docstrings
+- Pattern 73 (Single Source of Truth) — explains the fan-in: one canonical home for both CHECK and FK lock semantics on populated tables
+- PostgreSQL docs: [ALTER TABLE / NOT VALID](https://www.postgresql.org/docs/current/sql-altertable.html) and [Explicit Locking](https://www.postgresql.org/docs/current/explicit-locking.html) — the canonical references for the lock-surface guarantees cited above (CHECK and FK both)
 
 ---
 
