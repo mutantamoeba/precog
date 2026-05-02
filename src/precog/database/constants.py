@@ -332,6 +332,138 @@ sibling lookup-table peer.
 """
 
 
+OBSERVATION_KIND_VALUES: Final[tuple[str, ...]] = (
+    "game_state",  # Sports observations (Cohort 4 — only kind exercised this cohort)
+    "weather",  # Weather observations (Cohort 9 — deferred under Option D)
+    "poll",  # Poll-release observations (Cohort 6+)
+    "econ",  # Econ-print observations (Cohort 6+)
+    "news",  # News-event observations (Cohort 7+)
+    "market_snapshot",  # Cross-platform market-state observations (Cohort 5+)
+)
+"""Canonical 6-value vocabulary for ``canonical_observations.observation_kind``.
+
+Authoritative per ADR-118 V2.43 Cohort 4 + slot 0078 build spec § 3 +
+session 85 4-agent design council convergence.
+
+Migration 0078 enforces this list at the DDL layer via an inline CHECK
+constraint on ``canonical_observations.observation_kind``.  Adding a new
+kind requires lockstep update of both this constant AND a migration
+ALTERing the CHECK constraint — drift between Python and DDL would
+produce silent ingest-pipeline bugs.
+
+Per CLAUDE.md Critical Pattern #8 (Pattern 73 SSOT): the
+``crud_canonical_observations.append_observation_row()`` CRUD function
+uses this constant in real-guard validation —
+``if observation_kind not in OBSERVATION_KIND_VALUES: raise ValueError(...)``.
+This is the same #1085-finding-#2 strengthening Cohort 3 slot 0073
+established (real-guard usage, not side-effect-only ``# noqa: F401``).
+
+Cohort 4 ONLY exercises ``'game_state'``; the other kinds are reserved
+forward-pointers to later cohorts (Cohorts 5-9).  The DDL CHECK is sized
+for the eventual full-vocabulary set so future-cohort migrations don't
+need to ALTER the CHECK every time a new kind is added — they only seed
+new rows + update this Python constant.
+
+Pattern 81 carve-out: this is intentionally NOT a lookup table.  The
+kind set is closed (every value binds to per-kind projection code in
+later cohorts per Pattern 81 § "When NOT to Apply"); same carve-out
+rationale as ``LINK_STATE_VALUES`` / ``ACTION_VALUES`` /
+``REVIEW_STATE_VALUES`` / ``POLARITY_VALUES``.  See ``Migration 0078``
+docstring for the full Pattern 81 non-application explanation.
+"""
+
+
+PARTITION_STRATEGY_VALUES: Final[tuple[str, ...]] = (
+    "range_monthly_ingested_at",  # Cohort 4 canonical_observations strategy
+    # Future strategies (e.g., "range_quarterly", "list_kind") are reserved
+    # here when added.
+)
+"""Documentation-only vocabulary for partitioning strategies.
+
+Authoritative per ADR-118 V2.43 Cohort 4 + slot 0078 build spec § 3.
+
+This tuple is **documentation-only** — there is NO DDL CHECK constraint
+backing it (PostgreSQL partition strategy is encoded in the
+``PARTITION BY`` clause itself, not a free-form column).  The constant
+exists so future cohorts adding new partitioning shapes have a canonical
+home to extend, and so anyone reading the Cohort 4 schema can answer
+"what partitioning strategies does this codebase commit to?" by reading
+ONE Python tuple rather than walking every migration file.
+
+Pattern 73 SSOT: when a future cohort adds a new strategy (e.g.,
+``range_quarterly`` for a finer-grained partition shape, or
+``list_kind`` for a kind-based partition scheme), the strategy name is
+added here AND cited in the new migration's docstring.  Drift between
+"strategy named in migration X's PARTITION BY clause" and "strategy
+listed in this tuple" would surface as a silent docs-vs-DDL gap.
+
+Per Cohort 4 council convergence + V2.43 Item 2: ``range_monthly_ingested_at``
+is the strategy committed to for ``canonical_observations`` based on
+Holden D1 PM call (``ingested_at`` is the partition key) + the operational
+cadence of monthly partition addition (~7 days before expiration per the
+Cohort 4 operator runbook).
+"""
+
+
+RECONCILIATION_OUTCOME_VALUES: Final[tuple[str, ...]] = (
+    "match",  # Source observation matches projection
+    "drift",  # Source vs projection differ within tolerance
+    "mismatch",  # Source vs projection differ beyond tolerance (alert-worthy)
+    "missing_dim",  # Projection has row but no canonical_observation parent
+    "missing_fact",  # canonical_observation has no projection in expected per-kind table
+    "ambiguous",  # Multiple projections for one canonical_observation
+)
+"""Canonical 6-value vocabulary for the future Cohort 5+ reconciler.
+
+Authoritative per ADR-118 V2.43 Cohort 4 + slot 0078 build spec § 3 +
+session 85 4-agent design council Cohort 4 reconciler design.
+
+**Defined in Cohort 4, consumed in Cohort 5+** — slot 0078 ships this
+constant alongside ``canonical_observations`` so the canonical reconciler
+module (when it materializes in Cohort 5+) inherits a stable vocabulary
+rather than re-deriving it post-hoc.  The ``canonical_observations_
+reconciliation_anomaly_count`` metric (Cohort 4 native metric #2 per
+build spec § 7) increments per row per non-``match`` outcome, riding the
+``system_health.details`` JSONB surface until a typed
+``canonical_reconciliation_results`` table lands (Cohort 5+, V2.43
+Item 4).
+
+Outcome semantics (build spec § 7 + Cohort 4 council convergence):
+
+    ``match``         — Source observation row equals the projection
+                        within strict equality (per per-kind comparator).
+    ``drift``         — Source vs projection differ but within
+                        per-kind drift tolerance; soft signal, not alert-
+                        worthy by itself but trended over time.
+    ``mismatch``      — Source vs projection differ beyond drift
+                        tolerance; alert-worthy.  Reconciler logs the
+                        diff fingerprint to ``system_health.details``
+                        JSONB.
+    ``missing_dim``   — Per-kind projection has a row but no parent
+                        ``canonical_observations`` row exists.  Indicates
+                        the writer skipped the parent INSERT (audit gap).
+    ``missing_fact``  — ``canonical_observations`` row has no per-kind
+                        projection in the expected table.  Indicates a
+                        consumer is behind or not yet onboarded.
+    ``ambiguous``     — Multiple projection rows exist for one
+                        ``canonical_observations`` row.  Indicates the
+                        per-kind table's UNIQUE invariant is missing or
+                        an upstream writer double-wrote.
+
+Per CLAUDE.md Critical Pattern #8 (Pattern 73 SSOT): when the Cohort 5+
+reconciler module ships, it imports this constant and uses it in the
+outcome-tally code path.  Schema-level enforcement is deferred until
+the typed ``canonical_reconciliation_results`` table lands (Cohort 5+);
+until then the JSONB ``details`` payload uses these strings.
+
+Pattern 81 carve-out: this vocabulary is **closed** (every outcome
+binds to operator-runbook-investigation branches per Pattern 81 §
+"When NOT to Apply"); not a lookup table.  Same shape as
+``LINK_STATE_VALUES`` / ``ACTION_VALUES`` / ``REVIEW_STATE_VALUES`` /
+``POLARITY_VALUES`` / ``OBSERVATION_KIND_VALUES``.
+"""
+
+
 SOURCE_KIND_VALUES: Final[tuple[str, ...]] = (
     "api",
     "scrape",

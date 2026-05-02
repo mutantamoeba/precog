@@ -396,6 +396,18 @@ features:
   multi_sport: false  # Phase 8
   polymarket: false  # Phase 10
 
+  # Cohort 4 canonical-tier observation writer (Migration 0078).
+  # Skeleton-only at slot-0078 deploy time; the writer's _poll_once() is a
+  # no-op until Cohort 5+ source-observation pipelines materialize.  Stays
+  # disabled until session 87 soak window opens — see
+  # docs/operations/canonical_observations_runbook.md for the activation
+  # procedure + safety considerations.  Nested per-feature subkey (rather
+  # than flat boolean) is forward-extensible: future Cohort 5+ reconciler
+  # config will use canonical_observations_writer.reconcile_interval etc.
+  # without further schema churn.
+  canonical_observations_writer:
+    enabled: false  # Cohort 4 default — flip to true at session 87 soak start
+
   # Development features
   debug_mode: false  # Extra logging, no real trades
   dry_run: false  # Simulate trades but don't execute

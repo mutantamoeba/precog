@@ -125,6 +125,8 @@ MODULE_TIERS = {
     "database/crud_canonical_match_log": "experimental",
     "database/crud_canonical_match_overrides": "experimental",
     "database/crud_canonical_match_reviews": "experimental",
+    # Cohort 4 slot 0078 — canonical_observations CRUD (Epic #972)
+    "database/crud_canonical_observations": "experimental",
     "database/constants": "experimental",
     "database/seeding/seeding_manager": "business",
     "database/seeding/historical_elo_loader": "business",
@@ -166,6 +168,10 @@ MODULE_TIERS = {
     # Schedulers
     "schedulers/espn_game_poller": "business",
     "schedulers/temporal_alignment_writer": "business",  # TODO: only unit tests exist — 7 test types missing, needs full suite
+    # Cohort 4 slot 0078 skeleton — registers with ServiceSupervisor but
+    # _poll_once is a no-op until Cohort 5+ source-observation pipelines materialize.
+    # Experimental tier until Cohort 5+ writer logic + full test suite ship (Epic #972).
+    "schedulers/canonical_observations_writer": "experimental",
     # Priority-based polling (#560) — new module, promote to business when test suite expands
     "schedulers/league_priority": "experimental",
     # Validation
