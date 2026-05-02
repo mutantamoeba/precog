@@ -69,10 +69,6 @@ class TestTemporalAlignmentWriterE2E:
         # Verify the full pipeline executed
         assert mock_get_cursor.called, "Should query for unaligned pairs"
         assert mock_insert.called, "Should insert the classified alignment"
-        # Verify result reports work done. _poll_once returns
-        # {"items_created": <int>} (per implementation lines 230 + 239); the
-        # earlier `or items_fetched` clause was a no-op since that key is
-        # never populated. (#1028 F3.)
         assert result.get("items_created", 0) >= 1, (
             f"Expected at least 1 alignment created, got {result!r}"
         )
@@ -91,10 +87,4 @@ class TestTemporalAlignmentWriterE2E:
         writer = create_temporal_alignment_writer()
         writer._poll_once()
 
-        # No alignments to insert -> insert function must NOT be called.
-        # The earlier conditional `if mock_insert.called: assert ...` was a
-        # silent no-op on the expected happy path: when mock is NOT called
-        # (which is the path this test is supposed to verify), no assertion
-        # ran at all and the test would have passed even on a buggy
-        # _poll_once that swallowed an early-exit exception. (#1028 F2.)
         mock_insert.assert_not_called()

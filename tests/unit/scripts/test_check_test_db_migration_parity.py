@@ -92,6 +92,11 @@ class TestMainExitCodes:
         in feedback_test_db_branch_drift.md. Source: session 83 hit this 2x
         on PRs #1099 + #1100; #1101 closes the misleading-message gap.
         """
+        # MigrationStatus.versions_behind is a computed @property:
+        # int(head_version) - int(db_version) = 74 - 76 = -2 (AHEAD by 2).
+        # The hook formats |versions_behind| in user-facing messages, so the
+        # AHEAD branch should surface "by 2" — not just "2" (which would
+        # spuriously match "0076" / "0074" / "#1101" substrings below).
         mock_check.return_value = MigrationStatus(
             is_current=False,
             db_version="0076",
@@ -106,7 +111,7 @@ class TestMainExitCodes:
         assert "AHEAD" in out
         assert "0076" in out
         assert "0074" in out
-        assert "2" in out
+        assert "by 2" in out
         assert "upgrade head" not in out
         assert "feedback_test_db_branch_drift.md" in out
         assert "#867" in out

@@ -61,11 +61,8 @@ class TestClassifyQualityPerformance:
         """Classifying the same delta 100K times returns the same result every call.
 
         Functional regression guard: catches a future change that introduces
-        per-call state (e.g., LRU cache with eviction, accidental random
-        component) which would surface as occasional non-deterministic returns.
-        Memory profiling was the original framing but was never actually
-        measured (memory is heavyweight + platform-dependent at this tier);
-        the load-bearing assertion is the per-call equality check. (#1028 F4.)
+        per-call state (e.g., LRU cache, accidental random component) that
+        would surface as occasional non-deterministic returns.
         """
         d = Decimal("15.5")
         for _ in range(100_000):
