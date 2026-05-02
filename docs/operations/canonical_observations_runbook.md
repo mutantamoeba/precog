@@ -58,6 +58,8 @@ ORDER BY last_heartbeat DESC;
 
 **Default:** `false` at slot-0078 deploy time.
 
+**Note:** the `features.canonical_observations_writer.enabled` flag is currently **observation-only** — Cohort 4 ships the writer skeleton + ServiceSupervisor registration but the writer's per-source data-collection logic ships in Cohort 5+. Flipping the flag today registers/deregisters the heartbeat surface but does not start/stop any data-collection traffic. Full operator-toggle behavior activates with Cohort 5+ writer module landing.
+
 **Activation procedure** (session 87 soak window opening, or any future operator-driven enablement):
 
 1. **Pre-flight check:** verify the writer's CRUD path is wired correctly by running the unit + integration test suites locally:

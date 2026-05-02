@@ -76,14 +76,6 @@ from precog.schedulers.base_poller import BasePoller
 logger = logging.getLogger(__name__)
 
 
-# Default poll interval (seconds).  Cohort 4 chooses 30s as the baseline
-# because it matches the existing temporal_alignment_writer cadence; if
-# Cohort 5+ source-observation throughput requires a different cadence
-# the value tunes there.  Slot 0078 is no-op-per-cycle so the cadence
-# does not affect the system at deploy time.
-_DEFAULT_POLL_INTERVAL = 30
-
-
 class CanonicalObservationsWriter(BasePoller):
     """Background service skeleton for canonical_observations ingest.
 
@@ -113,7 +105,11 @@ class CanonicalObservationsWriter(BasePoller):
     BREAKER_TYPE: ClassVar[str] = "data_stale"
 
     MIN_POLL_INTERVAL: ClassVar[int] = 5
-    DEFAULT_POLL_INTERVAL: ClassVar[int] = _DEFAULT_POLL_INTERVAL
+    # 30s baseline matches existing temporal_alignment_writer cadence; if
+    # Cohort 5+ source-observation throughput requires a different cadence
+    # the value tunes here.  Slot 0078 is no-op-per-cycle so the cadence
+    # does not affect the system at deploy time.
+    DEFAULT_POLL_INTERVAL: ClassVar[int] = 30
 
     def __init__(
         self,

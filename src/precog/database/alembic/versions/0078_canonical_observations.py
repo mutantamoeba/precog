@@ -207,9 +207,11 @@ Bitemporal validity CHECK rationale:
     ``CHECK (valid_until IS NULL OR valid_until >= valid_at)`` — guards
     against bitemporal interval well-formedness violations.  A row with
     ``valid_until < valid_at`` is semantically meaningless ("valid from
-    later to earlier" is not a valid interval); the CHECK surfaces the
-    bug at write time rather than letting it propagate into replay
-    queries.
+    later to earlier" is not a valid interval); ``valid_until == valid_at``
+    is admitted (a zero-width interval — closed at the same instant it
+    opens — is a legitimate degenerate case the ``>=`` operator allows).
+    The CHECK surfaces the bug at write time rather than letting it
+    propagate into replay queries.
 
 BEFORE UPDATE trigger (slot 0076 generic ``set_updated_at()`` reuse):
 

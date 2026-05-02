@@ -352,13 +352,3 @@ def append_observation_row(
         row = cur.fetchone()
 
     return cast("int", row["id"]), cast("datetime", row["ingested_at"])
-
-
-# =============================================================================
-# Sentinel: OBSERVATION_KIND_VALUES is imported and USED above in
-# real-guard ``ValueError``-raising validation (append_observation_row).
-# If a future refactor drops the validation, the import becomes unused
-# and ruff (F401) will fire — closing the side-effect-only-import drift
-# surface that #1085 finding #2 strengthening prevents.  This is the
-# slot-0073-strengthened convention applied to slot 0078.
-# =============================================================================
