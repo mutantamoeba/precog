@@ -127,6 +127,8 @@ MODULE_TIERS = {
     "database/crud_canonical_match_reviews": "experimental",
     # Cohort 4 slot 0078 — canonical_observations CRUD (Epic #972)
     "database/crud_canonical_observations": "experimental",
+    # Cohort 4 slot 0079 — canonical_event_phase_log audit ledger CRUD (Epic #972)
+    "database/crud_canonical_event_phase_log": "experimental",
     "database/constants": "experimental",
     "database/seeding/seeding_manager": "business",
     "database/seeding/historical_elo_loader": "business",
