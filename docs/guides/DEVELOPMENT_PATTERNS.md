@@ -12524,7 +12524,7 @@ For CHECK constraints, work through items 1-5 in order. For FK constraints, skip
 | 0070 | canonical_events | `lifecycle_phase IN (...)` | Single-phase | 0-row state in dev; seeder is Cohort 6 / Migration 0085 (ADR-118 v2.40 item 3) |
 | 0077 (planned) | canonical_event_phase_log | `phase IN (...)` (mirrors 0070) | Two-phase REQUIRED | Migration 0085 will have populated `canonical_events` before 0077 lands its mirror CHECK on the audit log; the audit log is co-populated by trigger |
 | 0080 | game_states + games | `canonical_event_id` FK to `canonical_events` | Two-phase by analogy (FK NOT VALID + VALIDATE) | Both tables populated (~41k + ~5k rows in dev at build time); first FK by-analogy use — convergent reviewer sign-off (Glokta APPROVE + claude-review APPROVE-WITH-NOTES) |
-| 0082 | temporal_alignment | `canonical_event_id` FK to `canonical_events` | Two-phase by analogy (FK NOT VALID + VALIDATE) | Continuously-grown table; second FK by-analogy use — convergent reviewer sign-off (Glokta APPROVE-WITH-NITS + Ripley CLEAR-TO-MERGE) completing N=2 threshold for this V1.42 promotion |
+| 0082 | temporal_alignment | `canonical_event_id` FK to `canonical_events` | Two-phase by analogy (FK NOT VALID + VALIDATE) | Empty in dev at build time but on the `temporal_alignment_writer` write-path — future-populated table treated as populated per § When to Apply bullet "expected to have rows by deploy time"; second FK by-analogy use — convergent reviewer sign-off (Glokta APPROVE-WITH-NITS + Ripley CLEAR-TO-MERGE) completing N=2 threshold for this V1.42 promotion |
 | 0083 (planned) | v_temporal_alignment view rewire | n/a — view, no `ALTER TABLE` | n/a | View rewire; Pattern 84 silent (no constraint to apply) |
 | 0085 (planned) | canonical_events (seeder) | n/a — INSERT-only | n/a | Lifecycle CHECK already in place from 0070; seed runs against the existing constraint |
 | 0095+ (planned) | weather_observations | temperature/humidity range CHECKs | Two-phase REQUIRED | Weather observations table is written-to by `weather_poller` from the moment Phase 1 weather lands (ADR-119) |
@@ -12655,9 +12655,9 @@ ALTER TABLE game_states
 | Form | Phase 1 lock on *child* (referencing) | Phase 1 lock on *parent* (referenced) | Phase 2 lock on *child* | Phase 2 lock on *parent* |
 |---|---|---|---|---|
 | Single-phase `ADD CONSTRAINT FK` | `ACCESS EXCLUSIVE` (metadata + scan) | brief `ShareRowExclusiveLock` (parent-pin) | n/a | n/a |
-| Two-phase `NOT VALID` + `VALIDATE` | `ACCESS EXCLUSIVE` briefly (metadata only) | brief `ShareRowExclusiveLock` (parent-pin) | `SHARE UPDATE EXCLUSIVE` | none (parent is essentially uninvolved) |
+| Two-phase `NOT VALID` + `VALIDATE` | `ACCESS EXCLUSIVE` briefly (metadata only) | brief `ShareRowExclusiveLock` (parent-pin) | `SHARE UPDATE EXCLUSIVE` | `AccessShareLock` (transient, per-row index lookup; does not conflict with ordinary reads/writes/DDL-except-DROP) |
 
-The parent-side `ShareRowExclusiveLock` in Phase 1 is brief (constraint-metadata duration only) and does NOT block concurrent reads or writes on the parent — it blocks only DDL operations on the parent (e.g., concurrent DROP, schema-altering DDL). Pollers and writers reading or modifying parent rows proceed unaffected.
+The parent-side `ShareRowExclusiveLock` in Phase 1 is brief — constraint-metadata duration only, measured in milliseconds. It does NOT block ordinary `SELECT` on the parent (which uses `AccessShareLock`), but it DOES briefly block concurrent `INSERT` / `UPDATE` / `DELETE` on the parent (which acquire `RowExclusiveLock`, conflicting with `ShareRowExclusiveLock` per the PostgreSQL [explicit-locking conflict matrix](https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-TABLES)) and concurrent DDL. The window is the constraint-metadata write only — not the validation-scan duration. Pollers and writers reading parent rows proceed unaffected; pollers and writers *modifying* parent rows briefly wait (typically imperceptible at constraint-metadata duration) before proceeding.
 
 #### Common Misattribution Warning
 
