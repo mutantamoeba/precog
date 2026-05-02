@@ -196,6 +196,7 @@ precog-repo/
 - `docs/foundation/MASTER_REQUIREMENTS_V2.26.md` - All requirements
 - `docs/foundation/ARCHITECTURE_DECISIONS.md` - 116+ ADRs including ADR-118 + ADR-119 (Canonical Layer Foundation — Epic #972; ADR-118 Cohort 1 amendment per #996 encoded in V2.38, Cohort 2 amendment per session 73 encoded in V2.39, Cohort 1 carry-forward amendment per #1011 / session 75 encoded in V2.40) (count may drift from document head — the V2.x version bumps track document revisions, not ADR count)
 - `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.2.md` - Phase roadmap (Era 2: current)
+- `docs/foundation/SDL_FRAMEWORK_V1.0.md` - Strategy Development Lifecycle (9 stages + 3 gates; T43-T54 + S83-S87 + C32-C33 + C40-C41 trigger cluster; canonicalized session 88 per [#1126](https://github.com/mutantamoeba/precog/issues/1126))
 
 **Implementation:**
 - `docs/guides/DEVELOPMENT_PATTERNS.md` - 84 active development patterns with examples (highest numbered slot is 86; slots 51 + 85 reserved-for-future-promotion, so 86 - 2 = 84 active). V1.39 adds Pattern 86: Living-Doc Freshness Markers (ALWAYS for living canonical docs describing moving targets; codifies the `<!-- FRESHNESS: ... -->` HTML-comment shape DATABASE_SCHEMA_SUMMARY V2.1 demonstrates). V1.38 adds Pattern 84: Two-Phase `NOT VALID` + `VALIDATE CONSTRAINT` for CHECK on populated tables.
