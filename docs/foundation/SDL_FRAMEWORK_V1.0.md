@@ -1,6 +1,6 @@
 # Strategy Development Lifecycle (SDL) Framework V1.0
 
-<!-- FRESHNESS: alembic_head=N/A; last_session=88; last_audit=session-88; t_types=T43-T54; s_triggers=S53-S87; c_triggers=C32-C41 -->
+<!-- FRESHNESS: alembic_head=N/A; last_session=88; last_audit=session-88; t_types=T43-T54; s_triggers=S83-S87; c_triggers=C32-C41 -->
 
 **Document Type:** Foundation
 **Status:** Active (V1.0 — initial canonicalization)
@@ -360,4 +360,4 @@ The following are intentionally NOT in V1.0 and will be addressed in follow-on i
 
 | Version | Date | Summary |
 |---|---|---|
-| 1.0 | 2026-05-02 (session 88) | Initial canonicalization. 9 stages + 3 gates + 3 framing modes + 7-event-type taxonomy. T52/T53/T54 + S83-S87 + C40/C41 added; C11 generalized; T48 wording confirmed already-correct in canonical roster. Origin: GitHub issue [#1126](https://github.com/mutantamoeba/precog/issues/1126). |
+| 1.0 | 2026-05-02 (session 88) | Initial canonicalization. 9 stages + 3 gates + 3 framing modes + 7-event-type taxonomy. T52/T53/T54 + S83-S87 + C40/C41 added; C11 generalized; T48 wording confirmed already-correct in canonical roster. C40/C41 numbering — initial proposal in [#1126](https://github.com/mutantamoeba/precog/issues/1126) used C36/C37; renumbered at session-88 implementation due to existing C36 (Migration batch retrospective) / C37 (Pre-council Prior Art audit) / C38 (Post-council Generalization Check) / C39 (Schema Hardening Arc cohort completion) collisions in canonical `roster_triggers.md`. Origin: GitHub issue [#1126](https://github.com/mutantamoeba/precog/issues/1126). |
