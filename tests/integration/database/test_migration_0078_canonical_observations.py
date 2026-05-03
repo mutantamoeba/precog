@@ -77,13 +77,20 @@ pytestmark = [pytest.mark.integration]
 # Mirror-symmetric assertion messages per #1085 finding #4 inheritance.
 # =============================================================================
 
+# V2.45 (Migration 0084) update: ``payload`` column DROPPED;
+# ``canonical_event_id`` RENAMED to ``canonical_primary_event_id``.
+# These tests assert the post-migration-chain state (head = 0084), not
+# the slot-0078-end state.  See ADR-118 V2.45 Items 4 + 8.
 _OBSERVATIONS_COLS: list[tuple[str, str, str, str | None, int | None]] = [
     ("id", "bigint", "NO", "nextval", None),
     ("observation_kind", "character varying", "NO", None, 32),
     ("source_id", "bigint", "NO", None, None),
-    ("canonical_event_id", "bigint", "YES", None, None),
+    # V2.45: renamed from canonical_event_id.
+    ("canonical_primary_event_id", "bigint", "YES", None, None),
     ("payload_hash", "bytea", "NO", None, None),
-    ("payload", "jsonb", "NO", None, None),
+    # V2.45: payload column dropped — per-kind projection tables hold
+    # the typed source data; canonical_observations is a pure lineage
+    # / linkage table now.  Removed from the schema spec.
     ("event_occurred_at", "timestamp with time zone", "YES", None, None),
     ("source_published_at", "timestamp with time zone", "NO", None, None),
     ("ingested_at", "timestamp with time zone", "NO", "now()", None),
@@ -104,15 +111,19 @@ _EXPECTED_PARTITIONS: list[tuple[str, str, str]] = [
 ]
 
 
-# Expected indexes (slot 0078 baseline).  Pattern 73 SSOT mirror of the
-# migration's _INDEX_DEFINITIONS tuple.
+# Expected indexes (slot 0078 baseline + V2.45 RENAME COLUMN preservation).
+# Pattern 73 SSOT mirror of the migration's _INDEX_DEFINITIONS tuple.  The
+# index DEFINITIONS automatically follow PG's RENAME COLUMN semantic — the
+# index NAMES are unchanged from slot 0078 but the column they reference is
+# now named ``canonical_primary_event_id``.  The substring check below
+# matches the new column name.
 _EXPECTED_INDEXES: list[tuple[str, str, bool]] = [
     # (index_name, column_substring, is_partial)
-    ("idx_canonical_observations_event_id", "canonical_event_id", True),
+    ("idx_canonical_observations_event_id", "canonical_primary_event_id", True),
     ("idx_canonical_observations_kind_ingested", "observation_kind", False),
     ("idx_canonical_observations_source_published", "source_id", False),
     ("idx_canonical_observations_event_occurred", "event_occurred_at", True),
-    ("idx_canonical_observations_currently_valid", "canonical_event_id", True),
+    ("idx_canonical_observations_currently_valid", "canonical_primary_event_id", True),
 ]
 
 
@@ -157,7 +168,7 @@ def _insert_observation_direct(
     *,
     observation_kind: str = "game_state",
     source_id: int,
-    canonical_event_id: int | None = None,
+    canonical_primary_event_id: int | None = None,
     payload: dict | None = None,
     event_occurred_at: datetime | None = None,
     source_published_at: datetime | None = None,
@@ -172,6 +183,12 @@ def _insert_observation_direct(
     integration tests use direct SQL to exercise the raw DDL contracts
     (e.g., to set ``ingested_at`` explicitly for partition-routing
     tests).
+
+    **V2.45 (Migration 0084) update:** the ``payload`` column on
+    canonical_observations was DROPPED; only the SHA-256 hash is
+    persisted.  The ``canonical_event_id`` column was RENAMED to
+    ``canonical_primary_event_id``.  This helper takes the renamed
+    parameter; callers passing the old name MUST update.
     """
     if payload is None:
         payload = {"test_marker": uuid.uuid4().hex}
@@ -189,13 +206,13 @@ def _insert_observation_direct(
         cur.execute(
             """
             INSERT INTO canonical_observations (
-                observation_kind, source_id, canonical_event_id,
-                payload_hash, payload,
+                observation_kind, source_id, canonical_primary_event_id,
+                payload_hash,
                 event_occurred_at, source_published_at, ingested_at,
                 valid_at, valid_until
             ) VALUES (
                 %s, %s, %s,
-                %s, %s::jsonb,
+                %s,
                 %s, %s, %s,
                 %s, %s
             )
@@ -204,9 +221,8 @@ def _insert_observation_direct(
             (
                 observation_kind,
                 source_id,
-                canonical_event_id,
+                canonical_primary_event_id,
                 payload_hash,
-                json.dumps(payload),
                 event_occurred_at,
                 source_published_at,
                 ingested_at,
@@ -428,7 +444,7 @@ def test_insert_routes_to_correct_partition_2026_06(db_pool: Any) -> None:
     try:
         obs_id, returned_ingested_at = _insert_observation_direct(
             source_id=source_id,
-            canonical_event_id=seeded_event_id,
+            canonical_primary_event_id=seeded_event_id,
             ingested_at=target_ingested_at,
         )
 
@@ -473,7 +489,7 @@ def test_insert_outside_partition_range_fails(db_pool: Any) -> None:
         with pytest.raises(psycopg2.errors.CheckViolation):
             _insert_observation_direct(
                 source_id=source_id,
-                canonical_event_id=seeded_event_id,
+                canonical_primary_event_id=seeded_event_id,
                 ingested_at=out_of_range,
             )
     finally:
@@ -496,7 +512,7 @@ def test_observation_kind_check_fires(db_pool: Any) -> None:
             _insert_observation_direct(
                 observation_kind="bogus_kind",  # not in OBSERVATION_KIND_VALUES
                 source_id=source_id,
-                canonical_event_id=seeded_event_id,
+                canonical_primary_event_id=seeded_event_id,
             )
     finally:
         _cleanup_canonical_event(seeded_event_id)
@@ -519,7 +535,7 @@ def test_clock_skew_check_fires(db_pool: Any) -> None:
         with pytest.raises(psycopg2.errors.CheckViolation):
             _insert_observation_direct(
                 source_id=source_id,
-                canonical_event_id=seeded_event_id,
+                canonical_primary_event_id=seeded_event_id,
                 ingested_at=ingested_at,
                 source_published_at=bad_published_at,
             )
@@ -539,7 +555,7 @@ def test_clock_skew_check_admits_5min_boundary(db_pool: Any) -> None:
     try:
         obs_id, _returned_ingested_at = _insert_observation_direct(
             source_id=source_id,
-            canonical_event_id=seeded_event_id,
+            canonical_primary_event_id=seeded_event_id,
             ingested_at=ingested_at,
             source_published_at=boundary_published_at,
         )
@@ -562,7 +578,7 @@ def test_validity_check_fires(db_pool: Any) -> None:
         with pytest.raises(psycopg2.errors.CheckViolation):
             _insert_observation_direct(
                 source_id=source_id,
-                canonical_event_id=seeded_event_id,
+                canonical_primary_event_id=seeded_event_id,
                 ingested_at=valid_at,
                 valid_at=valid_at,
                 valid_until=bad_valid_until,
@@ -633,7 +649,7 @@ def test_observation_kind_vocabulary_pattern_73_ssot(db_pool: Any) -> None:
                 # canonical_event_id only matters for sports kinds; cross-domain
                 # kinds typically have NULL.  Pass NULL across the board to
                 # avoid FK noise in the vocabulary parity test.
-                canonical_event_id=None,
+                canonical_primary_event_id=None,
                 payload=payload,
             )
             inserted.append((obs_id, ingested_at))
@@ -665,7 +681,7 @@ def test_dedup_unique_fires_on_duplicate(db_pool: Any) -> None:
         # First insert succeeds.
         obs_id, _ = _insert_observation_direct(
             source_id=source_id,
-            canonical_event_id=seeded_event_id,
+            canonical_primary_event_id=seeded_event_id,
             payload=payload,
             ingested_at=ingested_at,
         )
@@ -674,7 +690,7 @@ def test_dedup_unique_fires_on_duplicate(db_pool: Any) -> None:
         with pytest.raises(psycopg2.errors.UniqueViolation):
             _insert_observation_direct(
                 source_id=source_id,
-                canonical_event_id=seeded_event_id,
+                canonical_primary_event_id=seeded_event_id,
                 payload=payload,
                 ingested_at=ingested_at,
             )
@@ -780,7 +796,7 @@ def test_insert_routes_to_exactly_one_partition_no_double_write(db_pool: Any) ->
     try:
         obs_id, _returned_ingested_at = _insert_observation_direct(
             source_id=source_id,
-            canonical_event_id=seeded_event_id,
+            canonical_primary_event_id=seeded_event_id,
             ingested_at=target_ingested_at,
         )
 
@@ -815,7 +831,10 @@ def test_insert_routes_to_exactly_one_partition_no_double_write(db_pool: Any) ->
         # Match on indexdef rather than indexname because PG truncates
         # partition index names when the parent name is too long; the
         # column list in the indexdef is the stable identifier.
-        ("(canonical_event_id) WHERE (canonical_event_id IS NOT NULL)", "event_id_partial"),
+        (
+            "(canonical_primary_event_id) WHERE (canonical_primary_event_id IS NOT NULL)",
+            "event_id_partial",
+        ),
         ("(observation_kind, ingested_at", "kind_ingested"),
         ("(source_id, source_published_at", "source_published"),
         (
@@ -823,7 +842,7 @@ def test_insert_routes_to_exactly_one_partition_no_double_write(db_pool: Any) ->
             "event_occurred_partial",
         ),
         (
-            "(canonical_event_id, ingested_at DESC) WHERE (valid_until IS NULL)",
+            "(canonical_primary_event_id, ingested_at DESC) WHERE (valid_until IS NULL)",
             "currently_valid_partial",
         ),
     ],
@@ -879,7 +898,7 @@ def test_before_update_trigger_advances_updated_at(db_pool: Any) -> None:
     try:
         obs_id, returned_ingested_at = _insert_observation_direct(
             source_id=source_id,
-            canonical_event_id=seeded_event_id,
+            canonical_primary_event_id=seeded_event_id,
             ingested_at=ingested_at,
         )
 
@@ -948,28 +967,28 @@ def test_canonical_event_id_set_null_on_event_delete(db_pool: Any) -> None:
     try:
         obs_id, returned_ingested_at = _insert_observation_direct(
             source_id=source_id,
-            canonical_event_id=seeded_event_id,
+            canonical_primary_event_id=seeded_event_id,
             ingested_at=ingested_at,
         )
 
-        # Pre-condition: canonical_event_id references the seeded event.
+        # Pre-condition: canonical_primary_event_id references the seeded event.
         with get_cursor() as cur:
             cur.execute(
-                "SELECT canonical_event_id FROM canonical_observations "
+                "SELECT canonical_primary_event_id FROM canonical_observations "
                 "WHERE id = %s AND ingested_at = %s",
                 (obs_id, returned_ingested_at),
             )
             pre_row = cur.fetchone()
-        assert pre_row["canonical_event_id"] == seeded_event_id
+        assert pre_row["canonical_primary_event_id"] == seeded_event_id
 
         # DELETE the canonical_event — SET NULL must fire.
         with get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM canonical_events WHERE id = %s", (seeded_event_id,))
 
-        # Post-condition: observation row survives, canonical_event_id is NULL.
+        # Post-condition: observation row survives, canonical_primary_event_id is NULL.
         with get_cursor() as cur:
             cur.execute(
-                "SELECT canonical_event_id, source_id FROM canonical_observations "
+                "SELECT canonical_primary_event_id, source_id FROM canonical_observations "
                 "WHERE id = %s AND ingested_at = %s",
                 (obs_id, returned_ingested_at),
             )
@@ -977,9 +996,9 @@ def test_canonical_event_id_set_null_on_event_delete(db_pool: Any) -> None:
         assert post_row is not None, (
             "observation row should survive canonical_event DELETE (SET NULL polarity, not CASCADE)"
         )
-        assert post_row["canonical_event_id"] is None, (
-            "canonical_event_id should be NULL post-event-DELETE; got "
-            f"{post_row['canonical_event_id']!r}"
+        assert post_row["canonical_primary_event_id"] is None, (
+            "canonical_primary_event_id should be NULL post-event-DELETE; got "
+            f"{post_row['canonical_primary_event_id']!r}"
         )
         assert post_row["source_id"] == source_id, "source_id should be preserved post-event-DELETE"
     finally:
@@ -1005,7 +1024,7 @@ def test_source_id_restrict_blocks_source_delete(db_pool: Any) -> None:
     try:
         obs_id, _ = _insert_observation_direct(
             source_id=source_id,
-            canonical_event_id=seeded_event_id,
+            canonical_primary_event_id=seeded_event_id,
             ingested_at=ingested_at,
         )
 
@@ -1060,7 +1079,7 @@ def test_append_observation_row_round_trips_to_canonical_observations(
         obs_id, ingested_at = _insert_observation_direct(
             observation_kind="game_state",
             source_id=source_id,
-            canonical_event_id=seeded_event_id,
+            canonical_primary_event_id=seeded_event_id,
             payload={"crud_test_marker": uuid.uuid4().hex},
             event_occurred_at=explicit_ingested_at,
             source_published_at=explicit_ingested_at,
@@ -1070,7 +1089,7 @@ def test_append_observation_row_round_trips_to_canonical_observations(
         # Verify the row is readable by composite PK.
         with get_cursor() as cur:
             cur.execute(
-                "SELECT observation_kind, source_id, canonical_event_id "
+                "SELECT observation_kind, source_id, canonical_primary_event_id "
                 "FROM canonical_observations "
                 "WHERE id = %s AND ingested_at = %s",
                 (obs_id, ingested_at),
@@ -1082,7 +1101,7 @@ def test_append_observation_row_round_trips_to_canonical_observations(
         )
         assert row["observation_kind"] == "game_state"
         assert row["source_id"] == source_id
-        assert row["canonical_event_id"] == seeded_event_id
+        assert row["canonical_primary_event_id"] == seeded_event_id
 
         # Additionally exercise the CRUD function path with an explicit
         # source_published_at within partition coverage.  The CRUD function
@@ -1094,7 +1113,7 @@ def test_append_observation_row_round_trips_to_canonical_observations(
             crud_result = append_observation_row(
                 observation_kind="game_state",
                 source_id=source_id,
-                canonical_event_id=seeded_event_id,
+                canonical_primary_event_id=seeded_event_id,
                 payload={"crud_contract_marker": uuid.uuid4().hex},
                 event_occurred_at=explicit_ingested_at,
                 source_published_at=explicit_ingested_at,

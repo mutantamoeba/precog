@@ -175,13 +175,33 @@ def append_observation_row(
     *,
     observation_kind: str,
     source_id: int,
-    canonical_event_id: int | None,
+    canonical_primary_event_id: int | None,
     payload: dict[str, Any],
     event_occurred_at: datetime | None,
     source_published_at: datetime,
     valid_until: datetime | None = None,
 ) -> tuple[int, datetime]:
     """Append one row to canonical_observations.  THIS IS THE ONLY SANCTIONED WRITE PATH.
+
+    **V2.45 (slot 0084) update:** the ``canonical_observations.payload``
+    column was DROPPED.  Per-kind projection tables (``game_states``,
+    ``market_snapshots``, future ``weather_observations`` /
+    ``poll_releases`` / ``econ_prints`` / ``news_events``) carry the
+    typed source data + JSONB residue where needed.  This function still
+    accepts the ``payload`` parameter — it is hashed via SHA-256 to
+    produce ``payload_hash`` (the dedup key, retained on the table) but
+    is NOT stored on canonical_observations itself.  Callers MUST also
+    write the typed projection-table row (Cohort 5+ writer wiring;
+    issue #1141) for the typed source data to be persistent.
+
+    **V2.45 (slot 0084) rename:** the
+    ``canonical_observations.canonical_event_id`` column was RENAMED to
+    ``canonical_primary_event_id`` to make denormalized-as-primary-tag
+    semantics explicit.  Many-to-many multi-event tagging lives in the
+    new ``canonical_observation_event_links`` table (slot 0084); this
+    column is the hot-path read for the "primary event" tag, mirroring
+    the ``link_kind = 'primary'`` row in the link table.  The function
+    parameter is renamed accordingly.
 
     The canonical_observations parent is append-only via application
     discipline (mirrors slot 0073 ``canonical_match_log`` precedent).
@@ -218,16 +238,22 @@ def append_observation_row(
             ``'game_state'``; other kinds reserved for Cohorts 5-9.
         source_id: BIGINT FK into ``observation_source.id`` (slot 0075).
             ON DELETE RESTRICT — source registry is authoritative.
-        canonical_event_id: BIGINT FK into ``canonical_events.id``.
-            NULL allowed for cross-domain observations (weather, econ,
-            news in future cohorts) that aren't tied to a canonical
-            event.  ON DELETE SET NULL per V2.42 sub-amendment B +
-            V2.43 Item 2 canonical-tier polarity.
+        canonical_primary_event_id: BIGINT FK into ``canonical_events.id``.
+            **Renamed from canonical_event_id in V2.45 (slot 0084).**
+            Denormalized "primary tag" — mirrors the ``link_kind =
+            'primary'`` row in ``canonical_observation_event_links``
+            (slot 0084 link table).  NULL allowed for cross-domain
+            observations (weather, econ, news in future cohorts) that
+            aren't tied to a canonical event.  ON DELETE SET NULL per
+            V2.42 sub-amendment B + V2.43 Item 2 canonical-tier polarity.
         payload: dict containing the source observation payload at
             decision time.  MUST be JSON-serializable; the function
             canonicalizes via ``json.dumps(sort_keys=True, separators=
             (',', ':'))`` and computes the SHA-256 hash for the dedup
-            key.  Per-kind projections (Cohort 9+) decode this dict.
+            key.  **V2.45 update:** the dict is NO LONGER stored on
+            canonical_observations.payload (column dropped); only the
+            hash is persisted (as the dedup key).  Per-kind projection
+            tables hold the typed source data.
         event_occurred_at: TIMESTAMPTZ when the real-world event
             happened (e.g., when the play happened on the field).  NULL
             allowed for observations with no clear event time (econ
@@ -263,15 +289,15 @@ def append_observation_row(
         psycopg2.errors.UniqueViolation: dedup hit on
             ``(source_id, payload_hash, ingested_at)``.
         psycopg2.errors.ForeignKeyViolation: ``source_id`` absent from
-            ``observation_source`` OR ``canonical_event_id`` absent
-            from ``canonical_events``.
+            ``observation_source`` OR ``canonical_primary_event_id``
+            absent from ``canonical_events``.
 
     Example:
         >>> from datetime import UTC, datetime
         >>> obs_id, ingested_at = append_observation_row(
         ...     observation_kind="game_state",
         ...     source_id=1,  # ESPN
-        ...     canonical_event_id=42,
+        ...     canonical_primary_event_id=42,
         ...     payload={"home_score": 14, "away_score": 7, "quarter": 2},
         ...     event_occurred_at=datetime(2026, 5, 15, 19, 30, tzinfo=UTC),
         ...     source_published_at=datetime(2026, 5, 15, 19, 30, 5, tzinfo=UTC),
@@ -298,8 +324,13 @@ def append_observation_row(
     Reference:
         - Migration 0078 (table DDL + 3 CHECK constraints + composite
           UNIQUE + composite PK + 5 indexes + BEFORE UPDATE trigger)
+        - Migration 0084 (V2.45 redesign: payload column dropped,
+          canonical_event_id renamed to canonical_primary_event_id,
+          new canonical_observation_event_links table for multi-event
+          tagging)
         - ``constants.py:OBSERVATION_KIND_VALUES``
-        - Build spec § 4 (CRUD API surface specification)
+        - ADR-118 V2.45 Items 4 + 8 (binding decisions for the V2.45
+          redesign codified in slot 0084)
         - V2.43 Item 3 (composite-FK invariant for per-kind projections)
     """
     # Validate BEFORE opening the cursor so callers see a clear validation
@@ -313,23 +344,23 @@ def append_observation_row(
             "pattern 73 SSOT vocabulary violation"
         )
 
+    # SHA-256 hash of canonicalized payload bytes is the dedup key.
+    # V2.45: only the hash is persisted (payload column dropped); the
+    # dict itself is consumed only to derive the hash.
     payload_hash = _compute_payload_hash(payload)
-
-    # payload dict serialized to JSON text and cast to JSONB at the SQL
-    # layer (`%s::jsonb` in the query below).  Going through json.dumps
-    # gives us deterministic encoding regardless of psycopg2 adapter
-    # registration state, which keeps the test mocks simple and matches
-    # the slot-0073 features-column convention.
-    payload_param = json.dumps(payload)
+    # payload arg retained in signature for hash derivation but not
+    # otherwise referenced post-V2.45.  Marker kept so static analysis
+    # does not flag the parameter as unused.
+    _ = payload
 
     query = """
         INSERT INTO canonical_observations (
-            observation_kind, source_id, canonical_event_id,
-            payload_hash, payload,
+            observation_kind, source_id, canonical_primary_event_id,
+            payload_hash,
             event_occurred_at, source_published_at, valid_until
         ) VALUES (
             %s, %s, %s,
-            %s, %s::jsonb,
+            %s,
             %s, %s, %s
         )
         RETURNING id, ingested_at
@@ -341,9 +372,8 @@ def append_observation_row(
             (
                 observation_kind,
                 source_id,
-                canonical_event_id,
+                canonical_primary_event_id,
                 payload_hash,
-                payload_param,
                 event_occurred_at,
                 source_published_at,
                 valid_until,

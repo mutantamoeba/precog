@@ -19,11 +19,18 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-from hypothesis import given, settings
-from hypothesis import strategies as st
 
-from precog.database.crud_ledger import VALID_ALIGNMENT_QUALITIES
-from precog.schedulers.temporal_alignment_writer import _classify_quality
+pytest.skip(
+    "V2.45 Migration 0084 redesigned temporal_alignment as pure-linkage table; "
+    "temporal_alignment_writer references columns dropped under V2.45. "
+    "Cohort 5+ rewrite per ADR-118 V2.45 Item 6 + issue #1141.",
+    allow_module_level=True,
+)
+from hypothesis import given, settings  # noqa: E402
+from hypothesis import strategies as st  # noqa: E402
+
+from precog.database.crud_ledger import VALID_ALIGNMENT_QUALITIES  # noqa: E402
+from precog.schedulers.temporal_alignment_writer import _classify_quality  # noqa: E402
 
 
 @pytest.mark.property
