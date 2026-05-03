@@ -125,7 +125,7 @@ Round-trip discipline (PR #1081 round-trip CI gate):
     per session 59 ``feedback_idempotent_migration_drops.md``.
 
     Recreating the old ``temporal_alignment`` shape in downgrade is
-    intentionally faithful to the slot-0082-end shape (20 columns + 8
+    intentionally faithful to the slot-0082-end shape (19 columns + 8
     constraints + 8 indexes) so the round-trip CI gate can replay
     upgrade -> downgrade -> upgrade and reach an identical schema state
     on each cycle.  The old shape's MCP-verified column inventory is
@@ -188,6 +188,15 @@ def upgrade() -> None:
     # ESPN's untyped fields).  The payload column on canonical_observations
     # was redundant with what per-kind tables already carry; dropping it
     # makes canonical_observations a pure lineage / linkage table.
+    #
+    # NOTE on per-kind back-reference FK gap (P2-3 fix-pass): the
+    # back-reference FK (per_kind_table.observation_id -> canonical_
+    # observations.id) is deferred to Cohort 5+ (issue #1141).  Until
+    # then, observations are recorded without a direct FK path to reach
+    # the typed source data; reconstruction requires JOINing on
+    # (source_id, source_published_at) heuristically.  This is by design:
+    # Cohort 4 ships the spine; Cohort 5+ wires sources.  The writer
+    # is feature-flagged off until the back-reference is in place.
     #
     # The associated NOT NULL constraint
     # (canonical_observations_payload_not_null) is dropped automatically
@@ -322,7 +331,12 @@ def upgrade() -> None:
             observation_b_ingested_at       TIMESTAMPTZ NOT NULL,
             -- Denormalized hot-path canonical_event tag.  Mirrors the
             -- slot 0078 canonical_primary_event_id polarity (SET NULL).
-            canonical_event_id              BIGINT REFERENCES canonical_events(id) ON DELETE SET NULL,
+            -- Explicit constraint name preserves slot 0082 parity across
+            -- upgrade + downgrade (P2-2 fix-pass; without explicit name,
+            -- PG auto-generates ``temporal_alignment_canonical_event_id_fkey``
+            -- on upgrade while downgrade explicitly recreates the slot
+            -- 0082 name ``fk_temporal_alignment_canonical_event_id``).
+            canonical_event_id              BIGINT,
             -- Pairing time gap; 3 decimal places of millisecond precision.
             time_delta_seconds              NUMERIC(10, 3) NOT NULL,
             -- Pairing-quality tier; vocabulary canonical home is the
@@ -343,6 +357,11 @@ def upgrade() -> None:
             CONSTRAINT fk_temporal_alignment_observation_b
                 FOREIGN KEY (observation_b_id, observation_b_ingested_at)
                 REFERENCES canonical_observations(id, ingested_at),
+            -- Explicit name matches slot 0082 + downgrade reconstruction
+            -- (P2-2 fix-pass).
+            CONSTRAINT fk_temporal_alignment_canonical_event_id
+                FOREIGN KEY (canonical_event_id)
+                REFERENCES canonical_events(id) ON DELETE SET NULL,
 
             -- Matcher idempotence: same pair (full composite identifier
             -- on both sides) cannot be aligned twice.
@@ -508,7 +527,7 @@ def downgrade() -> None:
         2. Drop new ``temporal_alignment`` table + 3 indexes (Item 6 reverse part A).
         3. Recreate old ``temporal_alignment`` shape with sport-typed
            columns + slot 0082 FK (Item 6 reverse part B).  This is a
-           faithful reconstruction of the slot-0082-end shape (20 columns
+           faithful reconstruction of the slot-0082-end shape (19 columns
            + 8 indexes + 8 constraints + 1 UNIQUE) so the round-trip
            CI gate replay leaves the schema bit-identical.
         4. Reverse rename: ``canonical_primary_event_id`` ->
@@ -554,7 +573,7 @@ def downgrade() -> None:
     # Step 3: Recreate old temporal_alignment (Item 6 reverse part B)
     #
     # Faithful reconstruction of the slot-0082-end shape:
-    #     - 20 columns (including slot 0082's canonical_event_id)
+    #     - 19 columns (including slot 0082's canonical_event_id)
     #     - id INTEGER PK (NOT BIGINT in the old shape; preserved here
     #       for faithful round-trip)
     #     - market_id, market_snapshot_id, game_state_id INTEGER NOT NULL

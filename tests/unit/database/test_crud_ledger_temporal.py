@@ -16,13 +16,23 @@ Usage:
     pytest tests/unit/database/test_crud_ledger_temporal.py -v -m unit
 """
 
-from datetime import UTC, datetime
-from decimal import Decimal
-from unittest.mock import MagicMock, patch
-
 import pytest
 
-from precog.database.crud_ledger import (
+pytest.skip(
+    "V2.45 Migration 0084 dropped the columns these CRUD functions write to "
+    "(market_snapshot_id, game_state_id, home_score, yes_ask_price, etc.). "
+    "Cohort 5+ rewrite per ADR-118 V2.45 Item 6 + issue #1141. The mocked "
+    "cursors in this file silently pass-green against dead-on-execute code "
+    "(Pattern 22 hand-mock failure mode); skip prevents false-positive signal "
+    "until the rewrite ships.",
+    allow_module_level=True,
+)
+
+from datetime import UTC, datetime  # noqa: E402
+from decimal import Decimal  # noqa: E402
+from unittest.mock import MagicMock, patch  # noqa: E402
+
+from precog.database.crud_ledger import (  # noqa: E402
     VALID_ALIGNMENT_QUALITIES,
     get_alignments_by_market,
     insert_temporal_alignment,

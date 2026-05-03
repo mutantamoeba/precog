@@ -166,13 +166,15 @@ The writer's `append_observation_row()` raises `psycopg2.errors.UniqueViolation`
 **Investigation query:**
 
 ```sql
-SELECT id, ingested_at, source_id, payload_hash, payload, source_published_at
+SELECT id, ingested_at, source_id, payload_hash, source_published_at
 FROM canonical_observations
 WHERE source_id = $1
   AND payload_hash = $2
 ORDER BY ingested_at DESC
 LIMIT 5;
 ```
+
+> **V2.45 / Migration 0084 note.** The `canonical_observations.payload` column was dropped in V2.45; the dedup contract is now enforced via `payload_hash` alone. To investigate the original payload contents, query the per-kind projection table that corresponds to the row's `observation_kind` (e.g., `game_states` for `observation_kind = 'game_state'`, `market_snapshots` for `'market_snapshot'`, etc.). The per-kind back-reference FK (`observation_id`) ships in Cohort 5+ (issue #1141); until then, payload reconstruction requires JOINing on `(source_id, source_published_at)` heuristically.
 
 If the duplicate is operationally legitimate (e.g., source genuinely intended to re-publish the observation as an update), the canonical fix is to mutate the payload (add a sequence number, a publication timestamp, etc.) so the second publication has a distinct `payload_hash`. **Never bypass the dedup UNIQUE** — the table is append-only, and silent overwrites would corrupt the audit trail.
 

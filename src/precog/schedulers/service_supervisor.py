@@ -62,10 +62,7 @@ from precog.schedulers.canonical_observations_writer import (
 from precog.schedulers.espn_game_poller import ESPNGamePoller, create_espn_poller
 from precog.schedulers.kalshi_poller import KalshiMarketPoller, create_kalshi_poller
 from precog.schedulers.kalshi_websocket import KalshiWebSocketHandler, create_websocket_handler
-from precog.schedulers.temporal_alignment_writer import (
-    TemporalAlignmentWriter,
-    create_temporal_alignment_writer,
-)
+from precog.schedulers.temporal_alignment_writer import TemporalAlignmentWriter
 
 # Set up logging early for helper functions
 logger = logging.getLogger(__name__)
@@ -1276,12 +1273,23 @@ def _create_kalshi_ws(
 
 def _create_temporal_alignment(
     **_kwargs: Any,
-) -> EventLoopService:
-    """Factory for Temporal Alignment Writer."""
-    return cast(
-        "EventLoopService",
-        create_temporal_alignment_writer(),
-    )
+) -> EventLoopService | None:
+    """Factory for Temporal Alignment Writer — disabled post-V2.45.
+
+    Migration 0084 (ADR-118 V2.45 Item 6) redesigned ``temporal_alignment``
+    as a pure linkage table.  The legacy writer in
+    ``src/precog/schedulers/temporal_alignment_writer.py`` SELECTs/INSERTs
+    columns that no longer exist on the new shape (``market_snapshot_id``,
+    ``game_state_id``, ``home_score``, ``yes_ask_price``, etc.) and would
+    crash on first poll cycle if registered.  Cohort 5+ rewrite tracked at
+    issue #1141 will re-author the writer against the linkage shape +
+    canonical_observations source streams.
+
+    Returns ``None`` so ``create_services`` (lines ~1374-1378) silently
+    skips registration + disables the service config — same shape used
+    by future-service factories that aren't yet implemented.
+    """
+    return None
 
 
 def _create_canonical_observations_writer(
