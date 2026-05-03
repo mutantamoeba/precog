@@ -71,7 +71,9 @@ SET_NULL_FKS = [
     ("games", "away_team_id", "teams", "team_id"),
     ("games", "venue_id", "venues", "venue_id"),
     ("game_states", "game_id", "games", "id"),
-    ("temporal_alignment", "game_id", "games", "id"),
+    # NOTE: temporal_alignment.game_id removed in V2.45 / Migration 0084 redesign
+    # (Item 6: pure-linkage shape replaces the slot-0035-era denormalized fact-table).
+    # FK to games no longer exists post-V2.45.  See ADR-118 V2.45 Item 6.
 ]
 
 # All FKs that were CASCADE, now RESTRICT
@@ -97,9 +99,10 @@ CASCADE_FKS = [
     ("predictions", "evaluation_run_id", "evaluation_runs", "id"),
     ("predictions", "market_id", "markets", "id"),
     ("orderbook_snapshots", "market_id", "markets", "id"),
-    ("temporal_alignment", "market_id", "markets", "id"),
-    ("temporal_alignment", "market_snapshot_id", "market_snapshots", "id"),
-    ("temporal_alignment", "game_state_id", "game_states", "id"),
+    # NOTE: temporal_alignment.market_id / .market_snapshot_id / .game_state_id
+    # all removed in V2.45 / Migration 0084 redesign (Item 6: pure-linkage shape
+    # replaces the slot-0035-era denormalized fact-table).  These FKs no longer
+    # exist post-V2.45.  See ADR-118 V2.45 Item 6.
     ("edges", "market_id", "markets", "id"),
     ("positions", "market_id", "markets", "id"),
     ("trades", "market_id", "markets", "id"),
@@ -156,11 +159,10 @@ def fk_test_platform(db_pool: Any) -> Any:
 
     with get_cursor(commit=True) as cur:
         # Defensive cleanup of any prior run (reverse FK order)
-        cur.execute(
-            "DELETE FROM temporal_alignment WHERE market_id IN "
-            "(SELECT id FROM markets WHERE platform_id = %s)",
-            (platform_id,),
-        )
+        # NOTE: V2.45 / Migration 0084 redesigned temporal_alignment as a
+        # pure-linkage table; the market_id column no longer exists.  The
+        # defensive cleanup of test rows on the new shape is handled by
+        # canonical_observations FK CASCADE — no explicit DELETE needed here.
         cur.execute(
             "DELETE FROM orderbook_snapshots WHERE market_id IN "
             "(SELECT id FROM markets WHERE platform_id = %s)",
@@ -254,12 +256,11 @@ def fk_test_platform(db_pool: Any) -> Any:
     yield platform_id
 
     # Teardown in reverse FK order
+    # NOTE: V2.45 / Migration 0084 redesigned temporal_alignment as a
+    # pure-linkage table; the market_id column no longer exists.  Teardown
+    # of test rows on the new shape is handled by canonical_observations
+    # FK CASCADE — no explicit DELETE needed here.
     with get_cursor(commit=True) as cur:
-        cur.execute(
-            "DELETE FROM temporal_alignment WHERE market_id IN "
-            "(SELECT id FROM markets WHERE platform_id = %s)",
-            (platform_id,),
-        )
         cur.execute(
             "DELETE FROM orderbook_snapshots WHERE market_id IN "
             "(SELECT id FROM markets WHERE platform_id = %s)",

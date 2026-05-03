@@ -22,7 +22,14 @@ from decimal import Decimal
 
 import pytest
 
-from precog.schedulers.temporal_alignment_writer import _classify_quality
+pytest.skip(
+    "V2.45 Migration 0084 redesigned temporal_alignment as pure-linkage table; "
+    "temporal_alignment_writer references columns dropped under V2.45. "
+    "Cohort 5+ rewrite per ADR-118 V2.45 Item 6 + issue #1141.",
+    allow_module_level=True,
+)
+
+from precog.schedulers.temporal_alignment_writer import _classify_quality  # noqa: E402
 
 _is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
 

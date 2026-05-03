@@ -66,9 +66,28 @@ import psycopg2.errors
 import pytest
 
 from precog.database.connection import get_cursor
-from precog.schedulers.temporal_alignment_writer import create_temporal_alignment_writer
+from precog.schedulers.temporal_alignment_writer import (
+    create_temporal_alignment_writer,
+)
 
-pytestmark = [pytest.mark.integration]
+# V2.45 / Migration 0084: temporal_alignment was REDESIGNED as a pure-
+# linkage table (DROP TABLE + CREATE TABLE with new shape).  Slot 0082's
+# FK contribution + the slot-0035-era columns it sat atop are all GONE
+# in the post-V2.45 schema.  Slot 0082 tests + temporal_alignment_writer
+# are kept as institutional memory but skipped; the V2.45 redesign is
+# tested by tests/integration/database/test_migration_0084_canonical_layer_redesign.py.
+# See ADR-118 V2.45 Item 6 + memory/design_review_v246_input_memo.md.
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skip(
+        reason=(
+            "V2.45 / Migration 0084 redesigned temporal_alignment as a pure-linkage "
+            "table; slot 0082's FK on the old shape no longer exists.  See ADR-118 "
+            "V2.45 Item 6 + test_migration_0084_canonical_layer_redesign.py for "
+            "post-V2.45 coverage."
+        )
+    ),
+]
 
 
 # Shipped by slot 0082 -- (table, fk_constraint_name, index_name).

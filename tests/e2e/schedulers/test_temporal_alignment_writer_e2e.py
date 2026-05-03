@@ -22,7 +22,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.schedulers.temporal_alignment_writer import (
+pytest.skip(
+    "V2.45 Migration 0084 redesigned temporal_alignment as pure-linkage table; "
+    "temporal_alignment_writer references columns dropped under V2.45. "
+    "Cohort 5+ rewrite per ADR-118 V2.45 Item 6 + issue #1141.",
+    allow_module_level=True,
+)
+
+from precog.schedulers.temporal_alignment_writer import (  # noqa: E402
     create_temporal_alignment_writer,
 )
 

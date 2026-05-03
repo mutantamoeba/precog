@@ -30,7 +30,6 @@ Reference:
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
@@ -159,7 +158,7 @@ class TestAppendObservationRowHappyPath:
         result = append_observation_row(
             observation_kind="game_state",
             source_id=1,
-            canonical_event_id=42,
+            canonical_primary_event_id=42,
             payload={"home_score": 14, "away_score": 7},
             event_occurred_at=datetime(2026, 5, 15, 19, 30, tzinfo=UTC),
             source_published_at=datetime(2026, 5, 15, 19, 30, 5, tzinfo=UTC),
@@ -181,7 +180,7 @@ class TestAppendObservationRowHappyPath:
         append_observation_row(
             observation_kind="game_state",
             source_id=1,
-            canonical_event_id=42,
+            canonical_primary_event_id=42,
             payload={"x": 1},
             event_occurred_at=None,
             source_published_at=datetime(2026, 5, 15, tzinfo=UTC),
@@ -194,13 +193,20 @@ class TestAppendObservationRowHappyPath:
 
     @patch("precog.database.crud_canonical_observations.get_cursor")
     def test_append_observation_row_includes_all_columns_in_insert(self, mock_get_cursor_factory):
-        """INSERT covers all 8 user-supplied columns (rest are DEFAULT)."""
+        """INSERT covers all 7 user-supplied columns (rest are DEFAULT).
+
+        V2.45 (Migration 0084) update: payload column DROPPED;
+        canonical_event_id RENAMED to canonical_primary_event_id.  The
+        function still accepts ``payload`` as a parameter (consumed for
+        SHA-256 hash derivation) but the value is NOT stored on the
+        canonical_observations row.
+        """
         mock_cursor = _wire_observation_cursor_mock(mock_get_cursor_factory)
 
         append_observation_row(
             observation_kind="game_state",
             source_id=1,
-            canonical_event_id=42,
+            canonical_primary_event_id=42,
             payload={"x": 1},
             event_occurred_at=None,
             source_published_at=datetime(2026, 5, 15, tzinfo=UTC),
@@ -210,41 +216,59 @@ class TestAppendObservationRowHappyPath:
         for col in (
             "observation_kind",
             "source_id",
-            "canonical_event_id",
+            "canonical_primary_event_id",
             "payload_hash",
-            "payload",
             "event_occurred_at",
             "source_published_at",
             "valid_until",
         ):
             assert col in sql, f"INSERT must include column {col!r}"
-        # JSONB cast for the payload column (mirrors slot-0073 features cast).
-        assert "::jsonb" in sql
+        # V2.45: payload column DROPPED — not in INSERT.
+        assert "payload," not in sql.replace("payload_hash", ""), (
+            "V2.45 Migration 0084 dropped the payload column; INSERT must NOT include it"
+        )
+        # V2.45: no JSONB cast (no JSONB column in INSERT post-payload-drop).
+        assert "::jsonb" not in sql, (
+            "V2.45 Migration 0084 dropped the payload JSONB column; "
+            "no ::jsonb cast should remain in the INSERT"
+        )
 
     @patch("precog.database.crud_canonical_observations.get_cursor")
-    def test_append_observation_row_serializes_payload_to_json(self, mock_get_cursor_factory):
-        """payload dict is serialized via json.dumps before SQL parameter binding."""
+    def test_append_observation_row_consumes_payload_for_hash(self, mock_get_cursor_factory):
+        """payload dict is consumed for SHA-256 hash derivation (not stored post-V2.45).
+
+        V2.45 update: payload column dropped from canonical_observations.
+        The function still accepts payload, hashes it for dedup, but
+        does NOT pass payload itself to SQL.  Only payload_hash crosses
+        the SQL boundary.
+        """
         mock_cursor = _wire_observation_cursor_mock(mock_get_cursor_factory)
 
         payload = {"home_score": 14, "away_score": 7}
         append_observation_row(
             observation_kind="game_state",
             source_id=1,
-            canonical_event_id=42,
+            canonical_primary_event_id=42,
             payload=payload,
             event_occurred_at=None,
             source_published_at=datetime(2026, 5, 15, tzinfo=UTC),
         )
 
         params = mock_cursor.execute.call_args[0][1]
-        # payload param is at position 4 (0-indexed) — observation_kind,
-        # source_id, canonical_event_id, payload_hash, payload, ...
-        payload_param = params[4]
-        assert isinstance(payload_param, str), (
-            f"payload param must be JSON string, got {type(payload_param).__name__}"
-        )
-        decoded = json.loads(payload_param)
-        assert decoded == payload, f"payload param JSON-decode must round-trip; got {decoded!r}"
+        # V2.45 SQL parameter order:
+        #   0: observation_kind
+        #   1: source_id
+        #   2: canonical_primary_event_id
+        #   3: payload_hash (BYTEA)
+        #   4: event_occurred_at
+        #   5: source_published_at
+        #   6: valid_until
+        # The payload dict itself MUST NOT appear in params; only its hash.
+        for param in params:
+            assert param != payload, (
+                "V2.45: payload dict must NOT be passed to SQL (column dropped); "
+                "only payload_hash should cross the SQL boundary"
+            )
 
     @patch("precog.database.crud_canonical_observations.get_cursor")
     def test_append_observation_row_passes_payload_hash_as_bytes(self, mock_get_cursor_factory):
@@ -254,15 +278,15 @@ class TestAppendObservationRowHappyPath:
         append_observation_row(
             observation_kind="game_state",
             source_id=1,
-            canonical_event_id=42,
+            canonical_primary_event_id=42,
             payload={"x": 1},
             event_occurred_at=None,
             source_published_at=datetime(2026, 5, 15, tzinfo=UTC),
         )
 
         params = mock_cursor.execute.call_args[0][1]
-        # payload_hash is at position 3 — observation_kind, source_id,
-        # canonical_event_id, payload_hash, payload, ...
+        # V2.45 param positions: payload_hash is at position 3 —
+        # observation_kind, source_id, canonical_primary_event_id, payload_hash, ...
         payload_hash_param = params[3]
         assert isinstance(payload_hash_param, bytes), (
             f"payload_hash param must be bytes (BYTEA), got {type(payload_hash_param).__name__}"
@@ -272,24 +296,24 @@ class TestAppendObservationRowHappyPath:
         )
 
     @patch("precog.database.crud_canonical_observations.get_cursor")
-    def test_append_observation_row_canonical_event_id_none_passes_through(
+    def test_append_observation_row_canonical_primary_event_id_none_passes_through(
         self, mock_get_cursor_factory
     ):
-        """canonical_event_id=None is forwarded as SQL NULL (cross-domain default)."""
+        """canonical_primary_event_id=None is forwarded as SQL NULL (cross-domain default)."""
         mock_cursor = _wire_observation_cursor_mock(mock_get_cursor_factory)
 
         append_observation_row(
             observation_kind="weather",  # cross-domain — typically NULL canonical_event
             source_id=1,
-            canonical_event_id=None,
+            canonical_primary_event_id=None,
             payload={"temperature_c": 22.5},
             event_occurred_at=None,
             source_published_at=datetime(2026, 5, 15, tzinfo=UTC),
         )
 
         params = mock_cursor.execute.call_args[0][1]
-        # canonical_event_id is at position 2.
-        assert params[2] is None, "canonical_event_id=None must pass as SQL NULL"
+        # V2.45 param positions: canonical_primary_event_id is at position 2.
+        assert params[2] is None, "canonical_primary_event_id=None must pass as SQL NULL"
 
     @patch("precog.database.crud_canonical_observations.get_cursor")
     def test_append_observation_row_event_occurred_at_none_passes_through(
@@ -301,15 +325,16 @@ class TestAppendObservationRowHappyPath:
         append_observation_row(
             observation_kind="econ",
             source_id=1,
-            canonical_event_id=None,
+            canonical_primary_event_id=None,
             payload={"cpi": 312.5},
             event_occurred_at=None,
             source_published_at=datetime(2026, 5, 15, tzinfo=UTC),
         )
 
         params = mock_cursor.execute.call_args[0][1]
-        # event_occurred_at is at position 5.
-        assert params[5] is None
+        # V2.45 param positions: event_occurred_at is at position 4
+        # (was 5 pre-V2.45; payload at position 4 was dropped).
+        assert params[4] is None
 
     @patch("precog.database.crud_canonical_observations.get_cursor")
     def test_append_observation_row_valid_until_none_passes_through(self, mock_get_cursor_factory):
@@ -319,7 +344,7 @@ class TestAppendObservationRowHappyPath:
         append_observation_row(
             observation_kind="game_state",
             source_id=1,
-            canonical_event_id=42,
+            canonical_primary_event_id=42,
             payload={"x": 1},
             event_occurred_at=None,
             source_published_at=datetime(2026, 5, 15, tzinfo=UTC),
@@ -327,8 +352,9 @@ class TestAppendObservationRowHappyPath:
         )
 
         params = mock_cursor.execute.call_args[0][1]
-        # valid_until is at position 7 (last).
-        assert params[7] is None
+        # V2.45 param positions: valid_until is at position 6 (last;
+        # was 7 pre-V2.45 with payload at 4).
+        assert params[6] is None
 
 
 # =============================================================================
@@ -359,7 +385,7 @@ class TestAppendObservationRowRejectsInvalidKind:
                 append_observation_row(
                     observation_kind=bad_kind,
                     source_id=1,
-                    canonical_event_id=42,
+                    canonical_primary_event_id=42,
                     payload={"x": 1},
                     event_occurred_at=None,
                     source_published_at=datetime(2026, 5, 15, tzinfo=UTC),
@@ -381,7 +407,7 @@ class TestAppendObservationRowRejectsInvalidKind:
             append_observation_row(
                 observation_kind=canonical_kind,
                 source_id=1,
-                canonical_event_id=None,
+                canonical_primary_event_id=None,
                 payload={"x": 1},
                 event_occurred_at=None,
                 source_published_at=datetime(2026, 5, 15, tzinfo=UTC),
@@ -419,14 +445,14 @@ class TestAppendObservationRowPayloadHashCrosscheck:
         append_observation_row(
             observation_kind="game_state",
             source_id=1,
-            canonical_event_id=42,
+            canonical_primary_event_id=42,
             payload=payload,
             event_occurred_at=None,
             source_published_at=datetime(2026, 5, 15, tzinfo=UTC),
         )
 
         params = mock_cursor.execute.call_args[0][1]
-        # payload_hash is at position 3.
+        # V2.45 param positions: payload_hash is at position 3.
         actual_hash = params[3]
         assert actual_hash == expected_hash, (
             "payload_hash sent to SQL must equal _compute_payload_hash(payload); "
