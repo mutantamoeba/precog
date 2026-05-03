@@ -1,13 +1,19 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.42
+**Version:** 1.43
 **Created:** 2025-11-13
 **Last Updated:** 2026-05-02
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.43:**
+- **Added Pattern 89: Post-Merge Sentinel Recovery (ALWAYS When CI Wall-Clock Races Reviewer Dispatch on Auto-Merge-Armed PRs).** Origin: session 88 PR #1131 SDL Framework V1.0 — Hermione's post-merge Sentinel frame caught a real Pattern 73 SSOT violation (Carter Strategist→Modeler) that the three pre-merge frames missed because auto-merge fired ~5 min before Hermione's dispatch landed. Quality-discipline rule about cold-context coverage: when reviewer dispatch wall-clock loses to CI green wall-clock, dispatch the reviewer post-merge — the audit is not a wasted retry, it provides genuine SSOT-against-merged-state coverage that pre-merge frames under timing pressure can miss. Severity: MEDIUM-HIGH (three-condition convergence required, not every PR).
+- **Added Pattern 90: Auto-Merge State Hygiene (ALWAYS After Any Push to an Auto-Merge-Armed PR), with sub-rules 90a + 90b.** Origin: session 72 PR #1008 (`mergeStateStatus: BEHIND` blocks armed merge — fix `gh pr update-branch <N>`) + session 86 PR #1120 (any push to PR head silently disarms auto-merge — fix re-arm via `gh pr merge <N> --auto --squash`). Operational `gh` CLI mechanics rule consolidating two existing feedback memos (`feedback_auto_merge_behind_diagnosis.md` + `feedback_auto_merge_disarmed_by_force_push.md`) into a single canonical Pattern with a 4-cell decision matrix and unified diagnostic invocation. Sub-rules 90a + 90b mirror Pattern 88's 88a + 88b shape (genuinely paired: shared diagnostic invocation, shared armed-PR surface, divergent operational moves). Severity: MEDIUM (operational latency cost, not correctness; SILENT failure mode is the discipline trigger).
+- **Why two separate patterns (Option X) rather than one consolidated Pattern 89 with sub-rules (Option Y).** Pattern 88's paired-rule precedent applied because both 88a + 88b shared the same surface (PG partitioned tables) AND the same incident (slot 0078 PR #1120); Pattern 89 + 90 share neither surface (dispatch discipline vs `gh` CLI mechanics) nor a single origin incident (three separate sessions across 14 cycles). The reader hitting "my Sentinel raced auto-merge and missed a real finding" does not need to learn about `mergeStateStatus: BEHIND`, and vice versa. Cross-reference searchability also improves: a future session memo citing "we hit Pattern 90b" is more discoverable than "Pattern 89.something" sub-rule indexing. Pattern 90 internally still uses 90a + 90b sub-rules (per Pattern 88) because 90a/90b ARE the genuine shared-diagnostic / divergent-move case that Pattern 88's precedent applies to.
+- **Promotion source:** Jorge S80 paired audit (session 87, memo `audit_s69_s80_session_87_jorge_memo.md` Frame 5) flagged both as promotion candidates with Pattern 89 candidate at MEDIUM-HIGH (consolidates 3 auto-merge feedback memos into 1 canonical pattern via Pattern 73 SSOT) and the post-merge Sentinel recovery rule earning multi-incident validation across session 88 (Hermione's post-merge frame on PR #1131 caught a real Pattern 73 SSOT violation — Carter Strategist→Modeler — that pre-merge frames missed because auto-merge fired ~5 min before Hermione's dispatch landed). The S80 audit explicitly flagged session 92 as the next periodic sweep window; this V1.43 amendment ships them now (one cycle earlier) because both have multi-incident origin and clear operational guidance, and Cohort 5+ work entering session 89-90 will hit the same auto-merge timing patterns repeatedly.
+- **Pair-with: Pattern 73 (SSOT — these are operational rules subject to the same single-source discipline; Pattern 90 in particular consolidates `feedback_auto_merge_behind_diagnosis.md` + `feedback_auto_merge_disarmed_by_force_push.md` — both retained as origin-reference per Pattern 88 precedent, but Pattern 90 is now the canonical home for the consolidated "gh auto-merge silent-failure modes" rule)**; Pattern 87 (Append-Only Migration Files — append-only spirit applies to in-flight state-verification surfaces: an auto-merged PR's "merged-to-main" state is the new canonical surface, and a post-merge Sentinel run audits THAT surface, not a pre-merge speculative one); Pattern 88 (paired-rule precedent considered and rejected — see "Why two patterns" above); Pattern 70 (Convergent-Reviewer Signal — Pattern 89 surfaced Hermione's frame as a load-bearing convergent signal because it converged with three pre-merge frames on the SDL V1.0 spec, then independently caught a violation none of the three did).
 **Changes in V1.42:**
 - **Extended Pattern 84 from CHECK constraints to FK constraints on populated tables, by analogy.** The two-phase `ADD CONSTRAINT ... NOT VALID` + `VALIDATE CONSTRAINT ...` shape has identical lock-isolation properties for an FK on a populated *referencing (child)* table as it does for a CHECK on a populated table — Phase 1 brief `ACCESS EXCLUSIVE` for metadata registration; Phase 2 `SHARE UPDATE EXCLUSIVE` for the row-scan against the predicate (FK target lookup). Pattern 84 now has two parallel applications (CHECK on populated tables, FK on populated tables) sharing identical phase-1 / phase-2 lock-isolation logic; the existing CHECK guidance is unchanged.
 - **N=2 origin:** slot 0080 (PR #1130, `game_states` + `games` `canonical_event_id` nullable FKs to `canonical_events`) and slot 0082 (PR #1134, `temporal_alignment` `canonical_event_id` nullable FK to `canonical_events`) both shipped applying the NOT VALID + VALIDATE shape to FK constraints on populated tables, with convergent reviewer sign-off (Glokta APPROVE + Ripley CLEAR-TO-MERGE in both cases). Two cold-context applications + convergent reviewer signal is the same canonical-promotion criterion that promoted Pattern 84 itself from PR #1031 (the V1.38 origin) — see § Source.
@@ -13100,6 +13106,304 @@ for partition_suffix in _INITIAL_PARTITIONS:
 - Jorge S80 sweep (session 87) — paired promotion identified as Option A; high urgency for active Cohort 4 partition-heavy work
 - Pattern 73 — Single Source of Truth (the column list IS the canonical content; the auto-generated partition name is a derived presentation surface)
 - Pattern 86 — Living-Doc Freshness Markers (PG version stability worth marking on partition-DDL docs as Cohort 4 progresses)
+
+---
+
+## Pattern 89: Post-Merge Sentinel Recovery (ALWAYS When CI Wall-Clock Races Reviewer Dispatch on Auto-Merge-Armed PRs)
+
+**Severity:** MEDIUM-HIGH — when a Sentinel / Reviewer dispatch loses the wall-clock race against auto-merge, the natural reaction is "the PR merged, dispatching now is throwaway." That reaction is wrong: the post-merge dispatch produces **genuine cold-context coverage against the merged-to-main state** — coverage that pre-merge frames under timing pressure can miss. Session 88 PR #1131 is the load-bearing instance: Hermione's frame, dispatched after auto-merge had already fired, caught a real Pattern 73 SSOT violation (Carter persona role drift Strategist→Modeler) that all three pre-merge frames missed. Severity is MEDIUM-HIGH rather than HIGH because the failure mode requires three conditions to converge (fast CI + auto-merge armed + real defect that pre-merge frames miss) — it does not fire every PR.
+
+### Problem / Trigger
+
+Three conditions converge:
+
+1. **Auto-merge is armed on a PR** (typical for high-volume sessions: PM arms `gh pr merge <N> --auto --squash` immediately after Builder push to keep the pipeline flowing).
+2. **CI completes faster than reviewer dispatch wall-clock.** Most common shape: docs-only PRs that auto-merge on `documentation-validation` green only (no code-path CI to run; CI Summary turns green in ~30-90s). For a code PR, CI typically takes 5-10 minutes — usually slower than reviewer dispatch — but for docs-only or near-docs-only PRs the race can flip.
+3. **A reviewer / Sentinel was dispatched but landed AFTER auto-merge fired.** The dispatch wall-clock includes prompt-construction + agent-spinup + read-files + analysis — easily 3-7 minutes. If CI green-to-merge takes 90s, the reviewer is reading a merged-to-main state when their findings come back.
+
+The naive PM reaction: "the PR is merged, the reviewer's findings are throwaway, discard." This is wrong on two grounds:
+
+- **Cold-context cover-coverage:** the post-merge reviewer is auditing the canonical-state-of-record (main HEAD), exactly what the project will run against. Pre-merge frames audit a speculative branch state that may not match main if other PRs landed between dispatch and merge.
+- **Timing-pressure compensation:** pre-merge frames know auto-merge is armed and the clock is ticking; this implicitly biases toward "approve fast, raise nits not blockers." A post-merge frame is not under that pressure — it audits as if reviewing a published artifact, which is closer to what real-world consumers will hit.
+
+The correct disposition is to treat the post-merge dispatch as a **canonical-state-verification audit** — same rigor as a pre-merge frame, with findings filed against the merged-to-main state and remediated in a follow-up PR if real.
+
+### The Pattern / Rule
+
+> When a Sentinel / Reviewer dispatch fires on an auto-merge-armed PR and the dispatch lands AFTER the auto-merge has already merged the PR, **complete the dispatch and treat its findings as canonical-state-verification audit findings** — not as throwaway recovery. File any real findings as P-prioritized issues against main (same rubric as pre-merge findings); remediate in a follow-up PR. The post-merge dispatch is the cold-context coverage layer that pre-merge timing-pressured frames can miss.
+
+**Corollary:** when arming auto-merge on a PR with Sentinel / Reviewer pipelines in flight, **do NOT cancel the in-flight dispatches if auto-merge fires first**. The dispatches are not waste — they become the post-merge audit layer.
+
+### Canonical Shape
+
+```text
+Pre-merge timing race:
+  T+0   PM dispatches Hermione (post-merge audit frame) on PR #1131
+  T+30s PM arms `gh pr merge 1131 --auto --squash`
+  T+45s CI Summary green (docs-only PR — only documentation-validation runs)
+  T+60s GitHub auto-merge fires; PR #1131 merged to main
+  T+5m  Hermione completes; reads PR #1131 + finds Pattern 73 SSOT violation
+            (Carter persona Strategist→Modeler drift in SDL Framework V1.0)
+
+Disposition (CORRECT):
+  - Treat Hermione's finding as canonical audit against merged-to-main state.
+  - File the finding as a follow-up issue against main.
+  - Remediate in a follow-up PR (#1132 in the session 88 case).
+  - Document the post-merge audit pattern as Pattern 89 (this entry).
+
+Disposition (WRONG — what the naive reaction would be):
+  - Discard Hermione's findings as "throwaway recovery."
+  - Carter persona drift ships uncorrected.
+  - Future readers of SDL Framework V1.0 carry the wrong persona role.
+  - Pattern 73 SSOT violation persists until next periodic audit.
+```
+
+### Wrong
+
+```text
+PM thought process (incorrect):
+  "The PR auto-merged before Hermione finished her review.
+   Her findings are post-hoc — the merge already happened.
+   I'll cancel her dispatch (or discard her output) and move on
+   to the next task. Auto-merge is the source-of-truth for
+   ship/no-ship decisions; everything else is advisory."
+
+Failure mode:
+  - Loses cold-context cover-coverage entirely.
+  - Pre-merge frames under timing pressure missed the violation;
+    the post-merge frame is the only frame that would have caught it
+    AT ALL — and PM threw away that frame's output.
+  - Pattern 73 SSOT violation ships and persists indefinitely.
+  - Re-discovery cost: next periodic Jorge S69 audit (~5 sessions later)
+    or worse, a confused reader filing a question against the wrong-persona
+    citation.
+```
+
+### Right
+
+```text
+PM thought process (correct):
+  "The PR auto-merged before Hermione's dispatch landed. That's
+   not a reason to discard Hermione's output — that's the cold-context
+   audit layer firing on the merged-to-main state, which is closer
+   to what real consumers will hit. Let her complete; treat her
+   findings as canonical-state audit; remediate any real findings
+   in a follow-up PR."
+
+Operational shape:
+  1. Let Hermione's dispatch run to completion.
+  2. Read her findings against the merged-to-main state.
+  3. Triage as if pre-merge findings (P0 / P1 / P2 / Nit rubric).
+  4. For real P0+P1: open follow-up PR immediately.
+  5. For P2+Nit: file as issues for next periodic sweep OR roll into
+     adjacent work if Tier 1 mechanical and bounded.
+  6. Document the recovery dispatch in the session memo as a
+     "post-merge canonical audit" entry, not a "throwaway recovery."
+```
+
+### When to Apply
+
+- **Any PR with auto-merge armed AND a Sentinel / Reviewer dispatch in flight.** The clock is ticking; assume the race may flip.
+- **Especially: docs-only or near-docs-only PRs** where CI Summary completes in seconds-to-minutes (no integration tests, no code paths). The reviewer dispatch wall-clock almost always exceeds CI Summary wall-clock for docs-only changes.
+- **Especially: low-LOC code PRs that gate on a single fast CI job.** If only `pre-commit-checks` + `documentation-validation` matter (no integration suite), CI green-to-merge can be sub-2-minutes.
+- **Always: when a post-merge dispatch surfaces a finding.** Triage it; do not discard it. The cost of P-prioritization is minutes; the cost of letting a Pattern 73 violation ship is unbounded.
+
+### When NOT to Apply
+
+- **The dispatch landed but produced ZERO findings.** No follow-up needed; treat as routine cold-context confirmation. Document in session memo as "Hermione post-merge frame: CLEAN, no findings against merged state."
+- **The dispatch landed and produced ONLY a finding that pre-merge frames also raised.** No new information; the pre-merge disposition stands. Avoid double-counting.
+- **The PR was a hotfix or emergency push and the in-flight dispatch was explicitly aborted.** If PM consciously cancelled the dispatch (e.g., to free agent capacity for a higher-priority emergency), the recovery rule doesn't apply because no dispatch was running. Pattern 89 fires only when the dispatch *did* run to completion.
+
+### Concrete Instances (Forward-Pointers)
+
+| Session | PR | Surface | Dispatch | Race outcome | Finding caught | Remediation |
+|---|---|---|---|---|---|---|
+| 88 | #1131 | SDL Framework V1.0 codification (docs-only) | Hermione post-merge audit frame | CI green → auto-merge fired ~5 min before Hermione completed | Pattern 73 SSOT violation: Carter persona role drift Strategist→Modeler | Follow-up PR #1132 (T1 Momentum) |
+| (future) | TBD | Cohort 5+ docs-heavy promotions (high-velocity periods) | Any reviewer with longer dispatch latency than CI | Forward-watch for the same shape | — | — |
+
+### Convergent-Reviewer Signal Note
+
+Hermione's frame on PR #1131 is the canonical instance of Pattern 70 (Convergent-Reviewer Signal Rule) firing on a *single-frame* signal. Three pre-merge frames (Vader + Joe Chip + a third dispositional-frame in the session 88 dispatch) had cleared SDL V1.0 with no SSOT-violation findings. Hermione's post-merge frame caught what all three missed. This is the mirror-image of multi-reviewer convergence: when N reviewers converge on the same finding, the signal strengthens; when N-1 reviewers miss a finding the Nth reviewer catches, the Nth reviewer is providing irreplaceable cold-context coverage. Pattern 89 codifies the operational discipline that protects that coverage from being discarded.
+
+### Source
+
+- **Session 88 PR #1131** (SDL Framework V1.0 codification) — origin instance; Hermione post-merge audit caught real Pattern 73 SSOT violation that pre-merge frames missed; remediation shipped in follow-up PR #1132 the same session
+- **Jorge S80 paired audit (session 87, `audit_s69_s80_session_87_jorge_memo.md` Frame 5)** — flagged the post-merge Sentinel coverage gap as a forward-watch concern; codification shipped in this V1.43 amendment
+- Pattern 70 — Convergent-Reviewer Signal Rule (the inverse-convergence case: 1 frame catches what N-1 frames miss; Pattern 89 protects the operational space for that case to fire)
+- Pattern 73 — Single Source of Truth (the *kind* of finding Hermione caught: persona-role canonical-citation drift between roster_agents.md and SDL Framework V1.0)
+- Pattern 78 — Two-Gate Audit Discipline (the post-merge audit must still pass Gate A "bug still present" — applied against merged-to-main HEAD, not against the pre-merge branch)
+- Pattern 90 — Auto-Merge State Hygiene (sibling pattern; Pattern 90 governs the `gh` CLI mechanics that determine WHEN auto-merge fires; Pattern 89 governs what to do with reviewer findings that land AFTER auto-merge fires)
+
+---
+
+## Pattern 90: Auto-Merge State Hygiene (ALWAYS After Any Push to an Auto-Merge-Armed PR)
+
+**Severity:** MEDIUM — auto-merge silent-failure shapes do not corrupt code or data; they consume PM polling time and delay merge by minutes-to-hours. The cost is operational latency, not correctness. But the failure modes are SILENT — there is no notification, no PR comment, no CI signal — so without operational discipline a PM can spend significant polling time on a stuck PR before discovering either failure mode. This pattern is the canonical home for two distinct silent-failure shapes (Pattern 73 SSOT consolidation of `feedback_auto_merge_behind_diagnosis.md` + `feedback_auto_merge_disarmed_by_force_push.md`).
+
+### Problem / Trigger
+
+A PR has `gh pr merge <N> --auto --squash` armed. All required CI checks complete green. The PR sits in `state=OPEN` indefinitely, with no apparent reason. PM polls `gh pr view <N>` and sees "OPEN" for ~5 minutes; concludes "CI must still be running" or "GitHub is slow today."
+
+This is wrong on two distinct grounds, with two distinct diagnostic paths:
+
+- **Sub-rule 90a (BEHIND-state):** auto-merge is still armed, but `mergeStateStatus: BEHIND` — the branch is out-of-date with main, and branch protection's "Require branches to be up to date before merging" rule is enforced. Auto-merge waits for the branch to be current; it does NOT auto-rebase or auto-update.
+- **Sub-rule 90b (silent disarm):** auto-merge has been silently cleared because the PR head changed since auto-merge was armed. Force-push always disarms; **even an ordinary fast-forward push can disarm** (GitHub's protective semantics are conservative). No notification fires.
+
+The diagnostic is the same first command for both, but the remediation diverges:
+
+| `mergeStateStatus` | `autoMergeRequest` | Cause | Fix |
+|---|---|---|---|
+| `BEHIND` | non-null | 90a: branch out-of-date | `gh pr update-branch <N>` |
+| `CLEAN` | null | 90b: auto-merge silently disarmed | `gh pr merge <N> --auto --squash` (re-arm) |
+| `BEHIND` | null | both: out-of-date AND disarmed | update-branch then re-arm |
+| `CLEAN` | non-null | armed and clean — should merge; if not, investigate other causes | — |
+
+### The Pattern / Rule
+
+> After ANY push to an auto-merge-armed PR (force-push OR ordinary push), **immediately re-confirm auto-merge state** via the JSON query below. If disarmed, re-arm. Whenever an auto-merge-armed PR sits OPEN with all required CI green, **diagnose `mergeStateStatus` AND `autoMergeRequest` together** — do not assume one or the other. The two silent-failure shapes are independent; both must be checked.
+
+### Canonical Shape
+
+**Diagnostic invocation (always run when an armed PR sits OPEN past expected merge time):**
+
+```bash
+gh pr view <N> --repo mutantamoeba/precog \
+  --json state,mergedAt,mergeStateStatus,autoMergeRequest,statusCheckRollup \
+  --jq '{
+    state,
+    mergedAt,
+    mergeStateStatus,
+    autoMerge: (.autoMergeRequest // "NOT armed — re-arm needed"),
+    checks: [.statusCheckRollup[]? | {name, conclusion}]
+  }'
+```
+
+**Remediation 90a (BEHIND):**
+
+```bash
+gh pr update-branch <N> --repo mutantamoeba/precog
+# CI re-runs against the rebased / merge-committed branch (~5 min).
+# Once green, the existing armed auto-merge fires automatically.
+```
+
+**Remediation 90b (silently disarmed):**
+
+```bash
+gh pr merge <N> --auto --squash --repo mutantamoeba/precog
+# Re-arms auto-merge against the current PR head.
+# CI does NOT re-run (already green); auto-merge fires immediately
+# upon re-arm if all merge preconditions are met.
+```
+
+**Re-confirmation invocation (always run after ANY push to an armed PR):**
+
+```bash
+gh pr view <N> --repo mutantamoeba/precog \
+  --json autoMergeRequest \
+  --jq '.autoMergeRequest // "NOT armed — re-arm needed"'
+# If output shows "NOT armed — re-arm needed", re-arm with the
+# remediation 90b command above.
+```
+
+### Wrong
+
+```text
+PM thought process (incorrect):
+  "I armed auto-merge on PR #1008 ten minutes ago. CI is green
+   on all 14 checks. The PR is still OPEN. GitHub must be slow
+   today; I'll keep polling `gh pr view --json state` every
+   30 seconds and wait."
+
+Failure mode (sub-rule 90a):
+  - Branch was BEHIND main from a sibling PR that merged after
+    PR #1008 was branched. Auto-merge has been waiting indefinitely
+    for the branch to be current.
+  - 20 minutes of polling waste before PM thinks to check
+    `mergeStateStatus`.
+  - Fix took 30 seconds: `gh pr update-branch 1008` → CI re-runs
+    (~5 min) → auto-merge fires.
+
+Failure mode (sub-rule 90b):
+  - Builder pushed a fix-pass commit to PR #1120 after PM armed
+    auto-merge. PM assumed the arm survived the push (Builder did
+    a normal git push, not a force-push). It didn't.
+  - 5+ minutes of polling waste before PM thinks to check
+    `autoMergeRequest`.
+  - Fix took 5 seconds: `gh pr merge 1120 --auto --squash` re-arm.
+```
+
+### Right
+
+```text
+PM thought process (correct):
+  "PR #1008 has been OPEN for 5 minutes with all CI green.
+   That's longer than expected — let me check both shapes
+   in one query before continuing to poll."
+
+Operational shape:
+  1. Run the diagnostic invocation above (single gh pr view call,
+     returns both mergeStateStatus AND autoMergeRequest in one shot).
+  2. Read the table above (mergeStateStatus × autoMergeRequest matrix)
+     to identify which sub-rule fired.
+  3. Apply the matching remediation.
+  4. After ANY subsequent push to the PR, run the re-confirmation
+     invocation above; re-arm if disarmed.
+
+Build into Tier 1 Momentum protocol:
+  - Every Tier 1 Momentum fix-pass that pushes new commits to a PR
+    branch must re-confirm auto-merge state in the same shell session
+    as the push. Add to dispatch prompt: "After pushing, verify
+    `gh pr view --json autoMergeRequest` is non-null; re-arm if
+    disarmed."
+```
+
+### Lock Surface / Diagnostic Comparison
+
+| Failure mode | Visible signal | Invisible cause | Diagnostic command |
+|---|---|---|---|
+| 90a (BEHIND-state) | PR OPEN; all CI green | `mergeStateStatus: BEHIND` blocking armed merge per branch protection rule | `gh pr view <N> --json mergeStateStatus` |
+| 90b (silent disarm) | PR OPEN; all CI green | `autoMergeRequest: null` after push silently cleared the arm | `gh pr view <N> --json autoMergeRequest` |
+| Both compounded | PR OPEN; all CI green | BEHIND **and** disarmed (e.g., PM force-pushed a rebase to address BEHIND, which also cleared the arm) | Combined `--json mergeStateStatus,autoMergeRequest` query |
+
+### When to Apply
+
+- **ALWAYS after any push to an auto-merge-armed PR** (re-confirmation invocation; re-arm if disarmed).
+- **ALWAYS when an armed PR sits OPEN past the expected merge wall-clock** (typical: CI duration + ~30s GitHub merge processing). Run the diagnostic invocation; do not poll `state` alone.
+- **ALWAYS in Tier 1 Momentum dispatch prompts that include `git push` to a PR branch.** Add the re-confirmation step to the dispatch checklist.
+- **WHENEVER a PM compresses multiple Builder rounds onto one PR** (e.g., Builder pushes initial work, reviewer findings, Builder pushes fix-pass — re-arm after the second push).
+
+### When NOT to Apply
+
+- **PRs without auto-merge armed.** Pattern 90 is silent for manually-merged PRs; the failure modes do not exist in that workflow.
+- **PRs where the OPEN state is intentional** (e.g., draft PRs, PRs awaiting external review, PRs blocked on a non-CI dependency). These are not "stuck" PRs — they are correctly OPEN.
+- **Brand-new PRs in the first ~60s after `gh pr create`.** GitHub takes ~30-60s to compute initial merge state; running the diagnostic immediately after PR creation can return transient `UNKNOWN` for `mergeStateStatus`. Wait one CI cycle before applying the diagnostic.
+
+### Concrete Instances (Forward-Pointers)
+
+| Session | PR | Failure mode | Symptom | Diagnostic / Fix |
+|---|---|---|---|---|
+| 72 | #1008 (Migration 0068) | 90a (BEHIND-state) | All 14 checks SUCCESS; PR OPEN for 10+ min after auto-merge arm | `mergeStateStatus: BEHIND` (PR #1006 merged after #1008 branched); fix: `gh pr update-branch 1008` → CI re-ran ~5 min → auto-merge fired |
+| 86 | #1120 (slot 0078 canonical_observations) | 90b (silent disarm) | Reviewers returned findings; Builder pushed fix-pass commit (normal `git push`, not force-push); auto-merge state silently cleared | `autoMergeRequest: null`; fix: `gh pr merge 1120 --auto --squash` re-arm |
+| (future) | TBD | Compound 90a + 90b | Force-push to address BEHIND clears arm AND leaves state behind | Combined: `gh pr update-branch` then `gh pr merge --auto --squash` re-arm |
+
+> **Adjacent surface (not Pattern 90):** session 88 PR #1131 saw auto-merge fire correctly while Hermione's Sentinel dispatch raced against the merge wall-clock — that race is the **Pattern 89** surface (post-merge Sentinel recovery), not a Pattern 90 silent-failure mode. Cross-reference handled in § Source.
+
+### Sibling Tooling Notes
+
+- `gh pr update-branch` was added in `gh` CLI 2.4+. Always available in this project's environment as of session 72 (PR #1008 origin).
+- `gh pr view --json mergeStateStatus,autoMergeRequest` is a single round-trip; combining the two fields avoids two separate API calls and reduces both PM polling time and GitHub rate-limit exposure.
+- `--repo mutantamoeba/precog` is good practice when the working directory is ambiguous (e.g., a worktree clone with multiple remotes); harmless in the canonical clone.
+
+### Source
+
+- **`feedback_auto_merge_behind_diagnosis.md`** — origin memo for sub-rule 90a (session 72 PR #1008); retained as origin-reference per Pattern 88 precedent
+- **`feedback_auto_merge_disarmed_by_force_push.md`** — origin memo for sub-rule 90b (session 86 PR #1120); retained as origin-reference per Pattern 88 precedent
+- Jorge S80 paired audit (session 87, `audit_s69_s80_session_87_jorge_memo.md` Frame 5) — flagged the consolidation as MEDIUM-HIGH promotion candidate; this V1.43 amendment is the consolidation
+- Session 72 (PR #1008): all 14 checks SUCCESS; 20 minutes of polling waste before PM thought to check `mergeStateStatus`; fix took 30 seconds via `gh pr update-branch 1008`
+- Session 86 (PR #1120): Builder pushed fix-pass on normal `git push` (not force-push); auto-merge state silently cleared; fix required explicit re-arm via `gh pr merge 1120 --auto --squash`
+- Pattern 73 — Single Source of Truth: this Pattern 90 is the canonical home for the consolidated rule; the two feedback memos remain as origin-reference but the canonical decision text lives here
+- Pattern 88 — Cohort 4 Partition DDL Idioms: precedent for "consolidate two coupled feedback memos into one Pattern entry; retain memos as origin-reference, not delete"; Pattern 90 follows the same shape EXCEPT 90a + 90b are presented as sub-rules of one Pattern (matching Pattern 88's 88a + 88b shape) since both are auto-merge silent-failure shapes diagnosed via the same `gh pr view --json` call
+- Pattern 89 — Post-Merge Sentinel Recovery: sibling pattern; Pattern 90 governs the `gh` CLI mechanics that determine when auto-merge fires; Pattern 89 governs what to do with reviewer findings that land AFTER auto-merge fires. The two patterns share the auto-merge-armed surface but address orthogonal failure modes
 
 ---
 
