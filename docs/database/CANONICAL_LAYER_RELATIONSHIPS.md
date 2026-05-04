@@ -113,9 +113,11 @@ The canonical layer comprises 5 layers (4 main + a sub-layer for audit ledgers i
 |       |              v        v                       |                   |
 |       |   canonical_events  ----------- canonical_event_links             |
 |       |   (a football game, an              (binds canonical_events <->  |
-|       |    election, a poll release,         canonical_markets;          |
+|       |    election, a poll release,         platform events;            |
 |       |    a weather event,                  source-of-truth for         |
-|       |    a news event)                     matcher event-market binds) |
+|       |    a news event)                     matcher event-to-platform   |
+|       |                                      event binds — Layer 1 ↔     |
+|       |                                      Layer 2 connector)          |
 |       |        ^                                       ^                 |
 |       |        |                                       |                 |
 |       v        |                                       v                 |
@@ -137,9 +139,9 @@ The canonical layer comprises 5 layers (4 main + a sub-layer for audit ledgers i
 +---------------------------------------------------------------------------+
 | games (sports dim)               markets (Kalshi dim)                     |
 |   - canonical_event_id FK        - canonical_market_id (via _links)       |
-|   - typed: home_team_id,         - typed: ticker, yes_bid, no_bid,        |
-|     away_team_id, league,         event_ticker, expiration                |
-|     venue, scheduled_start                                                |
+|   - typed: home_team_id,         - typed: ticker, title, market_type,     |
+|     away_team_id, league,         status, open_time, close_time,          |
+|     venue, scheduled_start        expiration_time, outcome_label          |
 |        ^                                ^                                 |
 |        |                                |                                 |
 |        v                                v                                 |
@@ -165,6 +167,8 @@ The canonical layer comprises 5 layers (4 main + a sub-layer for audit ledgers i
 | Future Layer 2 siblings (Cohort 5+ / 9):                                  |
 |   weather_observations + (location-association mechanism TBD)             |
 |   poll_releases, econ_prints, news_events                                 |
+|   *(table names above are placeholders matching V2.45 narrative shape;    |
+|    final per-kind projection-table names belong to per-cohort design)*    |
 +---------------------------------------------------------------------------+
 
 +---------------------------------------------------------------------------+
@@ -250,8 +254,11 @@ The canonical layer comprises 5 layers (4 main + a sub-layer for audit ledgers i
 |                                                                           |
 | canonical_event_phase_log (slot 0079)                                     |
 |   - audit ledger of canonical_event lifecycle phase transitions           |
-|   - evidence_observation_id -> canonical_observations (FK polarity to be  |
-|     harmonized in N3)                                                     |
+|   - shipped columns: id, canonical_event_id, previous_phase, new_phase,   |
+|     transition_at, changed_by, note, created_at                           |
+|   - (Cohort 5+ N3 future addition: evidence_observation_id BIGINT NULL FK |
+|     to canonical_observations with ON DELETE SET NULL — preserves         |
+|     session-90 input-memo intent; not yet present on the live table)      |
 |                                                                           |
 | Forward-growth notes (Cohort 5+):                                         |
 |   reconciler-results audit table (per V2.43 Item 4 commitment;            |
@@ -354,7 +361,7 @@ WHERE co_n.observation_kind = 'news'
 ORDER BY co_n.ingested_at;
 ```
 
-The multi-event semantics via `canonical_observation_event_links` is what makes news traversal work: a single news observation about "Buccaneers" can link to canonical_events for every Buccaneers game scheduled in the next week (one row per link), with `link_kind = 'speculative'` for forward-looking links and `link_kind = 'primary'` for the most-relevant event. The denormalized `canonical_primary_event_id` on `canonical_observations` mirrors the `link_kind = 'primary'` row.
+The multi-event semantics via `canonical_observation_event_links` is what makes news traversal work: a single news observation about "Buccaneers" can link to canonical_events for every Buccaneers game scheduled in the next week (one row per link). The denormalized `canonical_primary_event_id` on `canonical_observations` mirrors the `link_kind = 'primary'` row enforced by the partial UNIQUE index `idx_link_one_primary_per_observation`. The full operational semantic of the 4 `link_kind` values (`primary` / `secondary` / `derived` / `speculative`) is deferred to per-cohort tagger design — V2.46 ships the CHECK constraint vocabulary but does not codify per-value meaning beyond `primary`'s mirror invariant.
 
 ### Example 3 — Within-event temporal alignment (the hot path)
 
@@ -402,7 +409,7 @@ The canonical layer's relationship-verb tables, separated from the audit-ledger 
 | Verb table | Connects | Multiplicity | Source of truth for |
 |---|---|---|---|
 | `canonical_event_participants` | `canonical_entity` ↔ `canonical_events` (via `canonical_participant_roles` lookup) | many-to-many | which entities participate in which events, and in what role |
-| `canonical_event_links` | `canonical_events` ↔ `canonical_markets` (and platform events) | many-to-many | matcher-confirmed event-market binding |
+| `canonical_event_links` | `canonical_events` ↔ platform events (`platform_event_id`) | many-to-many | matcher-confirmed event-to-platform-event binding (Layer 1 ↔ Layer 2 connector; canonical_events ↔ canonical_markets is reached transitively via this table → `markets` → `canonical_market_links`) |
 | `canonical_market_links` | `canonical_markets` ↔ `markets` (platform) | many-to-many | matcher-confirmed market-platform binding |
 | `canonical_observation_event_links` (slot 0084 NEW) | `canonical_observations` ↔ `canonical_events` (composite FK) | many-to-many | multi-event tagging (news fans out; econ prints span markets) |
 | `temporal_alignment` (slot 0084 redesigned) | `canonical_observations` ↔ `canonical_observations` (composite FKs both sides) | many-to-many (via observation_a × observation_b) | continuous-stream pairing by time proximity within a tolerance window |
@@ -414,7 +421,7 @@ The canonical layer's relationship-verb tables, separated from the audit-ledger 
 | `canonical_match_log` (slot 0073) | matcher decisions (per-decision evidence, algorithm, action, confidence) | append-only |
 | `canonical_match_overrides` (slot 0074) | operator overrides of matcher decisions | append-only with `superseded_at` semantics |
 | `canonical_match_reviews` (slot 0074) | matcher review queue entries (human-in-the-loop) | mutable status field |
-| `canonical_event_phase_log` (slot 0079) | canonical_event lifecycle phase transitions (entered_at, evidence_observation_id) | append-only |
+| `canonical_event_phase_log` (slot 0079) | canonical_event lifecycle phase transitions (transition_at, previous_phase, new_phase, changed_by, note) | append-only (N3 future ADD: evidence_observation_id FK) |
 
 ### Forward growth notes (Cohort 5+ candidates)
 
