@@ -13567,7 +13567,7 @@ Operational shape:
 - **ALWAYS for high-churn surfaces.** Cohort 4+ canonical-layer slots ship multiple migrations per session; ADR text written from session-N memory is reliably stale by session-N+1. MCP probe before writing.
 - **ALWAYS when the claim is operational.** Rollback runbooks, fix-pass instructions, and migration-author guides reference column names that downstream operators will run UPDATE / SELECT against. A non-executable instruction (`UPDATE table SET nonexistent_column = NULL`) is worse than no instruction.
 - **ALWAYS at Phase 1+ design-review.** Design-review memos that cite specific columns, FK polarities, CHECK contents, or FK targets must MCP-verify at memo-authoring time. Holden's session-91 "verify if relevant" gap is the canonical anti-pattern — explicit honesty about the gap is better than silent assumption, but still falls short of "verified".
-- **ALWAYS at PM build-spec authoring time** — per the [build-spec premise check feedback memo](../../C--Users-emtol-repos-precog-repo/memory/feedback_premise_check_paid_for_itself_again.md), the build spec is the authoritative brief Builder dispatches against; a wrong premise here cascades into Builder halt-and-correct (session 90 actual) or worse, a shipped migration that doesn't match downstream artifacts.
+- **ALWAYS at PM build-spec authoring time** — per the build-spec premise check feedback memo (`memory/feedback_premise_check_paid_for_itself_again.md`), the build spec is the authoritative brief Builder dispatches against; a wrong premise here cascades into Builder halt-and-correct (session 90 actual) or worse, a shipped migration that doesn't match downstream artifacts.
 
 ### When NOT to Apply
 
@@ -13612,6 +13612,7 @@ The varied catch-stage is itself signal: premise drift can leak past PM authorin
 - Pattern 73 — Single Source of Truth: the canonical truth about live schema state is the live database, not the ADR / memory / recent context that documents intent. Pattern 91 is Pattern 73 applied to the authoring-side of the pipeline.
 - Pattern 78 — Two-Gate Audit Discipline: Gate A "bug still present" and Gate B "fix still valid" both require MCP verification against current schema; Pattern 91 codifies the same MCP-first discipline at authoring time rather than audit time.
 - Pattern 87 — Append-Only Migration Files: once shipped, the migration IS the live state; ADRs document INTENT, the database documents STATE. Pattern 91 enforces the directionality (database is canonical for state; ADR is canonical for decision).
+- **`memory/roster_agents.md`** § "MCP-first verification rule (Added S55, 2026-04-14)" — canonical S55 trigger definition; binds Holden / Galadriel / Elrond / Mulder / Cassandra / Deckard. Pattern 91 extends the rule symmetrically to PM-authored authoring artifacts (build specs, binding-input memos, ADR amendment text, design-review memos, operator runbooks). The trigger's home document owns the rule; Pattern 91 owns the scope-extension.
 
 ---
 
