@@ -199,7 +199,7 @@ precog-repo/
 - `docs/foundation/SDL_FRAMEWORK_V1.0.md` - Strategy Development Lifecycle (9 stages + 3 gates; T43-T54 + S83-S87 + C32-C33 + C40-C41 trigger cluster; canonicalized session 88 per [#1126](https://github.com/mutantamoeba/precog/issues/1126))
 
 **Implementation:**
-- `docs/guides/DEVELOPMENT_PATTERNS.md` - 84 active development patterns with examples (highest numbered slot is 86; slots 51 + 85 reserved-for-future-promotion, so 86 - 2 = 84 active). V1.39 adds Pattern 86: Living-Doc Freshness Markers (ALWAYS for living canonical docs describing moving targets; codifies the `<!-- FRESHNESS: ... -->` HTML-comment shape DATABASE_SCHEMA_SUMMARY V2.1 demonstrates). V1.38 adds Pattern 84: Two-Phase `NOT VALID` + `VALIDATE CONSTRAINT` for CHECK on populated tables.
+- `docs/guides/DEVELOPMENT_PATTERNS.md` - 89 active development patterns with examples (highest numbered slot is 91; slots 51 + 85 reserved-for-future-promotion, so 91 - 2 = 89 active). V1.44 adds Pattern 91: MCP-First Premise Verification for Authoring Artifacts (ALWAYS when an authoring artifact makes a claim about live schema state; N=3 from sessions 89+90+91 caught at three distinct pipeline stages — PM premise check / Builder execution / Phase 3 adversarial review). V1.43 adds Patterns 89 + 90: Post-Merge Sentinel Recovery + Auto-Merge State Hygiene. V1.39 adds Pattern 86: Living-Doc Freshness Markers (codifies the `<!-- FRESHNESS: ... -->` HTML-comment shape DATABASE_SCHEMA_SUMMARY V2.1 demonstrates).
 - `docs/guides/CONFIGURATION_GUIDE_V3.1.md` - YAML config reference
 - `docs/guides/KALSHI_CLIENT_USER_GUIDE_V1.0.md` - Kalshi API usage
 - `docs/guides/STRATEGY_MANAGER_USER_GUIDE_V1.1.md`

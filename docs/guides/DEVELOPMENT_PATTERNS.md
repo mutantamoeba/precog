@@ -1,13 +1,17 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.43
+**Version:** 1.44
 **Created:** 2025-11-13
-**Last Updated:** 2026-05-02
+**Last Updated:** 2026-05-04
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.44:**
+- **Added Pattern 91: MCP-First Premise Verification for Authoring Artifacts (ALWAYS When an Authoring Artifact Makes a Claim About Live Schema State).** Origin: N=3 across sessions 89 + 90 + 91 — three consecutive sessions where build-spec / binding-input-memo / ADR-amendment authoring premise was wrong about live schema state, caught at three distinct pipeline stages (PM premise check, Builder execution time, Phase 3 adversarial review). Codifies the rule that any authoring artifact making a claim about live schema state — column existence, type, FK polarity, CHECK contents, FK target, table existence, populated state — MUST be MCP-verified at authoring time, not at Builder/Reviewer/Sentinel time. The S55 MCP-first verification rule applies symmetrically to PM-authored artifacts, not just to agent-dispatched analyses. Severity: HIGH (premise drift propagates through every downstream pipeline phase; late catches are asymmetrically expensive vs ~30s of MCP queries upstream).
+- **Cross-references:** Pattern 73 (SSOT — the canonical truth about live schema state is the live database, not the ADR / memory / recent context that documents intent); Pattern 78 (Two-Gate Audit Discipline — Gate A "bug still present" and Gate B "fix still valid" both require MCP verification against current schema, same discipline applied at audit time); Pattern 87 (Append-Only Migration Files — once shipped, the migration IS the live state; ADRs document INTENT, the database documents STATE).
+- **Promotion source:** `memory/feedback_premise_check_paid_for_itself_again.md` § "Threshold for pattern promotion" path (a). Companion memo `memory/feedback_pm_prompt_premise_verification.md` covers the dispatch-side discipline (Sentinel/Reviewer prompt premise verification); Pattern 91 covers the authoring-side discipline. Both share the same root failure mode — PM/author working from memory + ADR text without MCP verification — but apply at different pipeline phases.
 **Changes in V1.43:**
 - **Added Pattern 89: Post-Merge Sentinel Recovery (ALWAYS When CI Wall-Clock Races Reviewer Dispatch on Auto-Merge-Armed PRs).** Origin: session 88 PR #1131 SDL Framework V1.0 — Hermione's post-merge Sentinel frame caught a real Pattern 73 SSOT violation (Carter Strategist→Modeler) that the three pre-merge frames missed because auto-merge fired ~5 min before Hermione's dispatch landed. Quality-discipline rule about cold-context coverage: when reviewer dispatch wall-clock loses to CI green wall-clock, dispatch the reviewer post-merge — the audit is not a wasted retry, it provides genuine SSOT-against-merged-state coverage that pre-merge frames under timing pressure can miss. Severity: MEDIUM-HIGH (three-condition convergence required, not every PR).
 - **Added Pattern 90: Auto-Merge State Hygiene (ALWAYS After Any Push to an Auto-Merge-Armed PR), with sub-rules 90a + 90b.** Origin: session 72 PR #1008 (`mergeStateStatus: BEHIND` blocks armed merge — fix `gh pr update-branch <N>`) + session 86 PR #1120 (any push to PR head silently disarms auto-merge — fix re-arm via `gh pr merge <N> --auto --squash`). Operational `gh` CLI mechanics rule consolidating two existing feedback memos (`feedback_auto_merge_behind_diagnosis.md` + `feedback_auto_merge_disarmed_by_force_push.md`) into a single canonical Pattern with a 4-cell decision matrix and unified diagnostic invocation. Sub-rules 90a + 90b mirror Pattern 88's 88a + 88b shape (genuinely paired: shared diagnostic invocation, shared armed-PR surface, divergent operational moves). Severity: MEDIUM (operational latency cost, not correctness; SILENT failure mode is the discipline trigger).
@@ -13404,6 +13408,211 @@ Build into Tier 1 Momentum protocol:
 - Pattern 73 — Single Source of Truth: this Pattern 90 is the canonical home for the consolidated rule; the two feedback memos remain as origin-reference but the canonical decision text lives here
 - Pattern 88 — Cohort 4 Partition DDL Idioms: precedent for "consolidate two coupled feedback memos into one Pattern entry; retain memos as origin-reference, not delete"; Pattern 90 follows the same shape EXCEPT 90a + 90b are presented as sub-rules of one Pattern (matching Pattern 88's 88a + 88b shape) since both are auto-merge silent-failure shapes diagnosed via the same `gh pr view --json` call
 - Pattern 89 — Post-Merge Sentinel Recovery: sibling pattern; Pattern 90 governs the `gh` CLI mechanics that determine when auto-merge fires; Pattern 89 governs what to do with reviewer findings that land AFTER auto-merge fires. The two patterns share the auto-merge-armed surface but address orthogonal failure modes
+
+---
+
+## Pattern 91: MCP-First Premise Verification for Authoring Artifacts (ALWAYS When an Authoring Artifact Makes a Claim About Live Schema State)
+
+**Severity:** HIGH — premise drift in an authoring artifact (build spec, binding-input memo, ADR amendment, design-review memo) propagates through every downstream pipeline phase: design council reads the premise, Builder dispatches against the premise, Reviewer audits against the premise, Sentinel verifies against the premise. Each phase that inherits the drift compounds the recovery cost. The cost of MCP-verifying at authoring time is ~30 seconds of `mcp__postgres-dev__query` calls; the cost of catching at Phase 3 adversarial review is rolled-back artifacts, fix-pass cycles, user-adjudication asks, and architectural re-think. Three consecutive sessions (89, 90, 91) caught premise drift at three distinct pipeline stages — proving the discipline is load-bearing across the full authoring surface, not specific to any one artifact type.
+
+### Problem / Trigger
+
+A PM (or agent author) drafts an authoring artifact — a build spec for Builder dispatch, a binding-input memo for design-review preconditions, an ADR amendment, a design-review memo — and makes one or more claims about live schema state:
+
+- "Column X exists on table Y" / "Column X has type Z"
+- "Table Y has N rows" / "Table Y is populated" / "Table Y is empty"
+- "Foreign key from A to B exists" / "FK polarity is ON DELETE SET NULL"
+- "CHECK constraint on column X enumerates values {a, b, c}"
+- "FK target is `parent(id)`" / "FK target is composite `parent(id, ingested_at)`"
+
+The claim is sourced from PM memory, recent-session context, or a referenced ADR section. The author does NOT run an MCP probe to verify the claim against the live database. The artifact ships with the unverified claim baked in.
+
+The premise can be silently wrong because:
+
+- **ADRs document INTENT, not present STATE.** ADR amendments describe what the project decided to build; the database is what the project actually built. Slot deferrals, build-time amendments (composite-FK invariants, polarity flips), and post-merge corrections accumulate between ADR and DB.
+- **Memory decays.** A "recent" session's architectural memo becomes increasingly stale across cycles. Session-90 architectural intent ≠ what slot 0079 actually shipped in session 87.
+- **Recent context can be a confabulation.** "I think slot 0079 added an `evidence_observation_id` column" is not the same as `\d+ canonical_event_phase_log` against the live DB.
+
+The naive PM (or agent author) reaction: "The ADR says X, my memory says X, recent context says X — three sources agree, no need to MCP-verify." This is wrong because all three sources can share the same premise lineage; MCP is the only orthogonal source-of-truth.
+
+### The Pattern / Rule
+
+> Any authoring artifact (build spec, binding-input memo, ADR amendment, design-review memo) that makes a claim about live schema state — column existence, type, FK polarity, CHECK contents, FK target, table existence, populated state — MUST be MCP-verified at authoring time, not at Builder / Reviewer / Sentinel time. The S55 MCP-first verification rule applies symmetrically to PM-authored artifacts, not just to agent-dispatched analyses. The artifact MUST disclose verification (e.g., "verified live via MCP at session NN" inline near the claim) so downstream readers know the claim is grounded.
+
+**Anti-pattern shape:** authoring from prior ADR text + memory + recent context without an MCP probe. Recent context can be stale; ADRs document INTENT not present STATE; memory decays. The premise drift propagates through downstream pipeline phases (council → Builder → Reviewer → Sentinel) and is asymmetrically expensive to catch late.
+
+### Canonical Shape
+
+**At authoring time (PM or agent), for every live-state claim:**
+
+```text
+1. Identify the claim:
+   "canonical_event_phase_log has an evidence_observation_id BIGINT NULL FK
+    to canonical_observations(id, ingested_at) with ON DELETE SET NULL."
+
+2. Run an MCP probe against the live database:
+
+   ToolSearch({query: 'select:postgres-dev'})  # load the tool schema
+
+   mcp__postgres-dev__query({
+     sql: "SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_name = 'canonical_event_phase_log'
+            ORDER BY ordinal_position;"
+   })
+
+3. Read the result against the claim:
+   Result columns: id, canonical_event_id, previous_phase, new_phase,
+                    transition_at, changed_by, note, created_at
+   Claim says: evidence_observation_id exists
+   Reality says: evidence_observation_id does NOT exist
+   --> Premise is WRONG. Do NOT write the claim into the artifact as
+       a present-state assertion. Either rescope the artifact (add the
+       column via the artifact's own migration) or drop the claim.
+
+4. Disclose verification in the artifact, inline near the claim:
+   "Verified live via MCP at session 91:
+    canonical_event_phase_log has 8 columns, no evidence_observation_id.
+    This artifact ADDS the column via Migration 00NN."
+```
+
+**At review time, for any artifact that makes a live-state claim:**
+
+```text
+1. Search the artifact for live-state claims (column names, FK shapes,
+   CHECK contents, table existence, row counts).
+2. For each claim, look for the inline MCP-verification disclosure.
+3. If a claim has NO disclosure, flag as P1 schema-truth risk:
+   "This artifact asserts X about live state without MCP verification.
+    Run the MCP probe; correct the artifact if reality contradicts the claim."
+4. If the disclosure says "verified at session NN", treat as load-bearing.
+   Re-verify only if NN is more than ~5 sessions stale OR if the
+   surface is high-churn (Cohort 4+ canonical-layer slots).
+```
+
+**At Builder execution time, when reality contradicts the artifact:**
+
+```text
+1. Halt and report. Do NOT improvise around the premise gap.
+2. Document the halt verbatim:
+   - The artifact's claim
+   - The reality from the failing operation (e.g., PG error text,
+     MCP probe output)
+   - The lineage trace (which artifact, which line, which premise)
+3. Surface to PM for adjudication. Path D ("the original plan was
+   wrong; let's fix the architecture, not paper over it") is a
+   defensible adjudication outcome and was the resolution path
+   in session 90 PR #1144.
+```
+
+### Wrong
+
+```text
+PM thought process (incorrect):
+  "I'm authoring V2.46 ADR amendment + binding-input memo for the
+   design-review pipeline. The session-90 architectural conversation
+   referenced canonical_event_phase_log.evidence_observation_id as
+   part of the 4-layer relationship graph. ADR-118 V2.45 mentions the
+   column. My memory says slot 0079 (session 87) shipped it. Three
+   sources agree — I don't need to MCP-verify. I'll just write
+   the claim into the memo."
+
+Failure mode (session 91 actual):
+  - Memo asserted evidence_observation_id at line 333.
+  - Holden (Phase 1) flagged "verify if relevant" — the verification
+    was never performed at Phase 2.
+  - Scheherazade (Phase 2 Builder) drafted V2.46 ADR with 4-5
+    occurrences of the column.
+  - Item 9c rollback runbook step (2) instructed operators to
+    UPDATE ... SET evidence_observation_id = NULL — non-executable
+    against shipped reality.
+  - Glokta (Phase 3 Reviewer) ran the MCP probe and discovered
+    the column does NOT exist on canonical_event_phase_log.
+  - Ripley (Phase 3 Sentinel) independently confirmed via MCP.
+  - Phase 3 adversarial review caught the drift; resolution required
+    user adjudication (A=(2)) to rescope N3 from "polarity flip"
+    to "ADD evidence_observation_id" + rewrite the rollback runbook.
+  - Cost: hours of pipeline rework + user-adjudication ask.
+```
+
+### Right
+
+```text
+PM thought process (correct):
+  "I'm authoring V2.46 ADR amendment. Before writing any claim about
+   canonical_event_phase_log columns or FK shapes, I'll run a single
+   MCP probe to enumerate the actual columns. 30 seconds upfront vs
+   a Phase 3 catch."
+
+Operational shape:
+  1. Before writing the claim, run:
+       SELECT column_name, data_type, is_nullable
+         FROM information_schema.columns
+         WHERE table_name = 'canonical_event_phase_log';
+  2. Read the actual columns. Compare against the intended claim.
+  3. If reality matches: write the claim WITH inline disclosure
+     ("verified live via MCP at session 91; canonical_event_phase_log
+     has 8 columns including ...").
+  4. If reality contradicts: rescope the artifact. Either the artifact
+     ADDS the missing column (via its own migration) and the runbook
+     differentiates pre-N vs post-N states; or the claim is dropped
+     entirely; or the artifact is paused for user adjudication.
+  5. Downstream readers (Phase 1 / Phase 2 / Phase 3) inherit the
+     verified premise + disclosure, not a confabulation.
+```
+
+### When to Apply
+
+- **ALWAYS at authoring time for any artifact making a live-state claim.** Build specs, binding-input memos, ADR amendments, design-review memos — all four surfaces have produced premise drift in the N=3 evidence (sessions 89-91). The discipline is symmetric across artifact types.
+- **ALWAYS for high-churn surfaces.** Cohort 4+ canonical-layer slots ship multiple migrations per session; ADR text written from session-N memory is reliably stale by session-N+1. MCP probe before writing.
+- **ALWAYS when the claim is operational.** Rollback runbooks, fix-pass instructions, and migration-author guides reference column names that downstream operators will run UPDATE / SELECT against. A non-executable instruction (`UPDATE table SET nonexistent_column = NULL`) is worse than no instruction.
+- **ALWAYS at Phase 1+ design-review.** Design-review memos that cite specific columns, FK polarities, CHECK contents, or FK targets must MCP-verify at memo-authoring time. Holden's session-91 "verify if relevant" gap is the canonical anti-pattern — explicit honesty about the gap is better than silent assumption, but still falls short of "verified".
+- **ALWAYS at PM build-spec authoring time** — per the build-spec premise check feedback memo (`memory/feedback_premise_check_paid_for_itself_again.md`), the build spec is the authoritative brief Builder dispatches against; a wrong premise here cascades into Builder halt-and-correct (session 90 actual) or worse, a shipped migration that doesn't match downstream artifacts.
+
+### When NOT to Apply
+
+- **Pure-prose artifacts that make no live-state claims.** A retrospective session memo describing process discipline — no columns / no FKs / no schema state — needs no MCP verification. Pattern 91 fires only when the artifact crosses into schema territory.
+- **Forward-state claims explicitly disclosed as forward-state.** "After Migration 00NN ships, the column will exist" is not a present-state assertion and does not need MCP verification of the column (it does need verification that Migration 00NN is in scope).
+- **Claims about non-database state.** Code-path existence, hook configuration, CI workflow contents — these have their own verification surfaces (grep, file inspection, `gh workflow view`) and are out of scope for Pattern 91. Pattern 91 is specifically about live database schema state.
+
+### Concrete Instances (Forward-Pointers — N=3 across sessions 89-91)
+
+| Session | Artifact | Premise (wrong) | Reality | Caught at | Recovery cost |
+|---|---|---|---|---|---|
+| 89 | Slot 0083 build spec | "View body sourced from physical `temporal_alignment` preserves user value because canonical_observations is empty" | `temporal_alignment` had **0 rows** (writer never registered to ServiceSupervisor); the rationale collapsed entirely | PM premise check at session-90-start protocol step 5 (`SELECT count(*) FROM temporal_alignment`) | Slot 0083 deferred + Path D adopted (redesign temporal_alignment as pure linkage table) — `memory/session_90_actual.md` |
+| 90 | V2.45 + slot 0084 build spec | "`temporal_alignment.observation_a_id BIGINT REFERENCES canonical_observations(id)`" (single-column FK) | `canonical_observations` has composite PK `(id, ingested_at)` per V2.43 Item 3 partition-key invariant; PG `InvalidForeignKey` at upgrade | Builder execution time (Samwise halted per S55 MCP-first discipline; PG error text traced to V2.43 Item 3) | Composite-FK shape applied across 3 sites (`observation_a` + `observation_b` + `canonical_observation_event_links.observation_id`); resolution codified in V2.45 § "V2.43 Item 3 composite-FK invariant flow-through" |
+| 91 | V2.46 binding-input memo + ADR draft | "`canonical_event_phase_log.evidence_observation_id BIGINT REFERENCES canonical_observations(id)` (points back here)" — 4-5 occurrences across the V2.46 amendment + companion doc + Item 9c rollback runbook step (2) | Slot 0079 (PR #1124, session 87) shipped `canonical_event_phase_log` as a pure 8-column phase-transition log; **no `evidence_observation_id` column exists**; the rollback runbook step was non-executable | Phase 3 adversarial review (Glokta F1 P0 + Ripley P0-1 convergent — both ran `mcp__postgres-dev__query` to enumerate columns) | User adjudication A=(2) — rescope N3 from "polarity flip" to "ADD evidence_observation_id BIGINT NULL FK with ON DELETE SET NULL" + rewrite Item 9c rollback runbook step to differentiate pre-N3 (column doesn't exist; phase log unaffected) vs post-N3 (auto-NULL via ON DELETE SET NULL) |
+
+### Why N=3 Makes the Pattern Load-Bearing
+
+The catch-stage varied across sessions:
+
+- **Session 89:** caught at PM premise check (earliest possible stage; cost: minutes).
+- **Session 90:** caught at Builder execution time (PG error text; cost: hours of halt-and-correct).
+- **Session 91:** caught at Phase 3 adversarial review (Glokta + Ripley convergent; cost: hours of fix-pass + user-adjudication ask).
+
+The varied catch-stage is itself signal: premise drift can leak past PM authoring, can leak past design council (Phase 1 / Phase 2 inherit the premise), can leak past Builder execution (if the migration shape happens to be valid against the wrong premise) — but adversarial review catches it. **The full 4-phase pipeline (council + Builder + Reviewer + Sentinel) is what makes the catch reliable.** Collapsing to fewer phases would have shipped the V2.46 amendment with a fictional column referenced 4-5 times. **The pattern's value is preventing late catches** by pushing verification upstream to authoring time where the cost is ~30 seconds of MCP queries vs. hours of recovery.
+
+### Scope (What This Pattern Covers)
+
+- **Build specs** — PM-authored binding briefs for Builder dispatch (`memory/build_spec_*_pm_memo.md` shape).
+- **Binding-input memos** — design-review precondition documents (`memory/design_review_*_input_memo.md` shape).
+- **ADR amendment text** — especially when claiming current schema state in § amendment-justification or § rollback-runbook subsections.
+- **Design-review memos** — Galadriel / Holden / Miles / Uhura / Spock / etc. memos that cite specific columns, FKs, CHECK contents, or table existence.
+- **Operator runbooks** — adjacent surface; per Joe Chip standing-checklist item 13 (added session 91 from Glokta's session-90 PR #1144 review surface). Operator runbooks reference column names operators will run SQL against; non-executable instructions are a Pattern 91 violation regardless of which artifact ships them.
+
+### Source
+
+- **`memory/feedback_premise_check_paid_for_itself_again.md`** — N=3 evidence memo + canonical promotion-path-(a) rule shape; this Pattern 91 is the codification
+- **`memory/feedback_pm_prompt_premise_verification.md`** — companion (dispatch-side discipline; Sentinel/Reviewer prompt premise verification — same root failure mode at a different pipeline phase)
+- **Session 89 actual** — slot 0083 build spec premise gap; PM premise check at session-90-start caught it
+- **Session 90 actual** — V2.45 build spec single-column FK premise gap; Builder halt-and-correct at upgrade time; resolution in V2.45 § "V2.43 Item 3 composite-FK invariant flow-through"
+- **Session 91 actual** — V2.46 binding-input memo `evidence_observation_id` premise gap; Phase 3 adversarial review caught (Glokta F1 P0 + Ripley P0-1 convergent); user adjudication A=(2) rescoped N3
+- **ADR-118 V2.43 Item 3** — partition-key invariant origin (the composite-PK invariant that surfaced session 90 premise gap)
+- Pattern 73 — Single Source of Truth: the canonical truth about live schema state is the live database, not the ADR / memory / recent context that documents intent. Pattern 91 is Pattern 73 applied to the authoring-side of the pipeline.
+- Pattern 78 — Two-Gate Audit Discipline: Gate A "bug still present" and Gate B "fix still valid" both require MCP verification against current schema; Pattern 91 codifies the same MCP-first discipline at authoring time rather than audit time.
+- Pattern 87 — Append-Only Migration Files: once shipped, the migration IS the live state; ADRs document INTENT, the database documents STATE. Pattern 91 enforces the directionality (database is canonical for state; ADR is canonical for decision).
+- **`memory/roster_agents.md`** § "MCP-first verification rule (Added S55, 2026-04-14)" — canonical S55 trigger definition; binds Holden / Galadriel / Elrond / Mulder / Cassandra / Deckard. Pattern 91 extends the rule symmetrically to PM-authored authoring artifacts (build specs, binding-input memos, ADR amendment text, design-review memos, operator runbooks). The trigger's home document owns the rule; Pattern 91 owns the scope-extension.
 
 ---
 
