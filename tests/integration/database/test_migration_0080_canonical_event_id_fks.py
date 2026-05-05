@@ -52,8 +52,6 @@ Markers:
     @pytest.mark.integration: real DB required.
 """
 
-from __future__ import annotations
-
 import uuid
 from typing import Any
 
@@ -564,7 +562,9 @@ def test_game_states_fk_violation_on_nonexistent_canonical_event(
     canonical_events.id (BIGSERIAL starts at 1, dev DB has at most a few
     canonical_events rows).
     """
-    nonexistent_id = 2_147_483_647  # close to INT_MAX, far from any real id
+    nonexistent_id = (
+        9_223_372_036_854_775_807  # BIGINT_MAX; impossible to collide with any real BIGSERIAL id
+    )
     suffix = uuid.uuid4().hex[:8]
     with pytest.raises(psycopg2.errors.ForeignKeyViolation):
         with get_cursor(commit=True) as cur:
@@ -590,7 +590,9 @@ def test_game_states_fk_violation_on_nonexistent_canonical_event(
 
 def test_games_fk_violation_on_nonexistent_canonical_event(db_pool: Any) -> None:
     """INSERT games with non-existent canonical_event_id raises FK violation."""
-    nonexistent_id = 2_147_483_647
+    nonexistent_id = (
+        9_223_372_036_854_775_807  # BIGINT_MAX; impossible to collide with any real BIGSERIAL id
+    )
     suffix = uuid.uuid4().hex[:8]
     with pytest.raises(psycopg2.errors.ForeignKeyViolation):
         with get_cursor(commit=True) as cur:
