@@ -54,8 +54,6 @@ Markers:
     @pytest.mark.integration: real DB required.
 """
 
-from __future__ import annotations
-
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -638,7 +636,9 @@ def test_temporal_alignment_fk_violation_on_nonexistent_canonical_event(
     canonical_events.id (BIGSERIAL starts at 1, dev DB has at most a few
     canonical_events rows).
     """
-    nonexistent_id = 2_147_483_647  # close to INT_MAX, far from any real id
+    nonexistent_id = (
+        9_223_372_036_854_775_807  # BIGINT_MAX; impossible to collide with any real BIGSERIAL id
+    )
     suffix = uuid.uuid4().hex[:8]
     fk_chain_ids: dict[str, int] | None = None
     try:
